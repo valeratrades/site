@@ -1,0 +1,25 @@
+[package]
+name = "basic-nested-router"
+version = "0.1.0"
+edition = "2021"
+authors = ["geoffreygarrett <geoffrey@apollo.xyz>"]
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+console_error_panic_hook = "^0.1"
+#dbg
+console_log = "^1"
+leptos = { version = "^0.7.5", features = ["csr", "nightly"] }
+leptos-routable = "^0.1"
+leptos_meta = "^0.7.5"
+leptos_router = { version = "^0.7.5", features = ["nightly"] }
+#dbg
+log = "^0.4"
+# utils
+# strum = { version = "0.25", features = ["derive", "strum_macros"] }
+# strum_macros = "0.25"
+
+[dev-dependencies]
+wasm-bindgen = "^0.2"
+wasm-bindgen-test = "^0.3"
+web-sys = { version = "^0.3", features = ["Document", "Window"] }

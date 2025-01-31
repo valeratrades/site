@@ -1,0 +1,85 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* Improved default font, background gradient, etc. */
+  :root {
+    /* Subtle gradient and slight adjustment to text color */
+    @apply font-sans text-base leading-6 text-gray-800
+    bg-gradient-to-br from-gray-100 to-gray-50
+    antialiased;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      /* Matching gradient for dark mode */
+      @apply text-gray-50
+      bg-gradient-to-br from-gray-900 to-gray-800;
+    }
+  }
+
+  /* Give some default padding to body and make it fill the screen nicely */
+  body {
+    @apply min-h-screen flex flex-col items-center p-4;
+  }
+}
+
+@layer components {
+  /* More pronounced heading styling */
+  h1 {
+    @apply text-center text-3xl font-extrabold mb-6 text-indigo-700 tracking-tight;
+  }
+
+  /* Example secondary heading styling (optional) */
+  h2 {
+    @apply text-xl font-semibold mb-4 text-gray-700;
+  }
+
+  /* Improve link styling: underline on hover */
+  a {
+    @apply font-medium text-indigo-600 no-underline hover:underline;
+  }
+
+  /* Input-like elements (inputs, textareas) */
+  input,
+  textarea {
+    @apply w-full px-4 py-2 rounded-md
+    border border-gray-300
+    focus:outline-none focus:ring-2 focus:ring-indigo-500
+    transition-colors
+    mb-4; /* slightly increased spacing */
+  }
+
+  /* Buttons */
+  button {
+    @apply px-5 py-2.5 text-base font-medium
+    text-white bg-indigo-600
+    rounded-md shadow-sm
+    transition-colors
+    hover:bg-indigo-700
+    focus:outline-none
+    active:opacity-80
+    mb-4; /* slightly increased spacing */
+  }
+
+  /* Dark-mode overrides */
+  @media (prefers-color-scheme: dark) {
+    a:hover {
+      @apply text-cyan-400;
+    }
+
+    input,
+    textarea {
+      @apply text-white bg-gray-800 border-gray-600 focus:ring-cyan-500;
+    }
+
+    button {
+      @apply bg-indigo-500 hover:bg-indigo-600;
+    }
+
+    button:active {
+      @apply bg-indigo-600;
+    }
+  }
+}
