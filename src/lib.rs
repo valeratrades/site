@@ -7,7 +7,7 @@ use leptos_router::components::{Router, A};
 
 use crate::{
 	admin::{AdminRoutes, AdminView},
-	dashboards::{DashboardsRoutes, DashboardsView},
+	dashboards::DashboardsView,
 };
 
 #[derive(Clone)]
@@ -47,7 +47,7 @@ pub enum AppRoutes {
 	#[route(path = "/login")]
 	Login,
 	#[parent_route(path = "/dashboards", ssr = "::leptos_router::SsrMode::default()")]
-	Dashboards(DashboardsRoutes),
+	Dashboards(dashboards::Routes),
 	#[protected_parent_route(
 		path = "/admin",
 		condition = "get_auth_condition",
@@ -67,7 +67,7 @@ pub fn LoginView() -> impl IntoView {
 	let navigate = leptos_router::hooks::use_navigate();
 	let login = Callback::<()>::new(move |_| {
 		auth.set_logged_in.set(true);
-		navigate(&*AppRoutes::Profile.to_string(), Default::default());
+		navigate(&AppRoutes::Profile.to_string(), Default::default());
 	});
 	let logout = Callback::<()>::new(move |_| {
 		auth.set_logged_in.set(false);
@@ -155,12 +155,12 @@ pub fn AssetListView() -> impl IntoView {
 			  "→ Profile Page"
 			</A>
 			<A
-			  href=AppRoutes::Dashboards(DashboardsRoutes::DashboardsHome)
+			  href=AppRoutes::Dashboards(dashboards::Routes::Home)
 			  attr:class="inline-block px-4 py-2 bg-blue-500 text-white rounded"
 			>
 			  {format!(
 				  "→ Dashboards Home: {}",
-				  AppRoutes::Dashboards(DashboardsRoutes::DashboardsHome),
+				  AppRoutes::Dashboards(dashboards::Routes::Home),
 			  )}
 			</A>
 			<A
@@ -275,7 +275,7 @@ pub fn App() -> impl IntoView {
 			  "Home"
 			</A>
 			<A
-			  href=AppRoutes::Dashboards(DashboardsRoutes::DashboardsHome)
+			  href=AppRoutes::Dashboards(dashboards::Routes::Home)
 			  attr:class="text-white px-3 py-1 bg-blue-600 rounded"
 			>
 			  "Dashboards"

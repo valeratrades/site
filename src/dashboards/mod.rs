@@ -9,35 +9,35 @@ use crate::AppRoutes;
 
 #[derive(Routable)]
 #[routes(transition = false)]
-pub enum DashboardsRoutes {
+pub enum Routes {
 	#[route(path = "")]
-	DashboardsHome,
+	Home,
 
 	#[route(path = "/settings")]
-	DashboardsSettings,
+	Settings,
 
 	#[route(path = "/analytics")]
-	DashboardsAnalytics,
+	Analytics,
 
 	#[fallback]
 	#[route(path = "/404")]
-	DashboardsNotFound,
+	NotFound,
 }
 
 #[component]
-pub fn DashboardsHomeView() -> impl IntoView {
+pub fn HomeView() -> impl IntoView {
 	view! {
 		<section class="p-4 text-center">
 			<h1 class="text-2xl font-bold">"Dashboards Home"</h1>
 			<p>"Welcome to Dashboards!"</p>
 			<A
-				href=AppRoutes::Dashboards(DashboardsRoutes::DashboardsSettings)
+				href=AppRoutes::Dashboards(Routes::Settings)
 				attr:class="inline-block px-4 py-2 bg-blue-600 text-white rounded mt-2"
 			>
 				"Go to Settings"
 			</A>
 			<A
-				href=AppRoutes::Dashboards(DashboardsRoutes::DashboardsAnalytics)
+				href=AppRoutes::Dashboards(Routes::Analytics)
 				attr:class="inline-block px-4 py-2 bg-blue-600 text-white rounded mt-2 ml-2"
 			>
 				"Go to Analytics"
@@ -47,13 +47,13 @@ pub fn DashboardsHomeView() -> impl IntoView {
 }
 
 #[component]
-pub fn DashboardsSettingsView() -> impl IntoView {
+pub fn SettingsView() -> impl IntoView {
 	view! {
 		<section class="p-4 text-center">
 			<h1 class="text-2xl font-bold">"Dashboards Settings"</h1>
 			<p>"Configure dashboards' settings here."</p>
 			<A
-				href=AppRoutes::Dashboards(DashboardsRoutes::DashboardsHome)
+				href=AppRoutes::Dashboards(Routes::Home)
 				attr:class="inline-block px-4 py-2 bg-green-600 text-white rounded mt-2"
 			>
 				"Back Home"
@@ -63,13 +63,13 @@ pub fn DashboardsSettingsView() -> impl IntoView {
 }
 
 #[component]
-pub fn DashboardsAnalyticsView() -> impl IntoView {
+pub fn AnalyticsView() -> impl IntoView {
 	view! {
 		<section class="p-4 text-center">
 			<h1 class="text-2xl font-bold">"Dashboards Analytics"</h1>
 			<p>"Analytics overview."</p>
 			<A
-				href=AppRoutes::Dashboards(DashboardsRoutes::DashboardsHome)
+				href=AppRoutes::Dashboards(Routes::Home)
 				attr:class="inline-block px-4 py-2 bg-green-600 text-white rounded mt-2"
 			>
 				"Back Home"
@@ -79,14 +79,14 @@ pub fn DashboardsAnalyticsView() -> impl IntoView {
 }
 
 #[component]
-pub fn DashboardsNotFoundView() -> impl IntoView {
+pub fn NotFoundView() -> impl IntoView {
 	let loc = use_location();
 	view! {
 		<section class="p-4 text-center">
 			<h1 class="text-2xl font-bold">"Dashboards Route Not Found"</h1>
 			<p>{move || format!("Path: {}", loc.pathname.get())}</p>
 			<A
-				href=AppRoutes::Dashboards(DashboardsRoutes::DashboardsHome)
+				href=AppRoutes::Dashboards(Routes::Home)
 				attr:class="inline-block px-4 py-2 bg-green-600 text-white rounded mt-2"
 			>
 				"Go to Dashboard Home"
