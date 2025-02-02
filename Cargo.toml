@@ -9,12 +9,14 @@ authors = ["geoffreygarrett <geoffrey@apollo.xyz>"]
 console_error_panic_hook = "^0.1"
 #dbg
 console_log = "^1"
+grep = { version = "0.3.2", features = ["simd-accel"] }
 leptos = { version = "^0.7.5", features = ["csr", "nightly"] }
 leptos-routable = "^0.1"
 leptos_meta = "^0.7.5"
 leptos_router = { version = "^0.7.5", features = ["nightly"] }
 #dbg
 log = "^0.4"
+web-sys = "^0.3"
 # utils
 # strum = { version = "0.25", features = ["derive", "strum_macros"] }
 # strum_macros = "0.25"
