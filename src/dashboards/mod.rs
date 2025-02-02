@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use leptos::prelude::*;
 use leptos_routable::prelude::*;
 use leptos_router::{
@@ -29,7 +27,6 @@ pub fn HomeView() -> impl IntoView {
 		"DOT".to_string(),
 		"DOGE".to_string(),
 		"SOL".to_string(),
-		"DOGE".to_string(),
 		"LUNA".to_string(),
 		"AVAX".to_string(),
 		"UNI".to_string(),
@@ -82,29 +79,27 @@ pub fn HomeView() -> impl IntoView {
 
 				// Dropdown results container
 				{move || {
-					let items = filtered_items.get();
-					//if !items.is_empty() {
+						let items = filtered_items.get();
 						view! {
+							// if !items.is_empty() {
 							<div class="absolute w-full mt-1 max-h-48 overflow-y-auto bg-white border rounded shadow-lg">
 								<For
 									each=move || filtered_items.get()
 									key=|item| item.clone()
 									children=move |item: String| {
-										view! {
-											<div
-												class="p-2 hover:bg-gray-100 cursor-pointer text-left"
-												on:click=move |_| handle_select(item.clone())
-											>
-												{item.clone()}
-											</div>
-										}
+											view! {
+												<div
+													class="p-2 hover:bg-gray-100 cursor-pointer text-left"
+													on:click=move |_| handle_select(item.clone())
+												>
+													{item.clone()}
+												</div>
+											}
 									}
 								/>
 							</div>
-						}.into_view()
-					//} else {
-					//	view! { <div>""</div> }.into_view()
-					//}
+						}
+								.into_view()
 				}}
 			</form>
 
@@ -114,17 +109,14 @@ pub fn HomeView() -> impl IntoView {
 					each=move || selected_items.get()
 					key=|item| item.clone()
 					children=move |item: String| {
-						view! {
-							<div class="flex items-center justify-between p-2 bg-gray-50 rounded">
-								<span>{item.clone()}</span>
-								<button
-									class="text-red-500 hover:text-red-700"
-									on:click=move |_| handle_remove(item.clone())
-								>
-									"×"
-								</button>
-							</div>
-						}
+							view! {
+								<div class="flex items-center justify-between p-2 bg-gray-50 rounded">
+									<span>{item.clone()}</span>
+									<button class="text-red-500 hover:text-red-700" on:click=move |_| handle_remove(item.clone())>
+										"×"
+									</button>
+								</div>
+							}
 					}
 				/>
 			</div>
