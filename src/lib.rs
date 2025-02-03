@@ -1,9 +1,10 @@
 mod admin;
 mod dashboards;
+pub(crate) mod utils;
 use leptos::prelude::*;
 use leptos_meta::{Html, Meta, Title};
-use leptos_routable::prelude::{combine_paths, Routable};
-use leptos_router::components::{Router, A};
+use leptos_routable::prelude::{Routable, combine_paths};
+use leptos_router::components::{A, Router};
 
 use crate::{
 	admin::{AdminRoutes, AdminView},
@@ -77,10 +78,7 @@ pub fn LoginView() -> impl IntoView {
 						view! {
 							<div class="space-y-4">
 								<p class="text-gray-600">"You need to login to access protected routes."</p>
-								<button
-									class="px-4 py-2 bg-green-500 text-white rounded"
-									on:click=move |_| login.run(())
-								>
+								<button class="px-4 py-2 bg-green-500 text-white rounded" on:click=move |_| login.run(())>
 									"Login"
 								</button>
 							</div>
@@ -122,16 +120,10 @@ pub fn AssetListView() -> impl IntoView {
 			<div class="space-y-4">
 				<h2 class="text-xl">"Test Navigation Links"</h2>
 				<div class="flex flex-col space-y-2">
-					<A
-						href=AppRoutes::Home
-						attr:class="inline-block px-4 py-2 bg-green-500 text-white rounded"
-					>
+					<A href=AppRoutes::Home attr:class="inline-block px-4 py-2 bg-green-500 text-white rounded">
 						"→ Go Home"
 					</A>
-					<A
-						href=AppRoutes::Profile
-						attr:class="inline-block px-4 py-2 bg-blue-500 text-white rounded"
-					>
+					<A href=AppRoutes::Profile attr:class="inline-block px-4 py-2 bg-blue-500 text-white rounded">
 						"→ Profile Page"
 					</A>
 					<A
@@ -146,10 +138,7 @@ pub fn AssetListView() -> impl IntoView {
 					>
 						"→ Admin Dashboard"
 					</A>
-					<A
-						href=AppRoutes::NotFound
-						attr:class="inline-block px-4 py-2 bg-blue-500 text-white rounded"
-					>
+					<A href=AppRoutes::NotFound attr:class="inline-block px-4 py-2 bg-blue-500 text-white rounded">
 						"→ 404 Page"
 					</A>
 				</div>
@@ -170,10 +159,7 @@ pub fn ProfileView() -> impl IntoView {
 			<p>"Name: John Doe"</p>
 			<p>"Membership: Gold"</p>
 			<p>"Email: john.doe@example.com"</p>
-			<A
-				href=AppRoutes::Home
-				attr:class="inline-block px-4 py-2 mt-4 bg-green-500 text-white rounded"
-			>
+			<A href=AppRoutes::Home attr:class="inline-block px-4 py-2 mt-4 bg-green-500 text-white rounded">
 				"Back Home"
 			</A>
 		</div>
@@ -186,10 +172,7 @@ pub fn NotFoundView() -> impl IntoView {
 		<div class="p-4 text-center">
 			<h1 class="text-2xl font-bold">"404: Not Found"</h1>
 			<p>"Sorry, we can't find that page."</p>
-			<A
-				href=AppRoutes::Home
-				attr:class="inline-block px-4 py-2 bg-green-500 text-white rounded mt-4"
-			>
+			<A href=AppRoutes::Home attr:class="inline-block px-4 py-2 bg-green-500 text-white rounded mt-4">
 				"Go Home"
 			</A>
 		</div>
@@ -201,7 +184,7 @@ pub fn App() -> impl IntoView {
 	leptos_meta::provide_meta_context();
 	view! {
 		<Html attr:lang="en" attr:dir="ltr" />
-		<Title text="Welcome to Leptos CSR" />
+		<Title text="My sity-site" />
 		<Meta charset="UTF-8" />
 		<Meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<main class="min-h-screen">
@@ -210,10 +193,7 @@ pub fn App() -> impl IntoView {
 					<A href=AppRoutes::Home attr:class="text-white px-3 py-1 bg-green-600 rounded">
 						"Home"
 					</A>
-					<A
-						href=AppRoutes::Dashboards(dashboards::Routes::Home)
-						attr:class="text-white px-3 py-1 bg-blue-600 rounded"
-					>
+					<A href=AppRoutes::Dashboards(dashboards::Routes::Home) attr:class="text-white px-3 py-1 bg-blue-600 rounded">
 						"Dashboards"
 					</A>
 					<A href=AppRoutes::AssetList attr:class="text-white px-3 py-1 bg-blue-600 rounded">
@@ -222,10 +202,7 @@ pub fn App() -> impl IntoView {
 					<A href=AppRoutes::Profile attr:class="text-white px-3 py-1 bg-blue-600 rounded">
 						"Profile"
 					</A>
-					<A
-						href=AppRoutes::Admin(AdminRoutes::AdminHome)
-						attr:class="text-white px-3 py-1 bg-blue-600 rounded"
-					>
+					<A href=AppRoutes::Admin(AdminRoutes::AdminHome) attr:class="text-white px-3 py-1 bg-blue-600 rounded">
 						"Admin"
 					</A>
 				</nav>

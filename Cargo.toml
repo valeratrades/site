@@ -16,12 +16,18 @@ leptos_meta = "^0.7.5"
 leptos_router = { version = "^0.7.5", features = ["nightly"] }
 #dbg
 log = "^0.4"
+serde = { version = "1.0.217", features = ["derive"] }
+serde_json = "1.0.138"
+tracing = "0.1.41"
+#v_utils = { version = "2.4.0", default_features = false, features = ["io"] }
 web-sys = "^0.3"
 # utils
 # strum = { version = "0.25", features = ["derive", "strum_macros"] }
 # strum_macros = "0.25"
 
+#dbg: should be in dev-deps
+wasm-bindgen = { version = "^0.2", features = ["serde-serialize"] }
+xdg = "2.5.2"
 [dev-dependencies]
-wasm-bindgen = "^0.2"
 wasm-bindgen-test = "^0.3"
 web-sys = { version = "^0.3", features = ["Document", "Window"] }

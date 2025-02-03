@@ -1,4 +1,5 @@
 use leptos::prelude::*;
+use leptos_meta::Title;
 use leptos_routable::prelude::*;
 use leptos_router::{
 	components::{A, Outlet},

@@ -41,6 +41,7 @@
 			
 				buildTools = with pkgs; [
 					mold-wrapped
+          sccache
 					openssl
 					pkg-config
 				];
