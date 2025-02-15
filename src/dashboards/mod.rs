@@ -1,12 +1,16 @@
+mod lsrs;
+
 use leptos::prelude::*;
 use leptos_meta::Title;
 use leptos_routable::prelude::*;
 use leptos_router::{
-	components::{A, Outlet},
+	components::{Outlet, A},
 	hooks::use_location,
 };
+use lsrs::SortedLsrs;
+use v_utils::prelude::*;
 
-use crate::AppRoutes;
+use crate::{utils::Mock as _, AppRoutes};
 
 #[derive(Routable)]
 #[routes(transition = false)]
@@ -21,18 +25,14 @@ pub enum Routes {
 
 #[component]
 pub fn HomeView() -> impl IntoView {
-	let items = vec![
-		"BTC".to_string(),
-		"ETH".to_string(),
-		"ADA".to_string(),
-		"DOT".to_string(),
-		"DOGE".to_string(),
-		"SOL".to_string(),
-		"LUNA".to_string(),
-		"AVAX".to_string(),
-		"UNI".to_string(),
-		"LINK".to_string(),
-	];
+	// should be a) a resource, b) in its own component, which then c) is only loaded if it's included into the main `dashboards` selection, skeleton of which should in turn be defined here.
+	//let tf = "5m".into();
+	//let range = (24 * 12 + 1).into(); // 24h, given `5m` tf
+	//let lsrs = tokio::runtime::Runtime::new().unwrap().block_on(async { lsrs::get(tf, range).await }).unwrap();
+	//lsrs.persist().unwrap();
+	let lsrs = SortedLsrs::load_mock().unwrap(); //dbg
+	let displayed_lsrs: Vec<String> = lsrs.iter().map(|lsr| lsr.display_short().unwrap()).collect();
+	debug!(?displayed_lsrs);
 
 	let (search_value, set_search_value) = signal(String::new());
 	let (selected_items, set_selected_items) = signal(Vec::<String>::new());
@@ -40,7 +40,11 @@ pub fn HomeView() -> impl IntoView {
 	// Create a derived signal for filtered items
 	let filtered_items = Memo::new(move |_| {
 		let search = search_value.get();
-		if search.is_empty() { vec![] } else { fzf(&search, &items) }
+		if search.is_empty() {
+			vec![]
+		} else {
+			fzf(&search, &displayed_lsrs)
+		}
 	});
 
 	let handle_input = move |ev: web_sys::Event| {

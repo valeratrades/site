@@ -7,20 +7,31 @@ authors = ["geoffreygarrett <geoffrey@apollo.xyz>"]
 
 [dependencies]
 console_error_panic_hook = "^0.1"
+
 #dbg
 console_log = "^1"
+log = "^0.4"
+
 grep = { version = "0.3.2", features = ["simd-accel"] }
 leptos = { version = "^0.7.5", features = ["csr", "nightly"] }
 leptos-routable = "^0.1"
 leptos_meta = "^0.7.5"
 leptos_router = { version = "^0.7.5", features = ["nightly"] }
-#dbg
-log = "^0.4"
 serde = { version = "1.0.217", features = ["derive"] }
 serde_json = "1.0.138"
+
 tracing = "0.1.41"
-#v_utils = { version = "2.4.0", default_features = false, features = ["io"] }
 web-sys = "^0.3"
+#futures = { version = "0.3.31", features = ["compat"] }
+#v_exchanges = { version = "0.6.0", features = ["binance", "bybit"] }
+color-eyre = "0.6.3"
+derive_more = { version = "2.0.1", features = ["debug", "deref", "deref_mut", "display", "from"] }
+futures = "0.3.31"
+tokio = { version = "1.43.0", features = ["macros", "rt"] }
+v_exchanges = { version = "0.6.0", features = ["binance", "bybit"], path = "/home/v/s/v_exchanges/v_exchanges" } #ga: rm path
+
+#tokio = { version = "^1.43.0", features = ["sync", "macros", "io-util", "rt", "time"] }
+v_utils = { version = "^2.5.0", path = "/home/v/s/v_utils/v_utils", features = ["wasm"] } #ga: rm path
 # utils
 # strum = { version = "0.25", features = ["derive", "strum_macros"] }
 # strum_macros = "0.25"
@@ -28,6 +39,12 @@ web-sys = "^0.3"
 #dbg: should be in dev-deps
 wasm-bindgen = { version = "^0.2", features = ["serde-serialize"] }
 xdg = "2.5.2"
+
 [dev-dependencies]
 wasm-bindgen-test = "^0.3"
-web-sys = { version = "^0.3", features = ["Document", "Window"] }
+#web-sys = { version = "^0.3", features = ["Document", "Window"] }
+
+[[workspace.metadata.leptos]]
+name = "basic-nested-router"
+bin-package = "basic-nested-router"
+lib-package = "basic-nested-router"

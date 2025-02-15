@@ -1,10 +1,11 @@
+#![feature(duration_constructors)]
 mod admin;
 mod dashboards;
 pub(crate) mod utils;
 use leptos::prelude::*;
 use leptos_meta::{Html, Meta, Title};
-use leptos_routable::prelude::{Routable, combine_paths};
-use leptos_router::components::{A, Router};
+use leptos_routable::prelude::{combine_paths, Routable};
+use leptos_router::components::{Router, A};
 
 use crate::{
 	admin::{AdminRoutes, AdminView},
