@@ -8,11 +8,11 @@
         "rust-analyzer-src": "rust-analyzer-src"
       },
       "locked": {
-        "lastModified": 1738305171,
-        "narHash": "sha256-Bt7jBEGnOmxyvma4S7MFFf3vbPUiTbr8TJoZLXEDXKc=",
+        "lastModified": 1739601191,
+        "narHash": "sha256-mAUJ+9f8cevpZWfMbO4rxHRgxaW0hSGLFw4zxssJApU=",
         "owner": "nix-community",
         "repo": "fenix",
-        "rev": "667e3751a708b886bb67879147f71c07b0014c7f",
+        "rev": "56b82ec9192365904927ca3acbb39d7ef2dfbf3d",
         "type": "github"
       },
       "original": {
@@ -76,23 +76,6 @@
         "type": "github"
       }
     },
-    "hooks": {
-      "locked": {
-        "dir": "hooks",
-        "lastModified": 1738253345,
-        "narHash": "sha256-0kPWg2VetbGUphPaRos9jP+iF6kR6v+j0+kUEDrWvt8=",
-        "owner": "valeratrades",
-        "repo": ".github",
-        "rev": "024a4974efdec31acf49cd676f3f5dda67d2caa2",
-        "type": "github"
-      },
-      "original": {
-        "dir": "hooks",
-        "owner": "valeratrades",
-        "repo": ".github",
-        "type": "github"
-      }
-    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1732014248,
@@ -125,6 +108,18 @@
         "type": "github"
       }
     },
+    "nixpkgs_3": {
+      "locked": {
+        "lastModified": 0,
+        "narHash": "sha256-nU6AezEX4EuahTO1YopzueAXfjFfmCHylYEFCagduHU=",
+        "path": "/nix/store/kmns8raz2za5ra55bnbj7srxrya3bild-source",
+        "type": "path"
+      },
+      "original": {
+        "id": "nixpkgs",
+        "type": "indirect"
+      }
+    },
     "pre-commit-hooks": {
       "inputs": {
         "flake-compat": "flake-compat",
@@ -149,20 +144,19 @@
       "inputs": {
         "fenix": "fenix",
         "flake-utils": "flake-utils",
-        "hooks": "hooks",
         "nixpkgs": "nixpkgs",
         "pre-commit-hooks": "pre-commit-hooks",
-        "workflow-parts": "workflow-parts"
+        "v-utils": "v-utils"
       }
     },
     "rust-analyzer-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1738224931,
-        "narHash": "sha256-1zhfA5NBqin0Z79Se85juvqQteq7uClJMEb7l2pdDUY=",
+        "lastModified": 1739512757,
+        "narHash": "sha256-QfmtsyySvQSEKLuB850AmyqpNQRP+T57vuZnGIpmGD4=",
         "owner": "rust-lang",
         "repo": "rust-analyzer",
-        "rev": "3c2aca1e5e9fbabb4e05fc4baa62e807aadc476a",
+        "rev": "40e4f9130f4e44f20961a7cf4ade46325126698b",
         "type": "github"
       },
       "original": {
@@ -187,18 +181,19 @@
         "type": "github"
       }
     },
-    "workflow-parts": {
+    "v-utils": {
+      "inputs": {
+        "nixpkgs": "nixpkgs_3"
+      },
       "locked": {
-        "dir": ".github/workflows/nix-parts",
-        "lastModified": 1738253345,
-        "narHash": "sha256-0kPWg2VetbGUphPaRos9jP+iF6kR6v+j0+kUEDrWvt8=",
+        "lastModified": 1739572499,
+        "narHash": "sha256-D54f7ZR1X8WwIDOBbgUat7/nFPVcdLktXiYPzM8Xpf4=",
         "owner": "valeratrades",
         "repo": ".github",
-        "rev": "024a4974efdec31acf49cd676f3f5dda67d2caa2",
+        "rev": "1ebe885053e1de6f8b3125e74077ec126b5859ee",
         "type": "github"
       },
       "original": {
-        "dir": ".github/workflows/nix-parts",
         "owner": "valeratrades",
         "repo": ".github",
         "type": "github"

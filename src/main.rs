@@ -4,7 +4,7 @@ use tracing::info;
 
 fn main() {
 	color_eyre::install().unwrap();
-	v_utils::utils::init_subscriber("/home/v/.local/state/site/.log".into()); //standard xdg method doesn't work with wasm for some reason
+	//v_utils::utils::init_subscriber("/home/v/.local/state/site/.log".into()); // breaks the site for some reason
 	_ = console_log::init_with_level(log::Level::Debug);
 	console_error_panic_hook::set_once();
 

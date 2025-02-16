@@ -1,5 +1,12 @@
+env:
+  CARGO_INCREMENTAL: '0'
+  CARGO_NET_RETRY: '10'
+  RUSTUP_MAX_RETRIES: '10'
+  RUST_BACKTRACE: short
 jobs:
-  clippy:
+  pre_ci:
+    uses: valeratrades/.github/.github/workflows/pre_ci.yml@master
+  rust-clippy:
     if: github.event_name != 'pull_request'
     name: Clippy
     needs: pre_ci
@@ -13,7 +20,7 @@ jobs:
         name: modified-cargo-files
     - run: cargo clippy --tests -- -Dwarnings
     timeout-minutes: 45
-  doc:
+  rust-doc:
     env:
       RUSTDOCFLAGS: -Dwarnings
     if: needs.pre_ci.outputs.continue
@@ -30,7 +37,7 @@ jobs:
     - uses: dtolnay/install@cargo-docs-rs
     - run: cargo docs-rs
     timeout-minutes: 45
-  machete:
+  rust-machete:
     name: Unused Dependencies
     runs-on: ubuntu-latest
     steps:
@@ -42,9 +49,7 @@ jobs:
       run: "\t\t\t\t\t\tcargo machete\n\t\t\t\t\t\texit_code=$?\n\t\t\t\t\t\tif [\
         \ $exit_code = 0 ]; then\n\t\t\t\t\t\t\techo \"Found unused dependencies\"\
         \n\t\t\t\t\t\t\texit $exit_code\n\t\t\t\t\t\tfi\n\t\t\t"
-  pre_ci:
-    uses: valeratrades/.github/.github/workflows/pre_ci.yml@master
-  sort:
+  rust-sort:
     name: Cargo Sorted
     runs-on: ubuntu-latest
     steps:

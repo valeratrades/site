@@ -10,4 +10,4 @@ options = ["--edition", "2024"]
 [formatter.rust-leptos]
 command = "leptosfmt"
 includes = ["*.rs"]
-options = ["--tab-spaces", "2", "--max-width", "120"]
+options = ["--tab-spaces", "2", "--max-width", "100"]

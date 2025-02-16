@@ -1,4 +1,4 @@
-mod lsrs;
+mod lsr;
 
 use leptos::prelude::*;
 use leptos_meta::Title;
@@ -7,7 +7,7 @@ use leptos_router::{
 	components::{Outlet, A},
 	hooks::use_location,
 };
-use lsrs::SortedLsrs;
+//use lsrs::SortedLsrs;
 use v_utils::prelude::*;
 
 use crate::{utils::Mock as _, AppRoutes};
@@ -28,10 +28,24 @@ pub fn HomeView() -> impl IntoView {
 	// should be a) a resource, b) in its own component, which then c) is only loaded if it's included into the main `dashboards` selection, skeleton of which should in turn be defined here.
 	//let tf = "5m".into();
 	//let range = (24 * 12 + 1).into(); // 24h, given `5m` tf
-	//let lsrs = tokio::runtime::Runtime::new().unwrap().block_on(async { lsrs::get(tf, range).await }).unwrap();
+	//let lsrs = tokio::runtime::Runtime::new().unwrap().block_on(async { lsr::get(tf, range).await }).unwrap();
 	//lsrs.persist().unwrap();
-	let lsrs = SortedLsrs::load_mock().unwrap(); //dbg
-	let displayed_lsrs: Vec<String> = lsrs.iter().map(|lsr| lsr.display_short().unwrap()).collect();
+	//let lsrs = SortedLsrs::load_mock().unwrap(); //dbg
+	//let displayed_lsrs: Vec<String> = lsrs.iter().map(|lsr| lsr.display_short().unwrap()).collect();
+	let displayed_lsrs = vec![
+		"BTC".to_string(),
+		"ETH".to_string(),
+		"ADA".to_string(),
+		"DOT".to_string(),
+		"DOGE".to_string(),
+		"SOL".to_string(),
+		"LUNA".to_string(),
+		"AVAX".to_string(),
+		"UNI".to_string(),
+		"LINK".to_string(),
+	]; //dbg
+	//DO: here we should join the world of ssr and csr, so the Vec should contain type without any reference to v_exchanges.
+
 	debug!(?displayed_lsrs);
 
 	let (search_value, set_search_value) = signal(String::new());
