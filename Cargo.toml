@@ -6,16 +6,16 @@ authors = ["geoffreygarrett <geoffrey@apollo.xyz>"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+#futures = { version = "0.3.31", features = ["compat"] }
+#v_exchanges = { version = "0.6.0", features = ["binance", "bybit"] }
+color-eyre = "0.6.3"
 console_error_panic_hook = "^0.1"
 
 #dbg
 console_log = "^1"
-log = "^0.4"
-#futures = { version = "0.3.31", features = ["compat"] }
-#v_exchanges = { version = "0.6.0", features = ["binance", "bybit"] }
-color-eyre = "0.6.3"
 derive_more = { version = "2.0.1", features = ["debug", "deref", "deref_mut", "display", "from"] }
 futures = "0.3.31"
+log = "^0.4"
 
 grep = { version = "0.3.2", features = ["simd-accel"] }
 leptos = { version = "^0.7.5", features = ["ssr", "csr", "hydrate", "nightly"] }
