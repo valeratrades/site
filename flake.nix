@@ -27,6 +27,7 @@
           latest.rust-std
           latest.rust-src
           targets.wasm32-unknown-unknown.latest.rust-std
+          targets.x86_64-unknown-linux-gnu.latest.rust-std
         ];
 
         # Frontend tools needed for Leptos development
@@ -62,6 +63,10 @@
             pkgs.openssl.dev
             pkgs.pkg-config
           ] ++ frontendTools ++ buildTools;
+
+          env = {
+            LEPTOS_SASS_VERSION = "1.71.0";
+          };
 
           shellHook =
             pre-commit-check.shellHook +

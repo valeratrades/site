@@ -7,7 +7,7 @@ use leptos_router::{
 	components::{Outlet, A},
 	hooks::use_location,
 };
-//use lsrs::SortedLsrs;
+use lsr::RenderedLsr;
 use v_utils::prelude::*;
 
 use crate::{utils::Mock as _, AppRoutes};
@@ -32,53 +32,34 @@ pub fn HomeView() -> impl IntoView {
 	//lsrs.persist().unwrap();
 	//let lsrs = SortedLsrs::load_mock().unwrap(); //dbg
 	//let displayed_lsrs: Vec<String> = lsrs.iter().map(|lsr| lsr.display_short().unwrap()).collect();
-	let displayed_lsrs = vec![
-		"BTC".to_string(),
-		"ETH".to_string(),
-		"ADA".to_string(),
-		"DOT".to_string(),
-		"DOGE".to_string(),
-		"SOL".to_string(),
-		"LUNA".to_string(),
-		"AVAX".to_string(),
-		"UNI".to_string(),
-		"LINK".to_string(),
+
+
+	let rendered_lsrs: Vec<RenderedLsr> = vec![
+		RenderedLsr::new(("DOT", "USDT").into(), "DOT: 96%".to_string()),
+		RenderedLsr::new(("DOGE", "USDT").into(), "DOGE: 30%".to_string()),
+		RenderedLsr::new(("SOL", "USDT").into(), "SOL: 20%".to_string()),
 	]; //dbg
-	//DO: here we should join the world of ssr and csr, so the Vec should contain type without any reference to v_exchanges.
+	debug!(?rendered_lsrs);
 
-	debug!(?displayed_lsrs);
+	let search_input = RwSignal::new(String::default());
+	let selected_items = RwSignal::new(Vec::<RenderedLsr>::new());
 
-	let (search_value, set_search_value) = signal(String::new());
-	let (selected_items, set_selected_items) = signal(Vec::<String>::new());
-
-	// Create a derived signal for filtered items
 	let filtered_items = Memo::new(move |_| {
-		let search = search_value.get();
+		let search = search_input.read();
 		if search.is_empty() {
 			vec![]
 		} else {
-			fzf(&search, &displayed_lsrs)
+			fzf(&search, &rendered_lsrs)
 		}
 	});
 
 	let handle_input = move |ev: web_sys::Event| {
-		let input = event_target_value(&ev);
-		set_search_value.set(input);
+		let new_input = event_target_value(&ev);
+		*search_input.write() = new_input;
 	};
 
-	let handle_select = move |item: String| {
-		set_selected_items.update(|items| {
-			if !items.contains(&item) {
-				items.push(item);
-			}
-		});
-		set_search_value.set(String::new());
-	};
-
-	let handle_remove = move |item: String| {
-		set_selected_items.update(|items| {
-			items.retain(|x| x != &item);
-		});
+	let handle_select = move |selected: RenderedLsr| {
+		todo!();
 	};
 
 	view! {
@@ -91,27 +72,26 @@ pub fn HomeView() -> impl IntoView {
 				<input
 					type="text"
 					placeholder="Search Dashboards"
-					prop:value=search_value
+					prop:value=search_input
 					on:input=handle_input
 					class="w-full p-2 border rounded"
 				/>
 
 				// Dropdown results container
 				{move || {
-						let items = filtered_items.get();
 						view! {
 							// if !items.is_empty() {
 							<div class="absolute w-full mt-1 max-h-48 overflow-y-auto bg-white border rounded shadow-lg">
 								<For
 									each=move || filtered_items.get()
 									key=|item| item.clone()
-									children=move |item: String| {
+									children=move |item: RenderedLsr| {
 											view! {
 												<div
 													class="p-2 hover:bg-gray-100 cursor-pointer text-left"
 													on:click=move |_| handle_select(item.clone())
 												>
-													{item.clone()}
+													{item.rend.clone()}
 												</div>
 											}
 									}
@@ -125,15 +105,12 @@ pub fn HomeView() -> impl IntoView {
 			// Selected items display
 			<div class="mt-4 space-y-2">
 				<For
-					each=move || selected_items.get()
+					each=move || selected_items.read().to_vec()
 					key=|item| item.clone()
-					children=move |item: String| {
+					children=move |item: RenderedLsr| {
 							view! {
 								<div class="flex items-center justify-between p-2 bg-gray-50 rounded">
-									<span>{item.clone()}</span>
-									<button class="text-red-500 hover:text-red-700" on:click=move |_| handle_remove(item.clone())>
-										"×"
-									</button>
+									<span>{item.rend.clone()}</span>
 								</div>
 							}
 					}
@@ -145,9 +122,9 @@ pub fn HomeView() -> impl IntoView {
 	}
 }
 
-fn fzf(s: &str, available: &[String]) -> Vec<String> {
+fn fzf(s: &str, available: &[RenderedLsr]) -> Vec<RenderedLsr> {
 	// For now, using simple substring matching
-	available.iter().filter(|item| item.to_lowercase().contains(&s.to_lowercase())).cloned().collect()
+	available.iter().filter(|v| v.rend.to_lowercase().contains(&s.to_lowercase())).cloned().collect()
 }
 
 #[component]

@@ -1,50 +1,110 @@
 [package]
-name = "basic-nested-router"
+name = "site"
 version = "0.1.0"
 edition = "2021"
 authors = ["geoffreygarrett <geoffrey@apollo.xyz>"]
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[package.metadata.leptos]
+# The site root folder is where cargo-leptos generate all output. WARNING: all content of this folder will be erased on a rebuild. Use it in your server setup.
+site-root = "target/site"
+
+# The site-root relative folder where all compiled output (JS, WASM and CSS) is written
+site-pkg-dir = "pkg"
+
+# [Optional] The source CSS file. If it ends with .sass or .scss then it will be compiled by dart-sass into CSS. The CSS is optimized by Lightning CSS before being written to <site-root>/<site-pkg>/app.css
+style-file = "style/main.scss"
+# Assets source dir. All files found here will be copied and synchronized to site-root.
+# The assets-dir cannot have a sub directory with the same name/path as site-pkg-dir.
+#
+assets-dir = "public"
+
+site-addr = "127.0.0.1:52635"
+reload-port = 52636
+
+# [Optional] Command to use when running end2end tests. It will run in the end2end dir.
+#   [Windows] for non-WSL use "npx.cmd playwright test"
+#   This binary name can be checked in Powershell with Get-Command npx
+end2end-cmd = "npx playwright test"
+end2end-dir = "end2end"
+
+#  The browserlist query used for optimizing the CSS.
+browserquery = "defaults"
+
+env = "DEV" # "DEV" | "PROD"
+
+bin-features = ["ssr"]
+bin-default-features = false
+lib-features = ["hydrate"]
+lib-default-features = false
+
+# The profile to use for the lib target when compiling for release
+#
+# Optional. Defaults to "release".
+lib-profile-release = "wasm-release"
 
 [dependencies]
-#futures = { version = "0.3.31", features = ["compat"] }
-#v_exchanges = { version = "0.6.0", features = ["binance", "bybit"] }
 color-eyre = "0.6.3"
-console_error_panic_hook = "^0.1"
 
-#dbg
 console_log = "^1"
-derive_more = { version = "2.0.1", features = ["debug", "deref", "deref_mut", "display", "from"] }
-futures = "0.3.31"
-log = "^0.4"
+derive_more = { version = "^2.0.1", features = ["debug", "deref", "deref_mut", "display", "from"] }
+futures = "^0.3.31"
 
-grep = { version = "0.3.2", features = ["simd-accel"] }
-leptos = { version = "^0.7.5", features = ["ssr", "csr", "hydrate", "nightly"] }
+grep = { version = "^0.3.2", features = ["simd-accel"] }
+leptos = { version = "^0.7.7", features = ["csr", "nightly"] }
 leptos-routable = "^0.1"
-leptos_meta = "^0.7.5"
-leptos_router = { version = "^0.7.5", features = ["nightly"] }
-serde = { version = "1.0.217", features = ["derive"] }
-serde_json = "1.0.138"
-tokio = { version = "1.43.0", features = ["macros", "rt"] }
+leptos_meta = "^0.7.7"
+leptos_router = { version = "^0.7.7", features = ["nightly"] }
+serde = { version = "^1.0.217", features = ["derive"] }
+serde_json = "^1.0.138"
 
-tracing = "0.1.41"
-v_exchanges = { version = "0.6.0", features = ["binance", "bybit"], path = "/home/v/s/v_exchanges/v_exchanges" } #ga: rm path
+tracing = { version = "^0.1.41", features = ["log"] }
 web-sys = "^0.3"
 
-#tokio = { version = "^1.43.0", features = ["sync", "macros", "io-util", "rt", "time"] }
 v_utils = { version = "^2.5.0", path = "/home/v/s/v_utils/v_utils", features = ["wasm"] } #ga: rm path
+axum = { version = "=0.7.9", optional = true } # 0.8 with leptos breaks as of today (2025/02/18)
+
+# optional {{{
+console_error_panic_hook = { version = "^0.1", optional = true }
+derive-new = "0.7.0"
+leptos_axum = { version = "^0.7.7", optional = true }
+tokio = { version = "1.43.0", features = ["macros", "rt", "rt-multi-thread"], optional = true }
+wasm-bindgen = { version = "^0.2.100", optional = true }
+
+v_exchanges = { version = "0.6.0", features = ["binance", "bybit"], path = "/home/v/s/v_exchanges/v_exchanges", optional = true } #ga: rm path
+#,}}}
 # utils
 # strum = { version = "0.25", features = ["derive", "strum_macros"] }
 # strum_macros = "0.25"
 
-#dbg: should be in dev-deps
-wasm-bindgen = { version = "^0.2", features = ["serde-serialize"] }
-xdg = "2.5.2"
-
 [dev-dependencies]
-wasm-bindgen-test = "^0.3"
+wasm-bindgen = { version = "^0.2", features = ["serde-serialize"] }
 #web-sys = { version = "^0.3", features = ["Document", "Window"] }
 
-[[workspace.metadata.leptos]]
-name = "basic-nested-router"
-bin-package = "basic-nested-router"
-lib-package = "basic-nested-router"
+[features]
+default = ["ssr", "hydrate"] #dbg
+hydrate = [
+    "leptos/hydrate",
+    "dep:console_error_panic_hook",
+    "dep:wasm-bindgen"
+]
+ssr = [
+    "dep:axum",
+    "dep:tokio",
+    "dep:v_exchanges",
+    "dep:leptos_axum",
+    "leptos/ssr",
+    "leptos_meta/ssr",
+    "leptos_router/ssr"
+]
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+# Defines a size-optimized profile for the WASM bundle in release mode
+[profile.wasm-release]
+inherits = "release"
+opt-level = 'z'
+lto = true
+codegen-units = 1
+panic = "abort"
