@@ -47,17 +47,17 @@ pub fn App() -> impl IntoView {
 		<Meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<main class="min-h-screen">
 			<Router>
-				<nav class="flex space-x-4 p-4 bg-gray-900 text-white">
-					<A href=AppRoutes::Home attr:class="text-white px-3 py-1 bg-green-600 rounded">
-						"Home"
-					</A>
-					<A
-						href=AppRoutes::Dashboards(dashboards::Routes::Home)
-						attr:class="text-white px-3 py-1 bg-blue-600 rounded"
-					>
-						"Dashboards"
-					</A>
-				</nav>
+				//<nav class="flex space-x-4 p-4 bg-gray-900 text-white">
+				//	<A href=AppRoutes::Home attr:class="text-white px-3 py-1 bg-green-600 rounded">
+				//		"Home"
+				//	</A>
+				//	<A
+				//		href=AppRoutes::Dashboards(dashboards::Routes::Home)
+				//		attr:class="text-white px-3 py-1 bg-blue-600 rounded"
+				//	>
+				//		"Dashboards"
+				//	</A>
+				//</nav>
 				{move || AppRoutes::routes()}
 			</Router>
 		</main>
@@ -88,16 +88,17 @@ pub fn HomeView() -> impl IntoView {
 
 #[component]
 pub fn NotFoundView() -> impl IntoView {
-	view! {
-		<div class="p-4 text-center">
-			<h1 class="text-2xl font-bold">"404: Not Found"</h1>
-			<p>"Sorry, we can't find that page."</p>
-			<A
-				href=AppRoutes::Home
-				attr:class="inline-block px-4 py-2 bg-green-500 text-white rounded mt-4"
-			>
-				"Go Home"
-			</A>
-		</div>
-	}
+	//view! {
+	//	<div class="p-4 text-center">
+	//		<h1 class="text-2xl font-bold">"404: Not Found"</h1>
+	//		<p>"Sorry, we can't find that page."</p>
+	//		<A
+	//			href=AppRoutes::Home
+	//			attr:class="inline-block px-4 py-2 bg-green-500 text-white rounded mt-4"
+	//		>
+	//			"Go Home"
+	//		</A>
+	//	</div>
+	//}
+	"404" //dbg
 }

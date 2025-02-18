@@ -78,46 +78,40 @@ pub fn HomeView() -> impl IntoView {
 				/>
 
 				// Dropdown results container
-				{move || {
-						view! {
-							// if !items.is_empty() {
-							<div class="absolute w-full mt-1 max-h-48 overflow-y-auto bg-white border rounded shadow-lg">
-								<For
-									each=move || filtered_items.get()
-									key=|item| item.clone()
-									children=move |item: RenderedLsr| {
-											view! {
-												<div
-													class="p-2 hover:bg-gray-100 cursor-pointer text-left"
-													on:click=move |_| handle_select(item.clone())
-												>
-													{item.rend.clone()}
-												</div>
-											}
-									}
-								/>
-							</div>
+				<div class="absolute w-full mt-1 max-h-48 overflow-y-auto bg-white border rounded shadow-lg">
+					<For
+						each=move || filtered_items.get()
+						key=|item| item.clone()
+						children=move |item: RenderedLsr| {
+								view! {
+									<div
+										class="p-2 hover:bg-gray-100 cursor-pointer text-left"
+										on:click=move |_| handle_select(item.clone())
+									>
+										{item.rend.clone()}
+									</div>
+								}
 						}
-								.into_view()
-				}}
+					/>
+				</div>
 			</form>
 
 			// Selected items display
-			<div class="mt-4 space-y-2">
-				<For
-					each=move || selected_items.read().to_vec()
-					key=|item| item.clone()
-					children=move |item: RenderedLsr| {
-							view! {
-								<div class="flex items-center justify-between p-2 bg-gray-50 rounded">
-									<span>{item.rend.clone()}</span>
-								</div>
-							}
-					}
-				/>
-			</div>
+			//<div class="mt-4 space-y-2">
+			//	<For
+			//		each=move || selected_items.read().to_vec()
+			//		key=|item| item.clone()
+			//		children=move |item: RenderedLsr| {
+			//				view! {
+			//					<div class="flex items-center justify-between p-2 bg-gray-50 rounded">
+			//						<span>{item.rend.clone()}</span>
+			//					</div>
+			//				}
+			//		}
+			//	/>
+			//</div>
 
-			<p class="text-sm font-mono mt-4">"Query String: " {move || use_location().search}</p>
+			//<p class="text-sm font-mono mt-4">"Query String: " {move || use_location().search}</p>
 		</section>
 	}
 }
@@ -129,19 +123,20 @@ fn fzf(s: &str, available: &[RenderedLsr]) -> Vec<RenderedLsr> {
 
 #[component]
 pub fn NotFoundView() -> impl IntoView {
-	let loc = use_location();
-	view! {
-		<section class="p-4 text-center">
-			<h1 class="text-2xl font-bold">"Dashboards Route Not Found"</h1>
-			<p>{move || format!("Path: {}", loc.pathname.get())}</p>
-			<A
-				href=AppRoutes::Dashboards(Routes::Home)
-				attr:class="inline-block px-4 py-2 bg-green-600 text-white rounded mt-2"
-			>
-				"Go to Dashboard Home"
-			</A>
-		</section>
-	}
+	//let loc = use_location();
+	//view! {
+	//	<section class="p-4 text-center">
+	//		<h1 class="text-2xl font-bold">"Dashboards Route Not Found"</h1>
+	//		<p>{move || format!("Path: {}", loc.pathname.get())}</p>
+	//		<A
+	//			href=AppRoutes::Dashboards(Routes::Home)
+	//			attr:class="inline-block px-4 py-2 bg-green-600 text-white rounded mt-2"
+	//		>
+	//			"Go to Dashboard Home"
+	//		</A>
+	//	</section>
+	//}
+	"404" //dbg
 }
 
 #[component]
