@@ -4,13 +4,13 @@ use leptos::prelude::*;
 use leptos_meta::Title;
 use leptos_routable::prelude::*;
 use leptos_router::{
-	components::{Outlet, A},
+	components::{A, Outlet},
 	hooks::use_location,
 };
 use lsr::RenderedLsr;
 use v_utils::prelude::*;
 
-use crate::{utils::Mock as _, AppRoutes};
+use crate::{AppRoutes, utils::Mock as _};
 
 #[derive(Routable)]
 #[routes(transition = false)]
@@ -33,7 +33,6 @@ pub fn HomeView() -> impl IntoView {
 	//let lsrs = SortedLsrs::load_mock().unwrap(); //dbg
 	//let displayed_lsrs: Vec<String> = lsrs.iter().map(|lsr| lsr.display_short().unwrap()).collect();
 
-
 	let rendered_lsrs: Vec<RenderedLsr> = vec![
 		RenderedLsr::new(("DOT", "USDT").into(), "DOT: 96%".to_string()),
 		RenderedLsr::new(("DOGE", "USDT").into(), "DOGE: 30%".to_string()),
@@ -46,11 +45,7 @@ pub fn HomeView() -> impl IntoView {
 
 	let filtered_items = Memo::new(move |_| {
 		let search = search_input.read();
-		if search.is_empty() {
-			vec![]
-		} else {
-			fzf(&search, &rendered_lsrs)
-		}
+		if search.is_empty() { vec![] } else { fzf(&search, &rendered_lsrs) }
 	});
 
 	let handle_input = move |ev: web_sys::Event| {
@@ -80,7 +75,7 @@ pub fn HomeView() -> impl IntoView {
 				// Dropdown results container
 				<div class="absolute w-full mt-1 max-h-48 overflow-y-auto bg-white border rounded shadow-lg">
 					<For
-						each=move || filtered_items.get()
+						each={move || filtered_items.get()}
 						key=|item| item.clone()
 						children=move |item: RenderedLsr| {
 								view! {
@@ -97,21 +92,21 @@ pub fn HomeView() -> impl IntoView {
 			</form>
 
 			// Selected items display
-			//<div class="mt-4 space-y-2">
-			//	<For
-			//		each=move || selected_items.read().to_vec()
-			//		key=|item| item.clone()
-			//		children=move |item: RenderedLsr| {
-			//				view! {
-			//					<div class="flex items-center justify-between p-2 bg-gray-50 rounded">
-			//						<span>{item.rend.clone()}</span>
-			//					</div>
-			//				}
-			//		}
-			//	/>
-			//</div>
+			<div class="mt-4 space-y-2">
+				<For
+					each={move || selected_items.read().to_vec()}
+					key=|item| item.clone()
+					children=move |item: RenderedLsr| {
+							view! {
+								<div class="flex items-center justify-between p-2 bg-gray-50 rounded">
+									<span>{item.rend.clone()}</span>
+								</div>
+							}
+					}
+				/>
+			</div>
 
-			//<p class="text-sm font-mono mt-4">"Query String: " {move || use_location().search}</p>
+			<p class="text-sm font-mono mt-4">"Query String: " {move || use_location().search}</p>
 		</section>
 	}
 }

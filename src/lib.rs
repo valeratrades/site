@@ -8,14 +8,14 @@ pub(crate) mod utils;
 use dashboards::DashboardsView;
 use leptos::prelude::*;
 use leptos_meta::{Html, Meta, MetaTags, Title};
-use leptos_routable::prelude::{combine_paths, Routable};
-use leptos_router::components::{Router, A};
+use leptos_routable::prelude::{Routable, combine_paths};
+use leptos_router::components::{A, Router};
 
 #[cfg(feature = "hydrate")]
 #[wasm_bindgen::prelude::wasm_bindgen]
 pub fn hydrate() {
 	console_error_panic_hook::set_once();
-	_ = console_log::init_with_level(tracing::log::Level::Debug); //Q: what is this, do I need it?
+	_ = console_log::init_with_level(tracing::log::Level::Debug);
 	leptos::mount::hydrate_body(App);
 }
 
@@ -40,6 +40,7 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
 #[component]
 pub fn App() -> impl IntoView {
 	leptos_meta::provide_meta_context();
+
 	view! {
 		<Html attr:lang="en" attr:dir="ltr" />
 		<Title text="My sity-site" />
@@ -47,17 +48,17 @@ pub fn App() -> impl IntoView {
 		<Meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<main class="min-h-screen">
 			<Router>
-				//<nav class="flex space-x-4 p-4 bg-gray-900 text-white">
-				//	<A href=AppRoutes::Home attr:class="text-white px-3 py-1 bg-green-600 rounded">
-				//		"Home"
-				//	</A>
-				//	<A
-				//		href=AppRoutes::Dashboards(dashboards::Routes::Home)
-				//		attr:class="text-white px-3 py-1 bg-blue-600 rounded"
-				//	>
-				//		"Dashboards"
-				//	</A>
-				//</nav>
+				// <nav class="flex space-x-4 p-4 bg-gray-900 text-white">
+				// <A href=AppRoutes::Home attr:class="text-white px-3 py-1 bg-green-600 rounded">
+				// "Home"
+				// </A>
+				// <A
+				// href=AppRoutes::Dashboards(dashboards::Routes::Home)
+				// attr:class="text-white px-3 py-1 bg-blue-600 rounded"
+				// >
+				// "Dashboards"
+				// </A>
+				// </nav>
 				{move || AppRoutes::routes()}
 			</Router>
 		</main>
@@ -69,7 +70,7 @@ pub fn App() -> impl IntoView {
 pub enum AppRoutes {
 	#[route(path = "/")]
 	Home,
-	#[parent_route(path = "/dashboards", ssr = "::leptos_router::SsrMode::default()")]
+	#[parent_route(path = "/dashboards")]
 	Dashboards(dashboards::Routes),
 	#[fallback]
 	#[route(path = "/404")]

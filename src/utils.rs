@@ -1,6 +1,6 @@
 use std::fs;
 
-use serde::{de::DeserializeOwned, Serialize};
+use serde::{Serialize, de::DeserializeOwned};
 use tracing::{debug, info};
 
 pub fn share_dir() -> std::path::PathBuf {
