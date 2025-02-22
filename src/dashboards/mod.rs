@@ -209,7 +209,7 @@ fn LsrSearch(rendered_lsrs: Memo<Vec<RenderedLsr>>, selected_items: WriteSignal<
 
 				// Dropdown results container
 				div()
-					.class("relative inline-block z-50 overflow-y-auto") //Q: +"max-h-96" for overflow?
+					.class("relative inline-block z-50 overflow-y-auto max-h-96")
 					.style(move || {
 						if filtered_items.get().is_empty() {
 							"display: none;"
