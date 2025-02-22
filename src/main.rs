@@ -2,20 +2,19 @@
 #[tokio::main]
 async fn main() {
 	use axum::Router;
-	use leptos::{logging::log, prelude::*};
-	use leptos_axum::{LeptosRoutes, generate_route_list};
-	use site::{App, shell};
-	use tracing::info;
+	use leptos::prelude::*;
+	use leptos_axum::{generate_route_list, LeptosRoutes};
+	use site::app::*;
+	use tracing::{debug, info};
 
-	//v_utils::clientside!(); // requires #![feature(stmt_expr_attributes)] (which is currently bugging)
-	color_eyre::install().unwrap();
-	v_utils::utils::init_subscriber(v_utils::utils::LogDestination::xdg(env!("CARGO_PKG_NAME")));
+	v_utils::clientside!();
 
 	let conf = get_configuration(None).unwrap();
 	let addr = conf.leptos_options.site_addr;
 	let leptos_options = conf.leptos_options;
-	// Generate the list of routes in your Leptos App
+
 	let routes = generate_route_list(App);
+	debug!(?routes);
 
 	let app = Router::new()
 		.leptos_routes(&leptos_options, routes, {
@@ -26,8 +25,8 @@ async fn main() {
 		.with_state(leptos_options);
 
 	// run our app with hyper (`axum::Server` is a re-export of `hyper::Server`)
-	info!("listening on http://{}", &addr);
 	let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
+	info!("listening on http://{}", &addr);
 	axum::serve(listener, app.into_make_service()).await.unwrap();
 }
 

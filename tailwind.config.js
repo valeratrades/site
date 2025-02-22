@@ -4,8 +4,8 @@ module.exports = {
     content: [
         // Rust project-specific paths for Leptos
         "./src/**/*.rs",
-        "./index.html",
-        "./src/**/*.html",
+        "./index.html", //Q: don't think I need this
+        "./src/**/*.html", //Q: don't think I need this
     ],
     theme: {
         extend: {
@@ -54,3 +54,4 @@ module.exports = {
         preflight: true,
     },
 };
+

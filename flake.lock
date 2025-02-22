@@ -110,9 +110,25 @@
     },
     "nixpkgs_3": {
       "locked": {
+        "lastModified": 1736320768,
+        "narHash": "sha256-nIYdTAiKIGnFNugbomgBJR+Xv5F1ZQU+HfaBqJKroC0=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "4bc9c909d9ac828a039f288cf872d16d38185db8",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "nixpkgs-unstable",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
+    "nixpkgs_4": {
+      "locked": {
         "lastModified": 0,
-        "narHash": "sha256-nU6AezEX4EuahTO1YopzueAXfjFfmCHylYEFCagduHU=",
-        "path": "/nix/store/kmns8raz2za5ra55bnbj7srxrya3bild-source",
+        "narHash": "sha256-EO1ygNKZlsAC9avfcwHkKGMsmipUk1Uc0TbrEZpkn64=",
+        "path": "/nix/store/kdynjy1mbgkdg4p196v9gx6ljpf7q4nk-source",
         "type": "path"
       },
       "original": {
@@ -146,6 +162,7 @@
         "flake-utils": "flake-utils",
         "nixpkgs": "nixpkgs",
         "pre-commit-hooks": "pre-commit-hooks",
+        "rust-overlay": "rust-overlay",
         "v-utils": "v-utils"
       }
     },
@@ -166,6 +183,24 @@
         "type": "github"
       }
     },
+    "rust-overlay": {
+      "inputs": {
+        "nixpkgs": "nixpkgs_3"
+      },
+      "locked": {
+        "lastModified": 1740074384,
+        "narHash": "sha256-T2eO9ognlph94/TyAu1uILo38fZG1G4S5FQxG+YBDv0=",
+        "owner": "oxalica",
+        "repo": "rust-overlay",
+        "rev": "d291a120b6524911249b198baf3ec3e07ff57e04",
+        "type": "github"
+      },
+      "original": {
+        "owner": "oxalica",
+        "repo": "rust-overlay",
+        "type": "github"
+      }
+    },
     "systems": {
       "locked": {
         "lastModified": 1681028828,
@@ -183,14 +218,14 @@
     },
     "v-utils": {
       "inputs": {
-        "nixpkgs": "nixpkgs_3"
+        "nixpkgs": "nixpkgs_4"
       },
       "locked": {
-        "lastModified": 1739753831,
-        "narHash": "sha256-rOO+Fp1DuJrQyJOhTVuEi7v24BOC1jghBuE65D936X0=",
+        "lastModified": 1739982642,
+        "narHash": "sha256-lCD+EqQUArTYDas1Rz9+KaFOvSahRizN/nnlloN7Mu4=",
         "owner": "valeratrades",
         "repo": ".github",
-        "rev": "057f324e8527595756d594d22ae41f2296b96009",
+        "rev": "cfe6b0b36624b472098d5eac2c6d732e061f98a5",
         "type": "github"
       },
       "original": {

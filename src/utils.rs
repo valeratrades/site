@@ -1,8 +1,9 @@
 use std::fs;
 
-use serde::{Serialize, de::DeserializeOwned};
 use tracing::{debug, info};
 
+//TODO: switch to v_utils
+#[cfg(feature = "ssr")]
 pub fn share_dir() -> std::path::PathBuf {
 	let base_path = std::env::var("XDG_DATA_HOME").unwrap_or_else(|_| format!("{}/.local/share", std::env::var("HOME").unwrap()));
 	let share_dir = std::path::PathBuf::from(base_path).join(env!("CARGO_PKG_NAME"));
@@ -10,9 +11,10 @@ pub fn share_dir() -> std::path::PathBuf {
 	share_dir
 }
 
+#[cfg(feature = "ssr")]
 pub trait Mock
 where
-	Self: Sized + DeserializeOwned + Serialize, {
+	Self: Sized + serde::de::DeserializeOwned + serde::Serialize, {
 	const NAME: &'static str;
 	fn persist(&self) -> std::io::Result<()> {
 		info!("Persisting current {}", Self::NAME);

@@ -1,5 +1,20 @@
+use serde::{Deserialize, Serialize};
+use v_utils::trades::Pair;
+
+#[derive(Debug, Default, Clone, derive_new::new, Hash, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RenderedLsr {
+	pub pair: Pair,
+	pub rend: String,
+}
 #[cfg(feature = "ssr")]
-mod ssr {
+impl From<ssr::SortedLsrs> for Vec<RenderedLsr> {
+	fn from(s: ssr::SortedLsrs) -> Self {
+		s.iter().map(|lsr| RenderedLsr::new(lsr.pair, lsr.display_short().unwrap())).collect()
+	}
+}
+
+#[cfg(feature = "ssr")]
+pub mod ssr {
 	use color_eyre::eyre::{Result, bail};
 	use futures::future::join_all;
 	use tracing::{info, warn};
@@ -133,11 +148,4 @@ mod ssr {
 			write!(f, "{s}")
 		}
 	}
-}
-
-use v_utils::trades::Pair;
-#[derive(Debug, Default, Clone, derive_new::new, Hash, PartialEq, Eq)]
-pub struct RenderedLsr {
-	pub pair: Pair,
-	pub rend: String,
 }
