@@ -4,7 +4,7 @@ async fn main() {
 	use axum::Router;
 	use leptos::prelude::*;
 	use leptos_axum::{generate_route_list, LeptosRoutes};
-	use site::app::*;
+	use site::{app::*, conf::Settings};
 	use tracing::{debug, info};
 
 	v_utils::clientside!();
@@ -16,8 +16,9 @@ async fn main() {
 	let routes = generate_route_list(App);
 	debug!(?routes);
 
+	let settings = Settings { mock: true }; //dbg
 	let app = Router::new()
-		.leptos_routes(&leptos_options, routes, {
+		.leptos_routes_with_context(&leptos_options, routes, move || provide_context(settings.clone()), {
 			let leptos_options = leptos_options.clone();
 			move || shell(leptos_options.clone())
 		})
@@ -32,7 +33,6 @@ async fn main() {
 
 #[cfg(not(feature = "ssr"))]
 pub fn main() {
-	// no client-side main function
-	// unless we want this to work with e.g., Trunk for pure client-side testing
-	// see lib.rs for hydration function instead
+	// hydration is bootstrapped in [./lib.rs]
+	panic!("not the correct access point");
 }

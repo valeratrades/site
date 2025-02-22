@@ -69,9 +69,12 @@ fn HomeView() -> impl IntoView {
 #[component]
 fn Lsr() -> impl IntoView {
 	#[server]
-	async fn build_lsrs(mock: bool) -> Result<Vec<RenderedLsr>, ServerFnError> {
+	async fn build_lsrs() -> Result<Vec<RenderedLsr>, ServerFnError> {
 		use lsr::ssr::SortedLsrs;
-		let v = match mock {
+
+		let settings = use_context::<Settings>().ok_or_else(|| ServerFnError::new("Settings not found in context"))?;
+
+		let v = match settings.mock {
 			true => {
 				let lsrs = SortedLsrs::load_mock().unwrap(); //dbg
 				lsrs.into()
@@ -87,15 +90,11 @@ fn Lsr() -> impl IntoView {
 		Ok(v)
 	}
 
-	let mock = true; //dbg
-	let lsrs_resource = Resource::new(
-		move || mock, // Dependency signal - rebuild if mock changes
-		|mock_value| async move { build_lsrs(mock_value).await },
-	);
+	let lsrs_resource = Resource::new(move || (), |_| async move { build_lsrs().await });
 	let rendered_lsrs_mem = Memo::new(move |_| {
 		match lsrs_resource.get() {
 			Some(Ok(lsrs)) => lsrs,
-			_ => vec![], // Return empty vector if loading or error
+			_ => vec![], // fallback
 		}
 	});
 

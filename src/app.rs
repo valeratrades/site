@@ -1,20 +1,16 @@
-use std::{cell::OnceCell, sync::OnceLock};
-
 use leptos::{
 	ev,
 	html::{button, div, h1, p},
 	prelude::*,
 };
-use leptos_meta::{provide_meta_context, MetaTags, Stylesheet, Title};
+use leptos_meta::{MetaTags, Stylesheet, Title, provide_meta_context};
 use leptos_routable::prelude::*;
-use leptos_router::components::{Router, A};
+use leptos_router::components::{A, Router};
 
 use crate::{
 	conf::Settings,
 	dashboards::{self, DashboardsView},
 };
-
-static SETTINGS: OnceLock<Settings> = OnceLock::new();
 
 pub fn shell(options: LeptosOptions) -> impl IntoView {
 	view! {
@@ -44,7 +40,7 @@ pub fn App() -> impl IntoView {
 	//TODO: with strum and derive_more, gen a nav bar at the top for all routes
 	let href = format!("/pkg/{}.css", env!("CARGO_PKG_NAME"));
 	view! {
-		<Stylesheet id="leptos" href=href/>
+		<Stylesheet id="leptos" href=href />
 
 		<Title text="My Site" />
 
