@@ -7,7 +7,7 @@
 [<img alt="ci errors" src="https://img.shields.io/github/actions/workflow/status/valeratrades/site/errors.yml?branch=master&style=for-the-badge&style=flat-square&label=errors&labelColor=420d09" height="20">](https://github.com/valeratrades/site/actions?query=branch%3Amaster) <!--NB: Won't find it if repo is private-->
 [<img alt="ci warnings" src="https://img.shields.io/github/actions/workflow/status/valeratrades/site/warnings.yml?branch=master&style=for-the-badge&style=flat-square&label=warnings&labelColor=d16002" height="20">](https://github.com/valeratrades/site/actions?query=branch%3Amaster) <!--NB: Won't find it if repo is private-->
 
-TODO
+My sity site
 
 <!-- markdownlint-disable -->
 <details>
@@ -29,7 +29,6 @@ TODO
 	This repository follows <a href="https://github.com/valeratrades/.github/tree/master/best_practices">my best practices</a> and <a href="https://github.com/tigerbeetle/tigerbeetle/blob/main/docs/TIGER_STYLE.md">Tiger Style</a> (except "proper capitalization for acronyms": (VsrState, not VSRState) and formatting).
 </sup>
 
-
 #### License
 
 <sup>
@@ -43,5 +42,3 @@ TODO
 for inclusion in this crate by you, as defined in the Apache-2.0 license, shall
 be licensed as above, without any additional terms or conditions.
 </sub>
-
-
