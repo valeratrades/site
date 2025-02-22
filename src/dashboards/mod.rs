@@ -68,34 +68,11 @@ fn HomeView() -> impl IntoView {
 
 #[component]
 fn Lsr() -> impl IntoView {
-	// should be a) a resource, b) in its own component, which then c) is only loaded if it's included into the main `dashboards` selection, skeleton of which should in turn be defined here.
-	//let tf = "5m".into();
-	//let range = (24 * 12 + 1).into(); // 24h, given `5m` tf
-	//let lsrs = tokio::runtime::Runtime::new().unwrap().block_on(async { lsr::get(tf, range).await }).unwrap();
-	//lsrs.persist().unwrap();
-	//let lsrs = SortedLsrs::load_mock().unwrap(); //dbg
-	//let displayed_lsrs: Vec<String> = lsrs.iter().map(|lsr| lsr.display_short().unwrap()).collect();
-
-	#[cfg(feature = "ssr")]
-	let settings = use_context::<Settings>().unwrap_or(Settings { mock: true }); //dbg
-
 	#[server]
 	async fn build_lsrs(mock: bool) -> Result<Vec<RenderedLsr>, ServerFnError> {
 		use lsr::ssr::SortedLsrs;
-		//let v = vec![
-		//	RenderedLsr::new(("DOT", "USDT").into(), "DOT: 96%".to_string()),
-		//	RenderedLsr::new(("DOGE", "USDT").into(), "DOGE: 30%".to_string()),
-		//	RenderedLsr::new(("SOL", "USDT").into(), "SOL: 20%".to_string()),
-		//	RenderedLsr::new(("ADA", "USDT").into(), "ADA: 66%".to_string()),
-		//]; //dbg
 		let v = match mock {
 			true => {
-				//	vec![
-				//	RenderedLsr::new(("DOT", "USDT").into(), "DOT: 96%".to_string()),
-				//	RenderedLsr::new(("DOGE", "USDT").into(), "DOGE: 30%".to_string()),
-				//	RenderedLsr::new(("SOL", "USDT").into(), "SOL: 20%".to_string()),
-				//	RenderedLsr::new(("ADA", "USDT").into(), "ADA: 66%".to_string()),
-				//]
 				let lsrs = SortedLsrs::load_mock().unwrap(); //dbg
 				lsrs.into()
 			}
@@ -245,18 +222,20 @@ fn LsrSearch(rendered_lsrs: Memo<Vec<RenderedLsr>>, selected_items: WriteSignal<
 							each: move || filtered_items.get(),
 							key: |item| item.clone(),
 							children: move |i: ReadSignal<usize>, item: RenderedLsr| {
-								let is_focused = Memo::new(move |_| focused_index.get() == *i.read() as i32);
-
-								//TEST
+							  let is_focused = move || focused_index.get() == *i.read() as i32;
 								static HOVER_BG: &str = "bg-gray-100";
-								let bg = match is_focused() {
-									true => HOVER_BG.to_owned(),
-									false => format!("hover:{HOVER_BG}"),
-								};
-								//let bg = "hover:bg-gray-100"; //TODO: change bg (same as on hover) when `focused_index` matches `index`
 
 								div()
-									.class(format!("w-full cursor-pointer text-left z-50 {bg}"))
+									.class(move || {
+										let base_classes = "w-full cursor-pointer text-left z-50";
+										let dynamic_class = if is_focused() {
+											HOVER_BG.to_owned()
+										} else {
+											format!("hover:{HOVER_BG}")
+										};
+
+										format!("{} {}", base_classes, dynamic_class)
+									})
 									.on(ev::click, {
 										let item_clone = item.clone();
 										move |_| handle_select_click(item_clone.clone()) //wtf, why must I clone twice?
