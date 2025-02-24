@@ -1,11 +1,7 @@
-use leptos::{
-	ev,
-	html::{button, div, h1, p},
-	prelude::*,
-};
-use leptos_meta::{MetaTags, Stylesheet, Title, provide_meta_context};
+use leptos::{ev, html::*, prelude::*};
+use leptos_meta::{MetaTags, Stylesheet, StylesheetProps, Title, TitleProps, provide_meta_context};
 use leptos_routable::prelude::*;
-use leptos_router::components::{A, Router};
+use leptos_router::components::{A, AProps, Router};
 
 use crate::dashboards::{self, DashboardsView};
 
@@ -31,16 +27,17 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
 pub fn App() -> impl IntoView {
 	provide_meta_context();
 	//TODO: with strum and derive_more, gen a nav bar at the top for all routes (ref: `nested` example in leptos-routable)
-	let href = format!("/pkg/{}.css", env!("CARGO_PKG_NAME"));
-	view! {
-		<Stylesheet id="leptos" href=href />
-
-		<Title text="My Site" />
-
-		<main class="min-h-screen">
-			<Router>{move || AppRoutes::routes()}</Router>
-		</main>
-	}
+	(
+		Stylesheet(StylesheetProps {
+			id: Some("leptos".to_owned()),
+			href: format!("/pkg/{}.css", env!("CARGO_PKG_NAME")),
+		}),
+		Title(TitleProps {
+			formatter: None,
+			text: Some("My Site".into()),
+		}),
+		main().class("min-h-screen").child(view! { <Router>{move || AppRoutes::routes()}</Router> }),
+	)
 }
 
 #[allow(dead_code)]
@@ -79,16 +76,17 @@ fn HomeButton() -> impl IntoView {
 
 #[component]
 pub fn NotFoundView() -> impl IntoView {
-	view! {
-		<div class="p-4 text-center">
-			<h1 class="text-2xl font-bold">"404: Not Found"</h1>
-			<p>"Sorry, we can't find that page."</p>
-			<A
-				href=AppRoutes::Home
-				attr:class="inline-block px-4 py-2 bg-green-500 text-white rounded mt-4"
-			>
-				"Go Home"
-			</A>
-		</div>
-	}
+	div().class("p-4 text-center").child((
+		h1().class("text-2xl font-bold"),
+		p().child("Sorry, we can't find that page"),
+		A(AProps {
+			href: AppRoutes::Home,
+			children: Box::new(|| view! { "Go Home" }.into_any()),
+			target: None,
+			exact: false,
+			strict_trailing_slash: false,
+			scroll: true,
+		})
+		.attr("class", "inline-block px-4 py-2 bg-green-500 text-white rounded mt-4"),
+	))
 }

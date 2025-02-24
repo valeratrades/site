@@ -9,7 +9,7 @@ use leptos::{
 use leptos_meta::{Title, TitleProps};
 use leptos_routable::prelude::*;
 use leptos_router::{
-	components::{A, Outlet},
+	components::{AProps, Outlet, A},
 	hooks::use_location,
 };
 use lsr::RenderedLsr;
@@ -31,23 +31,24 @@ pub enum Routes {
 // boilerplate {{{
 #[component]
 pub fn DashboardsView() -> impl IntoView {
-	view! { <Outlet /> }
+	Outlet()
 }
 #[component]
 fn NotFoundView() -> impl IntoView {
 	let loc = use_location();
-	view! {
-		<section class="p-4 text-center">
-			<h1 class="text-2xl font-bold">"Dashboards Route Not Found"</h1>
-			<p>{move || format!("Path: {}", loc.pathname.get())}</p>
-			<A
-				href=AppRoutes::Dashboards(Routes::Home)
-				attr:class="inline-block px-4 py-2 bg-green-600 text-white rounded mt-2"
-			>
-				"Go to Dashboard Home"
-			</A>
-		</section>
-	}
+	section().class("p-4 text-center").child((
+		h1().class("text-2xl font-bold").child("Dashboards Route Not Found"),
+		p().child(move || format!("Path: {}", loc.pathname.get())),
+		A(AProps {
+			href: AppRoutes::Dashboards(Routes::Home),
+			children: Box::new(|| view! { "Go to Dashboard Home" }.into_any()),
+			target: None,
+			exact: false,
+			strict_trailing_slash: false,
+			scroll: true,
+		})
+		.attr("class", "inline-block px-4 py-2 bg-green-600 text-white rounded mt-2"),
+	))
 }
 //,}}}
 
@@ -97,7 +98,7 @@ fn Lsr() -> impl IntoView {
 			_ => vec![], // fallback
 		}
 	});
-	//TODO: spawn an updated every 15m
+	//TODO: spawn to update every 15m
 
 	let selected_items = RwSignal::new(Vec::<RenderedLsr>::new());
 
@@ -135,7 +136,11 @@ fn LsrSearch(rendered_lsrs: Memo<Vec<RenderedLsr>>, selected_items: WriteSignal<
 	}
 	let filtered_items = Memo::new(move |_| {
 		let search = search_input.read();
-		if search.is_empty() { vec![] } else { fzf(&search, &rendered_lsrs.read()) }
+		if search.is_empty() {
+			vec![]
+		} else {
+			fzf(&search, &rendered_lsrs.read())
+		}
 	});
 
 	let handle_search_input = move |ev: web_sys::Event| {
@@ -198,53 +203,38 @@ fn LsrSearch(rendered_lsrs: Memo<Vec<RenderedLsr>>, selected_items: WriteSignal<
 		}
 	};
 
-	#[rustfmt::skip]
-		form().class("inline-block")
-			.child((
-				input().class("p-2 border rounded")
-					.attr("type", "text")
-					.attr("placeholder", "Search Dashboards")
-					.prop("value", search_input)
-					.on(ev::input, handle_search_input)
-					.on(ev::keydown, handle_key_nav),
+	form().class("inline-block").child((
+		input()
+			.class("p-2 border rounded")
+			.attr("type", "text")
+			.attr("placeholder", "Search Dashboards")
+			.prop("value", search_input)
+			.on(ev::input, handle_search_input)
+			.on(ev::keydown, handle_key_nav),
+		// Dropdown results container
+		div()
+			.class("relative inline-block z-50 overflow-y-auto max-h-96")
+			.style(move || if filtered_items.get().is_empty() { "display: none;" } else { "display: block;" })
+			.child(ForEnumerate(ForEnumerateProps {
+				each: move || filtered_items.get(),
+				key: |item| item.clone(),
+				children: move |i: ReadSignal<usize>, item: RenderedLsr| {
+					let is_focused = move || focused_index.get() == *i.read() as i32;
+					static HOVER_BG: &str = "bg-gray-100";
 
-				// Dropdown results container
-				div()
-					.class("relative inline-block z-50 overflow-y-auto max-h-96")
-					.style(move || {
-						if filtered_items.get().is_empty() {
-							"display: none;"
-						} else {
-							"display: block;"
-						}
-					})
-					.child(
-						ForEnumerate(ForEnumerateProps {
-							each: move || filtered_items.get(),
-							key: |item| item.clone(),
-							children: move |i: ReadSignal<usize>, item: RenderedLsr| {
-							  let is_focused = move || focused_index.get() == *i.read() as i32;
-								static HOVER_BG: &str = "bg-gray-100";
+					div()
+						.class(move || {
+							let base_classes = "w-full cursor-pointer text-left z-50";
+							let on_focus = if is_focused() { HOVER_BG } else { "" };
 
-								div()
-									.class(move || {
-										let base_classes = "w-full cursor-pointer text-left z-50";
-										let dynamic_class = if is_focused() {
-											HOVER_BG.to_owned()
-										} else {
-											format!("hover:{HOVER_BG}")
-										};
-
-										format!("{} {}", base_classes, dynamic_class)
-									})
-									.on(ev::click, {
-										let item_clone = item.clone();
-										move |_| handle_select_click(item_clone.clone()) //wtf, why must I clone twice?
-									})
-									.child(item.rend.clone())
-							}
-						}
-						)
-					),
-			))
+							format!("{base_classes} hover:{HOVER_BG} {on_focus}")
+						})
+						.on(ev::click, {
+							let item_clone = item.clone();
+							move |_| handle_select_click(item_clone.clone()) //wtf, why must I clone twice?
+						})
+						.child(item.rend.clone())
+				},
+			})),
+	))
 }

@@ -15,7 +15,7 @@ impl From<ssr::SortedLsrs> for Vec<RenderedLsr> {
 
 #[cfg(feature = "ssr")]
 pub mod ssr {
-	use color_eyre::eyre::{Result, bail};
+	use color_eyre::eyre::{bail, Result};
 	use futures::future::join_all;
 	use tracing::{info, warn};
 	use v_exchanges::{
