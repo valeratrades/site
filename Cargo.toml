@@ -41,7 +41,7 @@ console_error_panic_hook = { version = "^0.1", optional = true }
 derive-new = "0.7.0"
 derive_more = { version = "2.0.1", features = ["from", "display", "deref", "deref_mut", "debug"] }
 futures = "0.3.31"
-leptos = { version = "^0.7", features = ["nightly"] }
+leptos = { version = "^0.7", features = ["nightly", "islands"] }
 leptos-routable = "^0.1"
 leptos_axum = { version = "^0.7", optional = true }
 leptos_meta = { version = "^0.7" }

@@ -20,7 +20,7 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
 				<meta charset="utf-8" />
 				<meta name="viewport" content="width=device-width, initial-scale=1" />
 				<AutoReload options=options.clone() />
-				<HydrationScripts options />
+				<HydrationScripts options islands=true/>
 				<MetaTags />
 			</head>
 			<body>
@@ -33,11 +33,11 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
 #[component]
 pub fn App() -> impl IntoView {
 	//TODO: pass settings from the top [Axum State](<https://book.leptos.dev/server/26_extractors.html#axum-state>)
-	let settings = Settings { mock: true }; //dbg
-	provide_context(settings);
+	//let settings = Settings { mock: true }; //dbg
+	//provide_context(settings); //TEST
 
 	provide_meta_context();
-	//TODO: with strum and derive_more, gen a nav bar at the top for all routes
+	//TODO: with strum and derive_more, gen a nav bar at the top for all routes (ref: `nested` example in leptos-routable)
 	let href = format!("/pkg/{}.css", env!("CARGO_PKG_NAME"));
 	view! {
 		<Stylesheet id="leptos" href=href />
@@ -66,18 +66,22 @@ pub enum AppRoutes {
 /// Renders the home page of your application.
 #[component]
 fn HomeView() -> impl IntoView {
-	// Creates a reactive value to update the button
-	let count = RwSignal::new(0);
-	let on_click = move |_| *count.write() += 1;
-
 	#[rustfmt::skip]
 	div().child((
 		h1().child("Welcome to Leptos!"),
-		button()
-			.on(ev::click, on_click).child(format!("Click Me: {}", count.read())),
+		HomeButton(),
 		p().class("bg-purple-500 text-white p-2 rounded m-2")
-			.child("Tailwind check: this should have purple background and rounded corners")
+			.child("Tailwind check: this should have purple background and rounded corners") //dbg
 	))
+}
+
+//dbg
+#[island]
+fn HomeButton() -> impl IntoView {
+	let count = RwSignal::new(0);
+	let on_click = move |_| *count.write() += 1;
+
+	button().on(ev::click, on_click).child(move || format!("Click Me: {}", count.read()))
 }
 
 #[component]

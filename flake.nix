@@ -32,6 +32,7 @@
           openssl
           pkg-config
           tailwindcss
+					#flyctl # might end up using it for deployment
         ];
 
         sourceTailwind = ''
@@ -47,7 +48,8 @@
         readme = v-utils.readme-fw { inherit pkgs pname; lastSupportedVersion = "nightly-1.86"; rootDir = ./.; licenses = [{ name = "Blue Oak 1.0.0"; outPath = "LICENSE"; }]; badges = [ "msrv" "crates_io" "docs_rs" "loc" "ci" ]; };
       in
       {
-        #TODO: actually implement build process
+        #TODO: actually implement build process (ref: https://book.leptos.dev/deployment/ssr.html)
+				#TODO; figure out what's the equivalent of docker's `EXPOSE 8080`
         packages =
           let
             rust = (pkgs.rust-bin.fromRustupToolchainFile ./.cargo/rust-toolchain.toml);
@@ -62,7 +64,12 @@
               inherit pname;
               version = manifest.version;
 
-              preBuild = sourceTailwind;
+              preBuild = sourceTailwind ++
+								''
+								mkdir ./build/app
+								cp -r ./target/site/ ./build/app/site
+								cp ./target/release/${pname} ./build/app/
+							'';
               buildInputs = with pkgs; [
                 openssl.dev
               ];

@@ -66,7 +66,7 @@ fn HomeView() -> impl IntoView {
 	))
 }
 
-#[component]
+#[island]
 fn Lsr() -> impl IntoView {
 	#[server]
 	async fn build_lsrs() -> Result<Vec<RenderedLsr>, ServerFnError> {
@@ -91,19 +91,20 @@ fn Lsr() -> impl IntoView {
 	}
 
 	let lsrs_resource = Resource::new(move || (), |_| async move { build_lsrs().await });
-	let rendered_lsrs_mem = Memo::new(move |_| {
+	let rendered_lsrs = Memo::new(move |_| {
 		match lsrs_resource.get() {
 			Some(Ok(lsrs)) => lsrs,
 			_ => vec![], // fallback
 		}
 	});
+	//TODO: spawn an updated every 15m
 
 	let selected_items = RwSignal::new(Vec::<RenderedLsr>::new());
 
 	#[rustfmt::skip]
 	section().class("p-4 text-center").child((
 		LsrSearch(LsrSearchProps{
-			rendered_lsrs: rendered_lsrs_mem,
+			rendered_lsrs,
 			selected_items: selected_items.write_only(),
 		}),
 		// Selected items display
@@ -123,6 +124,7 @@ fn Lsr() -> impl IntoView {
 	))
 }
 
+//TODO!!!: prevent key hogging (probably in on:keydown)
 #[component]
 fn LsrSearch(rendered_lsrs: Memo<Vec<RenderedLsr>>, selected_items: WriteSignal<Vec<RenderedLsr>>) -> impl IntoView {
 	let search_input = RwSignal::new(String::default());
