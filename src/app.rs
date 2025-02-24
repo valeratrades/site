@@ -7,20 +7,17 @@ use leptos_meta::{MetaTags, Stylesheet, Title, provide_meta_context};
 use leptos_routable::prelude::*;
 use leptos_router::components::{A, Router};
 
-use crate::{
-	conf::Settings,
-	dashboards::{self, DashboardsView},
-};
+use crate::dashboards::{self, DashboardsView};
 
 pub fn shell(options: LeptosOptions) -> impl IntoView {
 	view! {
-		<!DOCTYPE html>
+		<!DOCTYPE html> 
 		<html lang="en">
 			<head>
 				<meta charset="utf-8" />
 				<meta name="viewport" content="width=device-width, initial-scale=1" />
 				<AutoReload options=options.clone() />
-				<HydrationScripts options islands=true/>
+				<HydrationScripts options islands=true />
 				<MetaTags />
 			</head>
 			<body>
@@ -32,10 +29,6 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
 
 #[component]
 pub fn App() -> impl IntoView {
-	//TODO: pass settings from the top [Axum State](<https://book.leptos.dev/server/26_extractors.html#axum-state>)
-	//let settings = Settings { mock: true }; //dbg
-	//provide_context(settings); //TEST
-
 	provide_meta_context();
 	//TODO: with strum and derive_more, gen a nav bar at the top for all routes (ref: `nested` example in leptos-routable)
 	let href = format!("/pkg/{}.css", env!("CARGO_PKG_NAME"));
