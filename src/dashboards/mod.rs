@@ -9,7 +9,7 @@ use leptos::{
 use leptos_meta::{Title, TitleProps};
 use leptos_routable::prelude::*;
 use leptos_router::{
-	components::{AProps, Outlet, A},
+	components::{A, AProps, Outlet},
 	hooks::use_location,
 };
 use lsr::RenderedLsr;
@@ -125,22 +125,17 @@ fn Lsr() -> impl IntoView {
 	))
 }
 
-//TODO!!!: prevent key hogging (probably in on:keydown)
 #[component]
 fn LsrSearch(rendered_lsrs: Memo<Vec<RenderedLsr>>, selected_items: WriteSignal<Vec<RenderedLsr>>) -> impl IntoView {
 	let search_input = RwSignal::new(String::default());
 
+	///HACK: for now, using simple substring matching
 	fn fzf(s: &str, available: &[RenderedLsr]) -> Vec<RenderedLsr> {
-		// For now, using simple substring matching
 		available.iter().filter(|v| v.rend.to_lowercase().contains(&s.to_lowercase())).cloned().collect()
 	}
 	let filtered_items = Memo::new(move |_| {
 		let search = search_input.read();
-		if search.is_empty() {
-			vec![]
-		} else {
-			fzf(&search, &rendered_lsrs.read())
-		}
+		if search.is_empty() { vec![] } else { fzf(&search, &rendered_lsrs.read()) }
 	});
 
 	let handle_search_input = move |ev: web_sys::Event| {
@@ -159,7 +154,7 @@ fn LsrSearch(rendered_lsrs: Memo<Vec<RenderedLsr>>, selected_items: WriteSignal<
 		*search_input.write() = String::default();
 	};
 
-	let focused_index = RwSignal::new(0); // -1 means no selection //TODO: make default to 0, then get rid of special-case handle_submit
+	let focused_index = RwSignal::new(0);
 	let handle_key_nav = move |ev: web_sys::KeyboardEvent| {
 		if !filtered_items.get().is_empty() {
 			let items_count = filtered_items.get().len();
@@ -202,7 +197,6 @@ fn LsrSearch(rendered_lsrs: Memo<Vec<RenderedLsr>>, selected_items: WriteSignal<
 			}
 		}
 	};
-
 	form().class("inline-block").child((
 		input()
 			.class("p-2 border rounded")
@@ -224,10 +218,10 @@ fn LsrSearch(rendered_lsrs: Memo<Vec<RenderedLsr>>, selected_items: WriteSignal<
 
 					div()
 						.class(move || {
-							let base_classes = "w-full cursor-pointer text-left z-50";
+							let base_classes = "w-full cursor-pointer text-left"; //inherits `z-50` from parent
 							let on_focus = if is_focused() { HOVER_BG } else { "" };
 
-							format!("{base_classes} hover:{HOVER_BG} {on_focus}")
+							format!("{base_classes} hover:{HOVER_BG} {on_focus}") //TODO: fix hover bg (doesn't work)
 						})
 						.on(ev::click, {
 							let item_clone = item.clone();
