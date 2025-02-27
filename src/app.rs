@@ -1,13 +1,13 @@
 use leptos::{ev, html::*, prelude::*};
-use leptos_meta::{MetaTags, Stylesheet, StylesheetProps, Title, TitleProps, provide_meta_context};
+use leptos_meta::{provide_meta_context, MetaTags, Stylesheet, StylesheetProps, Title, TitleProps};
 use leptos_routable::prelude::*;
-use leptos_router::components::{A, AProps, Router};
+use leptos_router::components::{AProps, Router, A};
 
 use crate::dashboards::{self, DashboardsView};
 
 pub fn shell(options: LeptosOptions) -> impl IntoView {
 	view! {
-		<!DOCTYPE html> 
+		<!DOCTYPE html>
 		<html lang="en">
 			<head>
 				<meta charset="utf-8" />

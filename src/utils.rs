@@ -28,3 +28,31 @@ where
 		Ok(serde_json::from_str(&json)?)
 	}
 }
+
+///```rs
+///crate::try_load_mock!(MarketStructure, .into());
+///```
+#[macro_export]
+macro_rules! try_load_mock {
+	// Basic case without transform
+	($r#type:path) => {
+		if use_context::<Settings>().expect("Settings not found in context").mock {
+			match <$type>::load_mock() {
+				Ok(v) => return Ok(v),
+				Err(e) => tracing::warn!("Couldn't load mock: {:?}\n-> Falling back to requesting new data.", e),
+			}
+		}
+	};
+
+	// With transform
+	($type:path; $($transform:tt)+) => {
+		if use_context::<Settings>().expect("Settings not found in context").mock {
+			match <$type>::load_mock() {
+				Ok(v) => {
+					return Ok(v$($transform)+);
+				}
+				Err(e) => tracing::warn!("Couldn't load mock: {:?}\n-> Falling back to requesting new data.", e),
+			}
+		}
+	};
+}
