@@ -6,16 +6,25 @@ pub struct RenderedLsr {
 	pub pair: Pair,
 	pub rend: String,
 }
+#[derive(Debug, Default, Clone, Hash, PartialEq, Eq, Serialize, Deserialize, derive_more::Deref)]
+pub struct RenderedLsrs {
+	#[deref]
+	pub v: Vec<RenderedLsr>,
+	pub outliers: String,
+}
 #[cfg(feature = "ssr")]
-impl From<ssr::SortedLsrs> for Vec<RenderedLsr> {
+impl From<ssr::SortedLsrs> for RenderedLsrs {
 	fn from(s: ssr::SortedLsrs) -> Self {
-		s.iter().map(|lsr| RenderedLsr::new(lsr.pair, lsr.display_short().unwrap())).collect()
+		Self {
+			v: s.iter().map(|lsr| RenderedLsr::new(lsr.pair, lsr.display_short().unwrap())).collect(),
+			outliers: s.display_outliers(10),
+		}
 	}
 }
 
 #[cfg(feature = "ssr")]
 pub mod ssr {
-	use color_eyre::eyre::{Result, bail};
+	use color_eyre::eyre::{bail, Result};
 	use futures::future::join_all;
 	use tracing::{info, warn};
 	use v_exchanges::{
@@ -26,7 +35,6 @@ pub mod ssr {
 
 	use crate::utils::Mock;
 
-	const SLICE_SIZE: usize = 10;
 	const MARKET: v_exchanges::AbsMarket = v_exchanges::AbsMarket::Binance(v_exchanges::binance::Market::Futures);
 
 	//Q: potentially fix to "1D", req and store full month of data for both Global and Top Positions, to display when searching for specific one.
@@ -111,41 +119,35 @@ pub mod ssr {
 			let longed_str = self.get(self.len() - i - 1).expect("checked earlier").display_change()?;
 			Ok(format!("{shorted_str}{longed_str}"))
 		}
-	}
-	impl Mock for SortedLsrs {
-		const NAME: &'static str = "lsrs";
-	}
-	impl std::fmt::Display for SortedLsrs {
-		fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+
+		pub fn display_outliers(&self, rows: usize) -> String {
 			let mut s = String::new();
-			let display_rows_ceiling = std::cmp::min(SLICE_SIZE, self.len() / 2 /*floor*/);
-			let width = Lsrs::CHANGE_STR_LEN;
+			let display_rows_ceiling = std::cmp::min(rows, self.len() / 2 /*floor*/);
 			for i in 0..display_rows_ceiling {
 				if i == 0 {
-					let title = |t: &'static str| -> std::fmt::Arguments {
-						//SAFETY: `t` is literally static
-						unsafe { std::mem::transmute::<std::fmt::Arguments, std::fmt::Arguments>(format_args!("{:<width$}", format!("Most {t} (% longs)"), width = width)) }
-					};
-
+					let title = |t: &'static str| format!("{:<width$}", format!("Most {t} (% longs)"), width = Lsrs::CHANGE_STR_LEN);
 					s.write_fmt(format_args!("{}{}", title("Shorted"), title("Longed"))).unwrap();
 					// match formatting of `fmt_lsr` (when counting, don't forget all symbols outside of main paddings)
-				} else {
-					s.push('\n');
 				}
+				s.push('\n');
+
 				s.push_str(
 					&self
 						.display_most_shorted_longed_row(i)
 						.expect("guaranteed enough elements (iterating over `self.len() / 2` minimum)"),
 				);
 			}
-			s.push_str(&format!("\n{:-^width$}", "", width = width));
+			s.push_str(&format!("\n{:-^width$}", "", width = Lsrs::CHANGE_STR_LEN));
 			s.push_str(&format!("\nAverage: {:.2}", self.iter().map(|lsr| lsr.last().unwrap().long()).sum::<f64>() / self.len() as f64));
 			s.push_str(&format!(
 				"\nCollected for {}/{} pairs on {MARKET}",
 				self.len(),
 				self.__total_pairs_on_exchange.expect("A dumb unwrap, really should be an error")
 			));
-			write!(f, "{s}")
+			s
 		}
+	}
+	impl Mock for SortedLsrs {
+		const NAME: &'static str = "lsrs";
 	}
 }

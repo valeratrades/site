@@ -9,10 +9,10 @@ use leptos::{
 use leptos_meta::{Title, TitleProps};
 use leptos_routable::prelude::*;
 use leptos_router::{
-	components::{A, AProps, Outlet},
+	components::{AProps, Outlet, A},
 	hooks::use_location,
 };
-use lsr::RenderedLsr;
+use lsr::{RenderedLsr, RenderedLsrs};
 
 #[cfg(feature = "ssr")]
 use crate::utils::Mock as _;
@@ -70,7 +70,7 @@ fn HomeView() -> impl IntoView {
 #[island]
 fn Lsr() -> impl IntoView {
 	#[server]
-	async fn build_lsrs() -> Result<Vec<RenderedLsr>, ServerFnError> {
+	async fn build_lsrs() -> Result<RenderedLsrs, ServerFnError> {
 		use lsr::ssr::SortedLsrs;
 
 		let settings = use_context::<Settings>().ok_or_else(|| ServerFnError::new("Settings not found in context"))?;
@@ -94,34 +94,38 @@ fn Lsr() -> impl IntoView {
 	let lsrs_resource = Resource::new(move || (), |_| async move { build_lsrs().await });
 	let rendered_lsrs = Memo::new(move |_| {
 		match lsrs_resource.get() {
-			Some(Ok(lsrs)) => lsrs,
+			Some(Ok(lsrs)) => lsrs.v,
 			_ => vec![], // fallback
 		}
 	});
+
 	//TODO: spawn to update every 15m
 
 	let selected_items = RwSignal::new(Vec::<RenderedLsr>::new());
 
-	#[rustfmt::skip]
 	section().class("p-4 text-center").child((
-		LsrSearch(LsrSearchProps{
-			rendered_lsrs,
-			selected_items: selected_items.write_only(),
-		}),
+		div().child((
+			//TODO: rewrite with view builder (currently failing)
+			view! {
+				<Suspense fallback=move || pre().child("Loading...")>
+				{move || match lsrs_resource.get() {
+					Some(Ok(l)) => pre().child(l.outliers),
+					Some(Err(e)) => pre().child(format!("Error loading Lsrs: {e}")),
+					None => unreachable!("or at least I think so"),
+				}}
+				</Suspense>
+			},
+			LsrSearch(LsrSearchProps {
+				rendered_lsrs,
+				selected_items: selected_items.write_only(),
+			}),
+		)),
 		// Selected items display
-		div().class("mt-4 space-y-2")
-			.child(
-				For(ForProps {
-					each: move || selected_items.read().to_vec(),
-					key: |item| item.clone(),
-					children: move |item: RenderedLsr| {
-						div().class("flex items-center justify-between p-2 bg-gray-50 rounded")
-							.child(
-								span().child(item.rend.clone())
-							)
-					}
-				})
-			),
+		div().class("mt-4 space-y-2").child(For(ForProps {
+			each: move || selected_items.read().to_vec(),
+			key: |item| item.clone(),
+			children: move |item: RenderedLsr| div().class("flex items-center justify-between p-2 bg-gray-50 rounded").child(span().child(item.rend.clone())),
+		})),
 	))
 }
 
@@ -135,7 +139,11 @@ fn LsrSearch(rendered_lsrs: Memo<Vec<RenderedLsr>>, selected_items: WriteSignal<
 	}
 	let filtered_items = Memo::new(move |_| {
 		let search = search_input.read();
-		if search.is_empty() { vec![] } else { fzf(&search, &rendered_lsrs.read()) }
+		if search.is_empty() {
+			vec![]
+		} else {
+			fzf(&search, &rendered_lsrs.read())
+		}
 	});
 
 	let handle_search_input = move |ev: web_sys::Event| {
@@ -218,10 +226,10 @@ fn LsrSearch(rendered_lsrs: Memo<Vec<RenderedLsr>>, selected_items: WriteSignal<
 
 					div()
 						.class(move || {
-							let base_classes = "w-full cursor-pointer text-left"; //inherits `z-50` from parent
+							let base_classes = "w-full cursor-pointer text-left";
 							let on_focus = if is_focused() { HOVER_BG } else { "" };
 
-							format!("{base_classes} hover:{HOVER_BG} {on_focus}") //TODO: fix hover bg (doesn't work)
+							format!("{base_classes} hover:{HOVER_BG} {on_focus}") //TODO: fix hover bg ("hover:" tag is included to css, but nothing happens on hover)
 						})
 						.on(ev::click, {
 							let item_clone = item.clone();
