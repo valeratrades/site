@@ -4481,7 +4481,7 @@ dependencies = [
 
 [[package]]
 name = "v_exchanges"
-version = "0.6.2"
+version = "0.6.5"
 dependencies = [
  "async-trait",
  "chrono",
@@ -4506,7 +4506,7 @@ dependencies = [
 
 [[package]]
 name = "v_exchanges_adapters"
-version = "0.6.1"
+version = "0.6.3"
 dependencies = [
  "chrono",
  "derive-new",
@@ -4529,7 +4529,7 @@ dependencies = [
 
 [[package]]
 name = "v_exchanges_api_generics"
-version = "0.8.1"
+version = "0.8.3"
 dependencies = [
  "bytes",
  "derive-new",
@@ -4560,7 +4560,7 @@ dependencies = [
 
 [[package]]
 name = "v_utils"
-version = "2.5.2"
+version = "2.5.5"
 dependencies = [
  "chrono",
  "const_format",

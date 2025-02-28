@@ -1,4 +1,4 @@
-use color_eyre::eyre::{bail, Result};
+use color_eyre::eyre::{Result, bail};
 use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 use tracing::{info, warn};
@@ -20,7 +20,7 @@ pub async fn get(tf: Timeframe, range: RequestRange) -> Result<SortedLsrs> {
 	let pairs = bn.exchange_info(MARKET).await.unwrap().usdt_pairs().collect::<Vec<_>>();
 	let pairs_len = pairs.len();
 
-	let lsr_no_data_pairs_file = create_xdg!(data, "").join("lsr_no_data_pairs.txt");
+	let lsr_no_data_pairs_file = xdg_data("").join("lsr_no_data_pairs.txt");
 	let lsr_no_data_pairs = match std::fs::metadata(&lsr_no_data_pairs_file) {
 		Ok(metadata) => {
 			let age = metadata.modified().unwrap().elapsed().unwrap();
@@ -122,6 +122,4 @@ impl SortedLsrs {
 		s
 	}
 }
-impl Mock for SortedLsrs {
-	const NAME: &'static str = "Lsrs";
-}
+impl Mock for SortedLsrs {}

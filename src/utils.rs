@@ -1,6 +1,7 @@
 use std::fs;
 
-use tracing::{debug, info};
+#[cfg(feature = "ssr")]
+use v_utils::prelude::*;
 
 //TODO: switch to v_utils
 #[cfg(feature = "ssr")]
@@ -15,16 +16,22 @@ pub fn share_dir() -> std::path::PathBuf {
 pub trait Mock
 where
 	Self: Sized + serde::de::DeserializeOwned + serde::Serialize, {
-	const NAME: &'static str;
+	fn __name() -> &'static str {
+		static NAME: std::sync::OnceLock<&'static str> = std::sync::OnceLock::new();
+		NAME.get_or_init(|| {
+			let type_path = std::any::type_name::<Self>();
+			type_path.split("::").last().unwrap_or(type_path)
+		})
+	}
 	fn persist(&self) -> std::io::Result<()> {
-		info!("Persisting current {}", Self::NAME);
+		info!("Persisting current {}", Self::__name());
 		let json = serde_json::to_string_pretty(self)?;
 		debug!(?json);
-		fs::write(share_dir().join(format!("{}.json", Self::NAME)), json)?;
+		fs::write(xdg_cache("").join(format!("{}.json", Self::__name())), json)?;
 		Ok(())
 	}
 	fn load_mock() -> std::io::Result<Self> {
-		let json = fs::read_to_string(share_dir().join(format!("{}.json", Self::NAME)))?;
+		let json = fs::read_to_string(share_dir().join(format!("{}.json", Self::__name())))?;
 		Ok(serde_json::from_str(&json)?)
 	}
 }
@@ -42,6 +49,7 @@ macro_rules! try_load_mock {
 				Err(e) => tracing::warn!("Couldn't load mock: {:?}\n-> Falling back to requesting new data.", e),
 			}
 		}
+		tracing::trace!("mock didn't happen, requesting new data");
 	};
 
 	// With transform
@@ -54,5 +62,6 @@ macro_rules! try_load_mock {
 				Err(e) => tracing::warn!("Couldn't load mock: {:?}\n-> Falling back to requesting new data.", e),
 			}
 		}
+		tracing::trace!("mock didn't happen, requesting new data");
 	};
 }

@@ -29,16 +29,16 @@ pub fn Lsr() -> impl IntoView {
 
 	section().class("p-4 text-center").child((
 		div().child((
-			//TODO: rewrite with view builder (currently failing)
-			view! {
-				<Suspense fallback=move || pre().child("Loading...")>
-				{move || match lsrs_resource.get() {
-					Some(Ok(l)) => pre().child(l.outliers),
-					Some(Err(e)) => pre().child(format!("Error loading Lsrs: {e}")),
-					None => unreachable!("or at least I think so"),
-				}}
-				</Suspense>
-			},
+			Suspense(SuspenseProps {
+				fallback: { || pre().child("Loading...") }.into(),
+				children: ToChildren::to_children(move || {
+					IntoRender::into_render(move || match lsrs_resource.get() {
+						Some(Ok(l)) => pre().child(l.outliers),
+						Some(Err(e)) => pre().child(format!("Error loading Lsrs: {e}")),
+						None => pre().child("Loading...".to_owned()),
+					})
+				}),
+			}),
 			LsrSearch(LsrSearchProps {
 				rendered_lsrs,
 				selected_items: selected_items.write_only(),
@@ -63,11 +63,7 @@ fn LsrSearch(rendered_lsrs: Memo<Vec<RenderedLsr>>, selected_items: WriteSignal<
 	}
 	let filtered_items = Memo::new(move |_| {
 		let search = search_input.read();
-		if search.is_empty() {
-			vec![]
-		} else {
-			fzf(&search, &rendered_lsrs.read())
-		}
+		if search.is_empty() { vec![] } else { fzf(&search, &rendered_lsrs.read()) }
 	});
 
 	let handle_search_input = move |ev: web_sys::Event| {

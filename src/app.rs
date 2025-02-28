@@ -1,13 +1,13 @@
 use leptos::{ev, html::*, prelude::*};
-use leptos_meta::{provide_meta_context, MetaTags, Stylesheet, StylesheetProps, Title, TitleProps};
+use leptos_meta::{MetaTags, Stylesheet, StylesheetProps, Title, TitleProps, provide_meta_context};
 use leptos_routable::prelude::*;
-use leptos_router::components::{AProps, Router, A};
+use leptos_router::components::{A, AProps, Router};
 
 use crate::dashboards::{self, DashboardsView};
 
 pub fn shell(options: LeptosOptions) -> impl IntoView {
 	view! {
-		<!DOCTYPE html>
+		<!DOCTYPE html> 
 		<html lang="en">
 			<head>
 				<meta charset="utf-8" />
@@ -56,12 +56,11 @@ pub enum AppRoutes {
 /// Renders the home page of your application.
 #[component]
 fn HomeView() -> impl IntoView {
-	#[rustfmt::skip]
 	div().child((
 		h1().child("Welcome to Leptos!"),
 		HomeButton(),
 		p().class("bg-purple-500 text-white p-2 rounded m-2")
-			.child("Tailwind check: this should have purple background and rounded corners") //dbg
+			.child("Tailwind check: this should have purple background and rounded corners"), //dbg
 	))
 }
 

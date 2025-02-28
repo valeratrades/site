@@ -1,4 +1,5 @@
 #![feature(stmt_expr_attributes)]
+#![feature(const_type_name)]
 #![feature(duration_constructors)]
 pub mod app;
 pub mod conf;

@@ -46,7 +46,6 @@ leptos-routable = "^0.1"
 leptos_meta = { version = "^0.7" }
 leptos_router = { version = "^0.7.7", features = ["nightly"] }
 serde = { version = "^1.0.218", features = ["derive"] }
-tracing = "0.1.41"
 v_utils = { version = "^2.5.2", path = "/home/v/s/v_utils/v_utils" } #ga: rm path
 web-sys = "0.3.77"
 
@@ -62,6 +61,7 @@ leptos_axum = { version = "^0.7", optional = true }
 plotly = { version = "^0.12.0", features = ["image", "kaleido"], optional = true }
 serde_json = { version = "^1.0.139", optional = true }
 tokio = { version = "^1", features = ["rt-multi-thread"], optional = true }
+tracing = { version = "0.1.41", optional = true }
 v_exchanges = { version = "0.6.0", path = "/home/v/s/v_exchanges/v_exchanges", features = ["binance", "bybit"], optional = true } #ga: rm path
 #,}}}
 
@@ -77,6 +77,7 @@ ssr = [
     "dep:v_exchanges",
     "dep:axum",
     "dep:tokio",
+    "dep:tracing",
     "dep:leptos_axum",
     "dep:chrono",
     "dep:plotly",

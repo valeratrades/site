@@ -4,7 +4,7 @@ use leptos::{html::*, prelude::*};
 use leptos_meta::{Title, TitleProps};
 use leptos_routable::prelude::*;
 use leptos_router::{
-	components::{AProps, Outlet, A},
+	components::{A, AProps, Outlet},
 	hooks::use_location,
 };
 

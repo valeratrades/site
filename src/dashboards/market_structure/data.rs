@@ -6,7 +6,6 @@ use v_utils::prelude::*;
 
 pub async fn try_build(limit: RequestRange, tf: Timeframe, market: AbsMarket) -> Result<Plot> {
 	let mut exchange = market.client();
-	//exchange.client_mut().update_default_option(BinanceOption::RequestConfig { recv_window: Some(5000) });
 	exchange.set_max_tries(3);
 
 	let exch_info = exchange.exchange_info(market).await.unwrap();
@@ -37,17 +36,16 @@ pub async fn collect_data(pairs: Vec<Pair>, tf: Timeframe, range: RequestRange, 
 
 	results.into_iter().for_each(|result| {
 		if let Ok((pair, series)) = result {
-			if "BTCUSDT" == pair {
+			if "BTC-USDT" == pair {
 				dt_index = series.col_open_times;
 			}
 			data.insert(pair, series.col_closes);
 		}
 	});
-
-	if dt_index.is_empty() {
-		bail!("Failed to fetch data for BTCUSDT, aborting");
-	}
 	tracing::info!("Fetched data for {} pairs", data.len());
+	if dt_index.is_empty() {
+		bail!("Failed to fetch data for BTC-USDT, aborting");
+	}
 
 	let mut normalized_df: HashMap<Pair, Vec<f64>> = HashMap::new();
 	for (symbol, closes) in data.into_iter() {
@@ -146,7 +144,7 @@ pub fn plotly_closes(normalized_closes: HashMap<Pair, Vec<f64>>, dt_index: Vec<D
 
 	let mut contains_btcusdt = false;
 	for col_name in normalized_closes.keys() {
-		if &col_name.to_string() == "BTCUSDT" {
+		if &col_name.to_string() == "BTC-USDT" {
 			contains_btcusdt = true;
 			continue;
 		}
@@ -170,7 +168,7 @@ pub fn plotly_closes(normalized_closes: HashMap<Pair, Vec<f64>>, dt_index: Vec<D
 		labeled_trace(col_name, None, 2.0, None);
 	}
 	if contains_btcusdt {
-		labeled_trace("BTCUSDT".try_into().unwrap(), Some("~BTC~"), 3.5, Some("gold"));
+		labeled_trace("BTC-USDT".try_into().unwrap(), Some("~BTC~"), 3.5, Some("gold"));
 	}
 	for col_name in bottom.into_iter().rev() {
 		labeled_trace(col_name, None, 2.0, None);

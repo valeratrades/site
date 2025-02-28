@@ -15,16 +15,16 @@ use crate::utils::Mock;
 
 #[component]
 pub fn MS() -> impl IntoView {
+	//TODO: refresh
 	view! {
-		//<Suspense fallback=move || pre().child("Loading...")>
-		////{move || match lsrs_resource.get() {
-		////	Some(Ok(l)) => pre().child(l.outliers),
-		////	Some(Err(e)) => pre().child(format!("Error loading Lsrs: {e}")),
-		////	None => unreachable!("or at least I think so"),
-		////}}
-		//{async move || {request_market_structure().await.map(|m| pre().child(m.0))}}
-		//</Suspense>
-		"PLACEHOLDER"
+		<Suspense fallback=move || {
+				pre().child("Loading...")
+		}>
+			{move || Suspend::new(async move {
+					let ms = request_market_structure().await.expect("TODO: handle error");
+					pre().child(ms.0);
+			})}
+		</Suspense>
 	}
 }
 
@@ -32,9 +32,7 @@ pub fn MS() -> impl IntoView {
 #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
 pub struct MarketStructure(pub String);
 #[cfg(feature = "ssr")]
-impl Mock for MarketStructure {
-	const NAME: &'static str = "MarketStructure";
-}
+impl Mock for MarketStructure {}
 #[server]
 async fn request_market_structure() -> Result<MarketStructure, ServerFnError> {
 	crate::try_load_mock!(MarketStructure);
