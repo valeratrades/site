@@ -57,12 +57,14 @@ wasm-bindgen = { version = "^0.2.100", optional = true }
 # optional-ssr {{{
 axum = { version = "=0.7.9", optional = true }
 chrono = { version = "^0.4.40", optional = true }
+chrono-tz = { version = "^0.10.1", optional = true }
 leptos_axum = { version = "^0.7", optional = true }
 plotly = { version = "^0.12.0", features = ["image", "kaleido"], optional = true }
+reqwest = { version = "^0.12.12", optional = true }
 serde_json = { version = "^1.0.139", optional = true }
 tokio = { version = "^1", features = ["rt-multi-thread"], optional = true }
-tracing = { version = "0.1.41", optional = true }
-v_exchanges = { version = "0.6.0", path = "/home/v/s/v_exchanges/v_exchanges", features = ["binance", "bybit"], optional = true } #ga: rm path
+tracing = { version = "^0.1.41", optional = true }
+v_exchanges = { version = "^0.6.0", path = "/home/v/s/v_exchanges/v_exchanges", features = ["binance", "bybit"], optional = true } #ga: rm path
 #,}}}
 
 [features]
@@ -79,7 +81,9 @@ ssr = [
     "dep:tokio",
     "dep:tracing",
     "dep:leptos_axum",
+    "dep:reqwest",
     "dep:chrono",
+    "dep:chrono-tz",
     "dep:plotly",
     "leptos/ssr",
     "leptos_meta/ssr",

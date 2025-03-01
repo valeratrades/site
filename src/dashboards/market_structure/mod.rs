@@ -16,7 +16,7 @@ pub fn MarketStructureView() -> impl IntoView {
 	let ms_resource = Resource::new(move || (), |_| async move { request_market_structure().await.expect("dbg") });
 	#[rustfmt::skip]
 	Suspense(SuspenseProps {
-		fallback: { || pre().child("Loading...") }.into(),
+		fallback: { || pre().child("Loading MarketStructure...") }.into(),
 		children: ToChildren::to_children(move || {
 			IntoRender::into_render(move || {
 				ms_resource.get().map(|ms| {

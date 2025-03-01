@@ -126,7 +126,9 @@ pub fn plotly_closes(normalized_closes: HashMap<Pair, Vec<f64>>, dt_index: Vec<D
 	let bottom: Vec<Pair> = performance.iter().take(n_samples).map(|x| x.0).collect();
 
 	let mut plot = Plot::new();
-	let hours = (dt_index.first().unwrap().signed_duration_since(dt_index.last().unwrap()) + tf.duration() * 1).num_hours().abs();
+	let hours = (dt_index.first().unwrap().signed_duration_since(dt_index.last().unwrap()) + tf.duration() * 2/*compensate for off-by-ones*/)
+		.num_hours()
+		.abs();
 	let title = format!("Last {hours}h of {}/{} pairs on {m}", normalized_closes.len(), all_pairs.len());
 	plot.set_layout(plotly::Layout::new().title(title));
 

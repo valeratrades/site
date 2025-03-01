@@ -1,4 +1,5 @@
 use std::{fs, path::PathBuf};
+
 use v_utils::xdg_cache;
 
 #[cfg(feature = "ssr")]
@@ -35,7 +36,7 @@ macro_rules! try_load_mock {
 	// Basic case without transform
 	($r#type:path) => {
 		if use_context::<Settings>().expect("Settings not found in context").mock {
-			match <$type>::load_mock() {
+			match <$type as $crate::utils::Mock>::load_mock() {
 				Ok(v) => return Ok(v),
 				Err(e) => tracing::warn!("Couldn't load mock: {:?}\n-> Falling back to requesting new data.", e),
 			}

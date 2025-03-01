@@ -14,7 +14,7 @@ use crate::conf::Settings;
 use crate::utils::Mock;
 
 #[island]
-pub fn Lsr() -> impl IntoView {
+pub fn LsrView() -> impl IntoView {
 	let lsrs_resource = Resource::new(move || (), |_| async move { build_lsrs().await });
 	let rendered_lsrs = Memo::new(move |_| {
 		match lsrs_resource.get() {
@@ -30,12 +30,12 @@ pub fn Lsr() -> impl IntoView {
 	section().class("p-4 text-center").child((
 		div().child((
 			Suspense(SuspenseProps {
-				fallback: { || pre().child("Loading...") }.into(),
+				fallback: { || pre().child("Loading LSR...") }.into(),
 				children: ToChildren::to_children(move || {
 					IntoRender::into_render(move || match lsrs_resource.get() {
 						Some(Ok(l)) => pre().child(l.outliers),
 						Some(Err(e)) => pre().child(format!("Error loading Lsrs: {e}")),
-						None => pre().child("Loading...".to_owned()),
+						None => pre().child("Loading LSR...".to_owned()),
 					})
 				}),
 			}),

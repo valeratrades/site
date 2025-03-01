@@ -1,3 +1,4 @@
+pub mod cme;
 pub mod lsr;
 pub mod market_structure;
 use leptos::{html::*, prelude::*};
@@ -13,7 +14,7 @@ use crate::app::AppRoutes;
 #[derive(Routable)]
 #[routes(transition = false)]
 pub enum Routes {
-	#[route(path = "")]
+	#[route(path = "/")]
 	Home,
 
 	#[fallback]
@@ -53,7 +54,8 @@ fn HomeView() -> impl IntoView {
 		}),
 		p().child("My Dashboards"),
 		market_structure::MarketStructureView(),
-		lsr::Lsr(),
+		lsr::LsrView(),
+		cme::CftcReportView(),
 		p().class("text-sm font-mono mt-4").child(("Query String (TODO: handle):", move || use_location().search)),
 	))
 }
