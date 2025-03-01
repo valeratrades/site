@@ -3,7 +3,7 @@
 #![feature(duration_constructors)]
 pub mod app;
 pub mod conf;
-pub(crate) mod dashboards;
+pub mod dashboards;
 pub(crate) mod utils;
 
 #[cfg(feature = "hydrate")]

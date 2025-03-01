@@ -1,4 +1,4 @@
-use std::fs;
+use std::{fs, path::PathBuf};
 use v_utils::xdg_cache;
 
 #[cfg(feature = "ssr")]
@@ -6,22 +6,24 @@ pub trait Mock
 where
 	Self: Sized + serde::de::DeserializeOwned + serde::Serialize, {
 	fn __name() -> &'static str {
-		static NAME: std::sync::OnceLock<&'static str> = std::sync::OnceLock::new();
-		NAME.get_or_init(|| {
-			let type_path = std::any::type_name::<Self>();
-			type_path.split("::").last().unwrap_or(type_path)
-		})
+		let type_path = std::any::type_name::<Self>();
+		type_path.split("::").last().unwrap_or(type_path)
+	}
+	fn __fpath() -> PathBuf {
+		xdg_cache!("dashboards").join(format!("{}.json", Self::__name()))
 	}
 	fn persist(&self) -> std::io::Result<()> {
 		tracing::info!("Persisting current {}", Self::__name());
 		let json = serde_json::to_string_pretty(self)?;
-		tracing::debug!(?json);
-		fs::write(xdg_cache!("").join(format!("{}.json", Self::__name())), json)?;
+		fs::write(Self::__fpath(), json)?;
 		Ok(())
 	}
 	fn load_mock() -> std::io::Result<Self> {
-		let json = fs::read_to_string(xdg_cache!("").join(format!("{}.json", Self::__name())))?;
-		Ok(serde_json::from_str(&json)?)
+		let filepath = Self::__fpath();
+		let json = fs::read_to_string(&filepath)?;
+		let contents = serde_json::from_str(&json)?;
+		tracing::info!("Loaded mock from {}", filepath.display());
+		Ok(contents)
 	}
 }
 

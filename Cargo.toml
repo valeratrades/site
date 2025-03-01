@@ -95,3 +95,7 @@ opt-level = 'z'
 lto = true
 codegen-units = 1
 panic = "abort"
+
+[[example]]
+name = "test"
+path = "./examples/test.rs"

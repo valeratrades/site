@@ -1,32 +1,32 @@
 #[cfg(feature = "ssr")]
 mod data;
 
-use leptos::{
-	control_flow::{For, ForEnumerate, ForEnumerateProps},
-	ev,
-	html::*,
-	prelude::*,
-};
-use serde::{Deserialize, Serialize};
+use leptos::{html::*, prelude::*};
 
 use crate::conf::Settings;
 #[cfg(feature = "ssr")]
 use crate::utils::Mock;
 
 #[component]
-pub fn MS() -> impl IntoView {
-	//TODO: refresh
-	view! {
-		<Suspense fallback=move || {
-				pre().child("Loading...")
-		}>
-			{move || Suspend::new(async move {
-					let ms = request_market_structure().await.expect("TODO: handle error");
-					pre().child(ms.0);
-			})}
-		</Suspense>
-	}
+pub fn MarketStructureView() -> impl IntoView {
+	//TODO: refresh (am I certain I care for it?)
+	//Q: potentially switch to LocalResource
+	//TODO: pass <leptos_meta::Script src="https://cdn.plot.ly/plotly-latest.min.js"></Script> from here, so that we don't unconditionally import it during init
+	//TODO: switch to convention of displaying `Loading...` above already loaded data (if any) on reload, instead of replacing it.
+	let ms_resource = Resource::new(move || (), |_| async move { request_market_structure().await.expect("dbg") });
+	#[rustfmt::skip]
+	Suspense(SuspenseProps {
+		fallback: { || pre().child("Loading...") }.into(),
+		children: ToChildren::to_children(move || {
+			IntoRender::into_render(move || {
+				ms_resource.get().map(|ms| {
+					div().inner_html(ms.0)
+				})
+			})
+		}),
+	})
 }
+//Q: not sure I actually need this refreshing at all, why not just drive it by manual refreshes?
 //let (trigger, set_trigger) = create_signal(());
 //
 //   // Create the resource that depends on the trigger
@@ -40,7 +40,7 @@ pub fn MS() -> impl IntoView {
 //       set_trigger.update(|_| ());
 //   });
 //
-//   // Create the view
+//
 //   view! {
 //       <div>
 //           {move || match data.get() {
@@ -59,11 +59,13 @@ pub struct MarketStructure(pub String);
 #[cfg(feature = "ssr")]
 impl Mock for MarketStructure {}
 #[server]
-async fn request_market_structure() -> Result<MarketStructure, ServerFnError> {
+pub async fn request_market_structure() -> Result<MarketStructure, ServerFnError> {
 	crate::try_load_mock!(MarketStructure);
 
 	let tf = "5m".into();
 	let range = (24 * 12 + 1).into(); // 24h, given `5m` tf
 	let plot = data::try_build(range, tf, "Binance/Futures".into()).await.expect("TODO: correct mapping to ServerFnError");
-	Ok(MarketStructure(plot.to_html()))
+	let ms = MarketStructure(plot.to_inline_html(None)); //Q: not sure if provision of div id is necessary
+	ms.persist()?;
+	Ok(ms)
 }

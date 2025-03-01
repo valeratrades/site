@@ -1,5 +1,5 @@
-mod lsr;
-mod market_structure;
+pub mod lsr;
+pub mod market_structure;
 use leptos::{html::*, prelude::*};
 use leptos_meta::{Title, TitleProps};
 use leptos_routable::prelude::*;
@@ -8,7 +8,7 @@ use leptos_router::{
 	hooks::use_location,
 };
 
-use crate::{app::AppRoutes, conf::Settings};
+use crate::app::AppRoutes;
 
 #[derive(Routable)]
 #[routes(transition = false)]
@@ -52,7 +52,7 @@ fn HomeView() -> impl IntoView {
 			text: Some("Dashboards".into()),
 		}),
 		p().child("My Dashboards"),
-		market_structure::MS(),
+		market_structure::MarketStructureView(),
 		lsr::Lsr(),
 		p().class("text-sm font-mono mt-4").child(("Query String (TODO: handle):", move || use_location().search)),
 	))

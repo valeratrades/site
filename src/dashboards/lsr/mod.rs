@@ -163,12 +163,12 @@ fn LsrSearch(rendered_lsrs: Memo<Vec<RenderedLsr>>, selected_items: WriteSignal<
 
 #[server]
 async fn build_lsrs() -> Result<RenderedLsrs, ServerFnError> {
-	crate::try_load_mock! {data::SortedLsrs; .into()};
+	crate::try_load_mock!(data::SortedLsrs; .into());
 
 	let tf = "5m".into();
 	let range = (24 * 12 + 1).into(); // 24h, given `5m` tf
 	let lsrs = data::get(tf, range).await.expect("TODO: proper error handling");
-	lsrs.persist().unwrap();
+	lsrs.persist()?;
 	Ok(lsrs.into())
 }
 #[derive(Debug, Default, Clone, derive_new::new, Hash, PartialEq, Eq, Serialize, Deserialize)]

@@ -15,6 +15,8 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
 				<AutoReload options=options.clone() />
 				<HydrationScripts options islands=true />
 				<MetaTags />
+				// all embedded plotly plots assume this is in scope
+				<script src="https://cdn.plot.ly/plotly-3.0.1.min.js"></script>
 			</head>
 			<body>
 				<App />

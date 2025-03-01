@@ -1,9 +1,9 @@
 use std::{collections::HashMap, sync::Arc};
 
 use chrono::{DateTime, Utc};
-use color_eyre::eyre::{bail, Result};
+use color_eyre::eyre::{Result, bail};
 use futures::future::join_all;
-use plotly::{common::Line, Plot, Scatter};
+use plotly::{Plot, Scatter, common::Line};
 use tracing::instrument;
 use v_exchanges::prelude::*;
 use v_utils::trades::{Pair, Timeframe};
