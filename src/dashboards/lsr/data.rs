@@ -1,3 +1,8 @@
+use std::{
+	fmt::Write as _,
+	sync::{Arc, Mutex},
+};
+
 use color_eyre::eyre::{Result, bail};
 use futures::future::join_all;
 use serde::{Deserialize, Serialize};
@@ -6,7 +11,7 @@ use v_exchanges::{
 	binance::{self, data::Lsrs},
 	prelude::*,
 };
-use v_utils::prelude::*;
+use v_utils::{trades::Timeframe, xdg_data};
 
 use crate::utils::Mock;
 
@@ -20,7 +25,7 @@ pub async fn get(tf: Timeframe, range: RequestRange) -> Result<SortedLsrs> {
 	let pairs = bn.exchange_info(MARKET).await.unwrap().usdt_pairs().collect::<Vec<_>>();
 	let pairs_len = pairs.len();
 
-	let lsr_no_data_pairs_file = xdg_data("").join("lsr_no_data_pairs.txt");
+	let lsr_no_data_pairs_file = xdg_data!("").join("lsr_no_data_pairs.txt");
 	let lsr_no_data_pairs = match std::fs::metadata(&lsr_no_data_pairs_file) {
 		Ok(metadata) => {
 			let age = metadata.modified().unwrap().elapsed().unwrap();

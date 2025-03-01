@@ -1,8 +1,11 @@
+use std::{collections::HashMap, sync::Arc};
+
 use chrono::{DateTime, Utc};
 use futures::future::join_all;
 use plotly::{Plot, Scatter, common::Line};
 use v_exchanges::prelude::*;
-use v_utils::prelude::*;
+use v_utils::trades::{Pair, Timeframe};
+use color_eyre::eyre::{Result, bail};
 
 pub async fn try_build(limit: RequestRange, tf: Timeframe, market: AbsMarket) -> Result<Plot> {
 	let mut exchange = market.client();
