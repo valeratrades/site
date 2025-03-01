@@ -27,6 +27,31 @@ pub fn MS() -> impl IntoView {
 		</Suspense>
 	}
 }
+//let (trigger, set_trigger) = create_signal(());
+//
+//   // Create the resource that depends on the trigger
+//   let data = create_resource(
+//       move || trigger(),  // This dependency means the resource will reload when trigger changes
+//       move |_| get_data() // The async function to call
+//   );
+//
+//   // Set up interval to refresh data every 15 minutes
+//   use_interval(Duration::from_secs(15 * 60), move || {
+//       set_trigger.update(|_| ());
+//   });
+//
+//   // Create the view
+//   view! {
+//       <div>
+//           {move || match data.get() {
+//               None => view! { <p>"Loading..."</p> }.into_view(),
+//               Some(result) => match result {
+//                   Ok(data) => view! { <p>"Data: " {data}</p> }.into_view(),
+//                   Err(e) => view! { <p>"Error: " {e.to_string()}</p> }.into_view(),
+//               }
+//           }}
+//       </div>
+//   }
 
 /// Contains [Plot](plotly::Plot) represented as an html string (for csr compat)
 #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]

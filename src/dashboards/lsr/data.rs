@@ -6,7 +6,7 @@ use std::{
 use color_eyre::eyre::{Result, bail};
 use futures::future::join_all;
 use serde::{Deserialize, Serialize};
-use tracing::{info, warn};
+use tracing::{info, instrument, warn};
 use v_exchanges::{
 	binance::{self, data::Lsrs},
 	prelude::*,
@@ -18,6 +18,7 @@ use crate::utils::Mock;
 const MARKET: v_exchanges::AbsMarket = v_exchanges::AbsMarket::Binance(v_exchanges::binance::Market::Futures);
 
 //Q: potentially fix to "1D", req and store full month of data for both Global and Top Positions, to display when searching for specific one.
+#[instrument]
 pub async fn get(tf: Timeframe, range: RequestRange) -> Result<SortedLsrs> {
 	let mut bn = binance::Binance::default();
 	bn.set_max_tries(3);

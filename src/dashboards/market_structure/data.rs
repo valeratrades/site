@@ -1,23 +1,26 @@
 use std::{collections::HashMap, sync::Arc};
 
 use chrono::{DateTime, Utc};
+use color_eyre::eyre::{bail, Result};
 use futures::future::join_all;
-use plotly::{Plot, Scatter, common::Line};
+use plotly::{common::Line, Plot, Scatter};
+use tracing::instrument;
 use v_exchanges::prelude::*;
 use v_utils::trades::{Pair, Timeframe};
-use color_eyre::eyre::{Result, bail};
 
+#[instrument]
 pub async fn try_build(limit: RequestRange, tf: Timeframe, market: AbsMarket) -> Result<Plot> {
 	let mut exchange = market.client();
 	exchange.set_max_tries(3);
 
 	let exch_info = exchange.exchange_info(market).await.unwrap();
-	let all_pairs = exch_info.usdt_pairs().collect::<Vec<Pair>>();
+	let all_usdt_pairs = exch_info.usdt_pairs().collect::<Vec<Pair>>();
 
-	let (normalized_df, dt_index) = collect_data(all_pairs.clone(), tf, limit, Arc::new(exchange)).await?;
-	Ok(plotly_closes(normalized_df, dt_index, tf, market, &all_pairs))
+	let (normalized_df, dt_index) = collect_data(all_usdt_pairs.clone(), tf, limit, Arc::new(exchange)).await?;
+	Ok(plotly_closes(normalized_df, dt_index, tf, market, &all_usdt_pairs))
 }
 
+#[instrument(skip_all)]
 pub async fn collect_data(pairs: Vec<Pair>, tf: Timeframe, range: RequestRange, exchange: Arc<Box<dyn Exchange>>) -> Result<(HashMap<Pair, Vec<f64>>, Vec<DateTime<Utc>>)> {
 	//HACK: assumes we're never misaligned here
 	let futures = pairs.into_iter().map(|symbol| {
@@ -85,6 +88,7 @@ pub struct RelevantHistoricalData {
 	col_closes: Vec<f64>,
 	col_volumes: Vec<f64>,
 }
+#[instrument(skip_all)]
 pub async fn get_historical_data(pair: Pair, tf: Timeframe, range: RequestRange, exchange: Arc<Box<dyn Exchange>>) -> Result<RelevantHistoricalData> {
 	let klines = exchange.klines(pair, tf, range, exchange.source_market()).await?;
 
