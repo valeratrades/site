@@ -46,7 +46,7 @@ leptos-routable = "^0.1"
 leptos_meta = { version = "^0.7" }
 leptos_router = { version = "^0.7.7", features = ["nightly"] }
 serde = { version = "^1.0.218", features = ["derive"] }
-v_utils = { version = "^2.5.2", path = "/home/v/s/v_utils/v_utils" } #ga: rm path
+v_utils = { version = "^2.6.2", features = ["cli"], path = "/home/v/s/v_utils/v_utils" } #ga: rm path
 web-sys = "0.3.77"
 
 # optional-hydrate {{{
@@ -58,13 +58,14 @@ wasm-bindgen = { version = "^0.2.100", optional = true }
 axum = { version = "=0.7.9", optional = true }
 chrono = { version = "^0.4.40", optional = true }
 chrono-tz = { version = "^0.10.1", optional = true }
+clap = { version = "^4.5.31", features = ["derive"] }
 leptos_axum = { version = "^0.7", optional = true }
 plotly = { version = "^0.12.0", features = ["image", "kaleido"], optional = true }
 reqwest = { version = "^0.12.12", optional = true }
 serde_json = { version = "^1.0.140", optional = true }
 tokio = { version = "^1", features = ["rt-multi-thread"], optional = true }
 tracing = { version = "^0.1.41", optional = true }
-v_exchanges = { version = "^0.6.0", path = "/home/v/s/v_exchanges/v_exchanges", features = ["binance", "bybit"], optional = true } #ga: rm path
+v_exchanges = { version = "^0.6.6", features = ["binance", "bybit"], optional = true, path = "/home/v/s/v_exchanges/v_exchanges" } #ga: rm path
 #,}}}
 
 [features]

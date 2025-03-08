@@ -1,3 +1,13 @@
+use clap::Parser;
+use site::conf::*;
+
+#[derive(Debug, Parser)]
+#[command(author, version, about, long_about = None)]
+struct Cli {
+	#[clap(flatten)]
+	settings: SettingsFlags,
+}
+
 #[cfg(feature = "ssr")]
 #[tokio::main]
 async fn main() {
@@ -8,6 +18,8 @@ async fn main() {
 	use tracing::{debug, info};
 
 	v_utils::clientside!();
+	let cli = Cli::parse();
+	let settings = Settings::try_build(cli.settings).unwrap();
 
 	let conf = get_configuration(None).unwrap();
 	let addr = conf.leptos_options.site_addr;
@@ -16,7 +28,6 @@ async fn main() {
 	let routes = generate_route_list(App);
 	debug!(?routes);
 
-	let settings = Settings { mock: true }; //dbg
 	let app = Router::new()
 		.leptos_routes_with_context(&leptos_options, routes, move || provide_context(settings.clone()), {
 			let leptos_options = leptos_options.clone();
