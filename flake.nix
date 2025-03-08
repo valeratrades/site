@@ -112,6 +112,13 @@
 
               							${sourceTailwind}
             '';
+
+          buildInputs = with pkgs; [
+            mold-wrapped
+            openssl
+            pkg-config
+            (rust-bin.fromRustupToolchainFile ./.cargo/rust-toolchain.toml)
+          ];
         };
       }
     );

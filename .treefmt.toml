@@ -5,7 +5,6 @@ includes = ["*.nix"]
 [formatter.rust]
 command = "rustfmt"
 includes = ["*.rs"]
-options = ["--edition", "2024"]
 
 [formatter.rust-leptos]
 command = "leptosfmt"
