@@ -1,4 +1,5 @@
 pub mod cme;
+pub mod fng;
 pub mod lsr;
 pub mod market_structure;
 pub mod vol;
@@ -6,7 +7,7 @@ use leptos::{html::*, prelude::*};
 use leptos_meta::{Title, TitleProps};
 use leptos_routable::prelude::*;
 use leptos_router::{
-	components::{A, AProps, Outlet},
+	components::{AProps, Outlet, A},
 	hooks::{self, use_location},
 	params::Params,
 };
@@ -59,6 +60,7 @@ fn HomeView() -> impl IntoView {
 		lsr::LsrView(),
 		cme::CftcReportView(),
 		vol::VolView(),
+		fng::FngView(),
 		p().class("text-sm font-mono mt-4").child(("Location.search: ", move || use_location().search)),
 		ParamsView(),
 	))

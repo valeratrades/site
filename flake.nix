@@ -113,7 +113,7 @@
               							${sourceTailwind}
             '';
 
-          buildInputs = with pkgs; [
+          packages = with pkgs; [
             mold-wrapped
             openssl
             pkg-config

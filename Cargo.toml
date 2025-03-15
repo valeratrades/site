@@ -63,6 +63,7 @@ leptos_axum = { version = "^0.7", optional = true }
 plotly = { version = "^0.12.0", features = ["image", "kaleido"], optional = true }
 reqwest = { version = "^0.12.12", optional = true }
 serde_json = { version = "^1.0.140", optional = true }
+serde_with = { version = "3.12.0", features = ["chrono"] }
 tokio = { version = "^1", features = ["rt-multi-thread"], optional = true }
 tracing = { version = "^0.1.41", optional = true }
 v_exchanges = { version = "^0.6.6", features = ["binance", "bybit", "data"], optional = true, path = "/home/v/s/v_exchanges/v_exchanges" } #ga: rm path

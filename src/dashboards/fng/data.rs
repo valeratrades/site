@@ -30,16 +30,17 @@ pub struct Metadata {
 	error: Option<String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Fng {
 	pub value: f64,
 	pub timestamp: DateTime<Utc>,
 }
 
+/// Is expected to be most often used wtih `limit=1`, so not exposing [Duration](std::time::Duration) instead of it.
 pub async fn btc_fngs_hourly(limit: usize) -> Result<Vec<Fng>> {
 	let client = Client::new();
 	let response = client
-		.get("https://api.alternative.me/fng/?limit={limit}")
+		.get(format!("https://api.alternative.me/fng/?limit={limit}"))
 		.send()
 		.await
 		.map_err(|e| eyre!("Failed to fetch Fear and Greed Index: {}", e))?;
@@ -63,16 +64,4 @@ pub async fn btc_fngs_hourly(limit: usize) -> Result<Vec<Fng>> {
 			Ok(Fng { value: raw.value, timestamp })
 		})
 		.collect()
-}
-
-#[tokio::main]
-async fn main() -> Result<()> {
-	color_eyre::install()?;
-
-	let fags = btc_fag().await?;
-	for fag in fags {
-		dbg!(&fag);
-	}
-
-	Ok(())
 }
