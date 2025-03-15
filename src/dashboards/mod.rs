@@ -1,12 +1,14 @@
 pub mod cme;
 pub mod lsr;
 pub mod market_structure;
+pub mod vol;
 use leptos::{html::*, prelude::*};
 use leptos_meta::{Title, TitleProps};
 use leptos_routable::prelude::*;
 use leptos_router::{
 	components::{A, AProps, Outlet},
-	hooks::use_location,
+	hooks::{self, use_location},
+	params::Params,
 };
 
 use crate::app::AppRoutes;
@@ -56,6 +58,14 @@ fn HomeView() -> impl IntoView {
 		market_structure::MarketStructureView(),
 		lsr::LsrView(),
 		cme::CftcReportView(),
-		p().class("text-sm font-mono mt-4").child(("Query String (TODO: handle):", move || use_location().search)),
+		vol::VolView(),
+		p().class("text-sm font-mono mt-4").child(("Location.search: ", move || use_location().search)),
+		ParamsView(),
 	))
+}
+#[component]
+fn ParamsView() -> impl IntoView {
+	section()
+		.class("p-4 text-center")
+		.child((p().child(("TODO: implement query parsing (for defining dashboards to be displayed procedurally)", move || q)),))
 }

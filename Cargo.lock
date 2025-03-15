@@ -4789,6 +4789,7 @@ name = "v_exchanges"
 version = "0.6.6"
 dependencies = [
  "async-trait",
+ "cfg-if",
  "chrono",
  "derive-new",
  "derive_more",
@@ -4865,7 +4866,7 @@ dependencies = [
 
 [[package]]
 name = "v_utils"
-version = "2.6.2"
+version = "2.6.3"
 dependencies = [
  "chrono",
  "config 0.15.9",
@@ -4892,7 +4893,7 @@ dependencies = [
 
 [[package]]
 name = "v_utils_macros"
-version = "2.2.2"
+version = "2.2.3"
 dependencies = [
  "eyre",
  "heck 0.5.0",

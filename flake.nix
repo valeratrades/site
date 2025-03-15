@@ -117,6 +117,7 @@
             mold-wrapped
             openssl
             pkg-config
+            sccache
             (rust-bin.fromRustupToolchainFile ./.cargo/rust-toolchain.toml)
           ];
         };

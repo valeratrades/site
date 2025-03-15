@@ -166,7 +166,7 @@ pub fn plotly_closes(normalized_closes: HashMap<Pair, Vec<f64>>, dt_index: Vec<D
 		let p: f64 = performance.iter().find(|a| a.0 == col_name).unwrap().1;
 		let symbol = match symbol {
 			Some(s) => s,
-			None => &col_name.to_string()[0..col_name.to_string().len() - 4].to_string().replace("1000", ""),
+			None => &col_name.to_string()[0..col_name.to_string().len() - 5].to_string().replace("1000", ""), //HACK: should be formatted at this point. We want to always omit 1000, and the quote when it's USDT //TODO: unify this with LSR, etc
 		};
 		let sign = if p >= 0.0 { '+' } else { '-' };
 		let change = format!("{:.2}", 100.0 * p.abs());
