@@ -258,8 +258,36 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "edca88bc138befd0323b20752846e6587272d3b03b0343c8ea28a6f819e6e71f"
 dependencies = [
  "async-trait",
- "axum-core",
+ "axum-core 0.4.5",
  "bytes",
+ "futures-util",
+ "http",
+ "http-body",
+ "http-body-util",
+ "itoa",
+ "matchit 0.7.3",
+ "memchr",
+ "mime",
+ "multer",
+ "percent-encoding",
+ "pin-project-lite",
+ "rustversion",
+ "serde",
+ "sync_wrapper",
+ "tower",
+ "tower-layer",
+ "tower-service",
+]
+
+[[package]]
+name = "axum"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d6fd624c75e18b3b4c6b9caf42b1afe24437daaee904069137d8bab077be8b8"
+dependencies = [
+ "axum-core 0.5.0",
+ "bytes",
+ "form_urlencoded",
  "futures-util",
  "http",
  "http-body",
@@ -267,10 +295,9 @@ dependencies = [
  "hyper",
  "hyper-util",
  "itoa",
- "matchit",
+ "matchit 0.8.4",
  "memchr",
  "mime",
- "multer",
  "percent-encoding",
  "pin-project-lite",
  "rustversion",
@@ -293,6 +320,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09f2bd6146b97ae3359fa0cc6d6b376d9539582c7b4220f041a33ec24c226199"
 dependencies = [
  "async-trait",
+ "bytes",
+ "futures-util",
+ "http",
+ "http-body",
+ "http-body-util",
+ "mime",
+ "pin-project-lite",
+ "rustversion",
+ "sync_wrapper",
+ "tower-layer",
+ "tower-service",
+]
+
+[[package]]
+name = "axum-core"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df1362f362fd16024ae199c1970ce98f9661bf5ef94b9808fee734bc3698b733"
+dependencies = [
  "bytes",
  "futures-util",
  "http",
@@ -515,9 +561,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.31"
+version = "4.5.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "027bb0d98429ae334a8698531da7077bdf906419543a35a55c2cb1b66437d767"
+checksum = "6088f3ae8c3608d19260cd7445411865a485688711b78b5be70d78cd96136f83"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -525,9 +571,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.5.31"
+version = "4.5.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5589e0cba072e0f3d23791efac0fd8627b49c829c196a492e88168e6a669d863"
+checksum = "22a7ef7f676155edfb82daa97f99441f3ebf4a58d5e32f295a56259f1b6facc8"
 dependencies = [
  "anstream",
  "anstyle",
@@ -537,9 +583,9 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "4.5.28"
+version = "4.5.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf4ced95c6f4a675af3da73304b9ac4ed991640c36374e4b46795c49e17cf1ed"
+checksum = "09176aae279615badda0765c0c0b3f6ed53f4709118af73cf4655d85d1530cd7"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -2188,7 +2234,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba5f7e98cbafa64b6dc0201557d912c39621a324f7bca4d6d069a154e78d3458"
 dependencies = [
  "any_spawner",
- "axum",
+ "axum 0.7.9",
  "dashmap",
  "futures",
  "hydration_context",
@@ -2501,6 +2547,12 @@ name = "matchit"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0e7465ac9959cc2b1404e8e2367b43684a6d13790fe23056cc8c6c5a6b7bcb94"
+
+[[package]]
+name = "matchit"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47e1ffaa40ddd1f3ed91f717a33c8c0ee23fff369e3aa8772b9605cc1d22f4c3"
 
 [[package]]
 name = "maybe-rayon"
@@ -3883,7 +3935,7 @@ version = "0.7.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "055476c2a42c9a98a69e3f0ce29b86aa3acbdef19a84e0523330f095097defcf"
 dependencies = [
- "axum",
+ "axum 0.7.9",
  "bytes",
  "const_format",
  "dashmap",
@@ -4005,7 +4057,7 @@ checksum = "56199f7ddabf13fe5074ce809e7d3f42b42ae711800501b5b16ea82ad029c39d"
 name = "site"
 version = "0.1.0"
 dependencies = [
- "axum",
+ "axum 0.8.1",
  "chrono",
  "chrono-tz",
  "clap",
@@ -4788,6 +4840,8 @@ dependencies = [
 [[package]]
 name = "v_exchanges"
 version = "0.6.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9ad1d0f62db56f83a2513a7df52320b7632415ec1ac6462b926b0ef7d86f8f7"
 dependencies = [
  "async-trait",
  "cfg-if",
@@ -4814,6 +4868,8 @@ dependencies = [
 [[package]]
 name = "v_exchanges_adapters"
 version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3edd776121a78be3e48a9602fc19e9cdfe0094f232efbf88095db5dfbc0b3012"
 dependencies = [
  "chrono",
  "derive-new",
@@ -4837,6 +4893,8 @@ dependencies = [
 [[package]]
 name = "v_exchanges_api_generics"
 version = "0.8.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ffabf577b81fd921726fd3d51449296b3c866f03eb61e6fb5092970b35c7012e"
 dependencies = [
  "bytes",
  "derive-new",
@@ -4868,6 +4926,8 @@ dependencies = [
 [[package]]
 name = "v_utils"
 version = "2.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "54164f9f5078081c8acd5229aafe1749d77d7fbd43cd3bcad199aca2e00d46f5"
 dependencies = [
  "chrono",
  "config 0.15.9",
@@ -4895,6 +4955,8 @@ dependencies = [
 [[package]]
 name = "v_utils_macros"
 version = "2.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "92f0390ab804848694b47c228c3551aae097a6c1d14e6270d86235d365437fa3"
 dependencies = [
  "eyre",
  "heck 0.5.0",
