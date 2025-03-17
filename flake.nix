@@ -60,10 +60,10 @@
 
               preBuild = sourceTailwind ++
                 ''
-                  								mkdir ./build/app
-                  								cp -r ./target/site/ ./build/app/site
-                  								cp ./target/release/${pname} ./build/app/
-                  							'';
+							mkdir ./build/app
+							cp -r ./target/site/ ./build/app/site
+							cp ./target/release/${pname} ./build/app/
+						'';
               buildInputs = with pkgs; [
                 openssl.dev
               ];
