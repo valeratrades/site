@@ -1,8 +1,8 @@
 use chrono::{/*serde::ts_seconds, */ DateTime, Utc};
-use color_eyre::eyre::{bail, eyre, Result};
+use color_eyre::eyre::{Result, bail, eyre};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, DisplayFromStr};
+use serde_with::{DisplayFromStr, serde_as};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FngResponse {

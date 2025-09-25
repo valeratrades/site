@@ -22,7 +22,12 @@ pub fn FngView() -> impl IntoView {
 async fn try_build() -> Result<FngRendered, ServerFnError> {
 	crate::try_load_mock!(data::Fng; .into());
 
-	let fng = data::btc_fngs_hourly(1).await.expect("TODO: proper error handling").into_iter().next().expect("TODO: error mapping");
+	let fng = data::btc_fngs_hourly(1)
+		.await
+		.expect("TODO: proper error handling")
+		.into_iter()
+		.next()
+		.expect("TODO: error mapping");
 	fng.persist()?;
 	Ok(fng.into())
 }
@@ -36,4 +41,3 @@ impl From<data::Fng> for FngRendered {
 		Self(format!("BTC Fear and Greed (alternative.me): {}", fng.value))
 	}
 }
-

@@ -1,13 +1,15 @@
 use leptos::{ev, html::*, prelude::*};
 use leptos_meta::{MetaTags, Stylesheet, StylesheetProps, Title, TitleProps, provide_meta_context};
-use leptos_routable::prelude::*;
-use leptos_router::components::{A, AProps, Router};
+use leptos_router::{
+	StaticSegment,
+	components::{A, AProps, Route, Router, Routes},
+};
 
-use crate::dashboards::{self, DashboardsView};
+use crate::dashboards;
 
 pub fn shell(options: LeptosOptions) -> impl IntoView {
 	view! {
-		<!DOCTYPE html> 
+		<!DOCTYPE html>
 		<html lang="en">
 			<head>
 				<meta charset="utf-8" />
@@ -38,21 +40,15 @@ pub fn App() -> impl IntoView {
 			formatter: None,
 			text: Some("My Site".into()),
 		}),
-		main().class("min-h-screen").child(view! { <Router>{move || AppRoutes::routes()}</Router> }),
+		main().class("min-h-screen").child(view! {
+			<Router>
+				<Routes fallback=NotFoundView>
+					<Route path=StaticSegment("") view=HomeView />
+					<Route path=StaticSegment("dashboards") view=dashboards::HomeView />
+				</Routes>
+			</Router>
+		}),
 	)
-}
-
-#[allow(dead_code)]
-#[derive(Routable)]
-#[routes(view_prefix = "", view_suffix = "View", transition = false)]
-pub enum AppRoutes {
-	#[route(path = "/")]
-	Home,
-	#[parent_route(path = "/dashboards")]
-	Dashboards(dashboards::Routes),
-	#[fallback]
-	#[route(path = "/404")]
-	NotFound,
 }
 
 /// Renders the home page of your application.
@@ -81,7 +77,7 @@ pub fn NotFoundView() -> impl IntoView {
 		h1().class("text-2xl font-bold"),
 		p().child("Sorry, we can't find that page"),
 		A(AProps {
-			href: AppRoutes::Home,
+			href: "/".to_string(),
 			children: Box::new(|| view! { "Go Home" }.into_any()),
 			target: None,
 			exact: false,
