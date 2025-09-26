@@ -1,4 +1,0 @@
-[toolchain]
-channel = "nightly"
-components = ["rustc-codegen-cranelift-preview"]
-targets = ["wasm32-unknown-unknown"]

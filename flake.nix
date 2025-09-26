@@ -40,6 +40,7 @@
               "rust-docs"
               "rustc-codegen-cranelift-preview"
             ];
+            targets = [ "wasm32-unknown-unknown" ];
           }
         );
 
