@@ -31,6 +31,18 @@
           binaryen # For wasm-opt
         ];
 
+        rust = pkgs.rust-bin.selectLatestNightlyWith (
+          toolchain:
+          toolchain.default.override {
+            extensions = [
+              "rust-src"
+              "rust-analyzer"
+              "rust-docs"
+              "rustc-codegen-cranelift-preview"
+            ];
+          }
+        );
+
         buildTools = with pkgs; [
           mold-wrapped
           sccache
@@ -83,8 +95,6 @@
         #TODO; figure out what's the equivalent of docker's `EXPOSE 8080`
         packages =
           let
-            #TODO!!!: switch to latest nightly, natively setup with oxide
-            rust = (pkgs.rust-bin.fromRustupToolchainFile ./.cargo/rust-toolchain.toml);
             rustc = rust;
             cargo = rust;
             rustPlatform = pkgs.makeRustPlatform {
@@ -167,7 +177,7 @@
             #NB: with what I currently understand, atm need to install cargo-leptos through cargo exclusively, as I need absolute latest
             pkg-config
             sccache
-            (rust-bin.fromRustupToolchainFile ./.cargo/rust-toolchain.toml)
+            rust
           ];
         };
       }

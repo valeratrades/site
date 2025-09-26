@@ -37,36 +37,36 @@ lib-profile-release = "wasm-release"
 skip_feature_sets = [["ssr", "hydrate"]]
 
 [dependencies]
-color-eyre = "0.6.3"
+color-eyre = "0.6.5"
 derive-new = "0.7.0"
 derive_more = { version = "2.0.1", features = ["from", "display", "deref", "deref_mut", "debug"] }
 futures = "0.3.31"
-leptos = { version = "^0.8", features = ["islands"] }
-leptos_meta = { version = "^0.8" }
-leptos_router = { version = "^0.8" }
-proc-macro2 = "=1.0.94"
-serde = { version = "^1.0.219", features = ["derive"] }
-v_utils = { version = "^2.6.4", features = ["cli"] } #ga: rm path
+leptos = { version = "^0.8.9", features = ["islands"] }
+leptos_meta = { version = "^0.8.5" }
+leptos_router = { version = "^0.8.7" }
+proc-macro2 = "=1.0.101"
+serde = { version = "^1.0.226", features = ["derive"] }
+v_utils = { version = "^2.6.8", features = ["cli"] }#, path = "../v_utils/v_utils" } #ga: rm path
 web-sys = "^0.3"
 
 # optional-hydrate {{{
 console_error_panic_hook = { version = "^0.1", optional = true }
-wasm-bindgen = { version = "0.2.100", optional = true } #NB: version must match that of wasm-bindgen-cli I'm compiling the project with
+wasm-bindgen = { version = "0.2.104", optional = true } #NB: version must match that of wasm-bindgen-cli I'm compiling the project with
 #,}}}
 
 # optional-ssr {{{
 axum = { version = "^0.8", optional = true }
-chrono = { version = "^0.4.40", optional = true, features = ["serde"] }
-chrono-tz = { version = "^0.10.3", optional = true }
-clap = { version = "^4.5.32", features = ["derive"] }
+chrono = { version = "^0.4.42", optional = true, features = ["serde"] }
+chrono-tz = { version = "^0.10.4", optional = true }
+clap = { version = "^4.5.48", features = ["derive"] }
 leptos_axum = { version = "^0.8", optional = true }
-plotly = { version = "^0.12.0", features = ["image", "kaleido"], optional = true }
-reqwest = { version = "^0.12.15", optional = true }
-serde_json = { version = "^1.0.140", optional = true }
-serde_with = { version = "3.12.0", features = ["chrono"] }
+plotly = { version = "^0.13.5", features = ["image", "kaleido"], optional = true }
+reqwest = { version = "^0.12.23", optional = true }
+serde_json = { version = "^1.0.145", optional = true }
+serde_with = { version = "3.14.1", features = ["chrono"] }
 tokio = { version = "^1", features = ["rt-multi-thread"], optional = true }
 tracing = { version = "^0.1.41", optional = true }
-v_exchanges = { version = "^0.6.7", features = ["binance", "bybit", "data"], optional = true } #ga: rm path
+v_exchanges = { version = "^0.11.1", features = ["binance", "bybit", "data"], optional = true } #ga: rm path
 #,}}}
 
 [features]
