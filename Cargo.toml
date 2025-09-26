@@ -46,7 +46,10 @@ leptos_meta = { version = "^0.8.5" }
 leptos_router = { version = "^0.8.7" }
 proc-macro2 = "=1.0.101"
 serde = { version = "^1.0.226", features = ["derive"] }
-v_utils = { version = "^2.6.8", features = ["cli"] }#, path = "../v_utils/v_utils" } #ga: rm path
+v_utils = { version = "^2.6.8", features = [
+	"cli"
+	#, "wasm"
+] } #, path = "../v_utils/v_utils" } #ga: rm path
 web-sys = "^0.3"
 
 # optional-hydrate {{{

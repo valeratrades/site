@@ -164,6 +164,7 @@
 
             							${sourceTailwind}
           '';
+          env.RUSTFLAGS = "-Zmacro-backtrace"; # XXX: would be overriding existing RUSTFLAGS
 
           packages = with pkgs; [
             mold-wrapped
