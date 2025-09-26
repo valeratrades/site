@@ -147,14 +147,8 @@
             							cp -f ${(v-utils.hooks.treefmt) { inherit pkgs; }} ./.treefmt.toml
             							cp -f ${(v-utils.hooks.preCommit) { inherit pkgs pname; }} ./.git/hooks/custom.sh
 
-            							mkdir -p ./.cargo
+            							#mkdir -p ./.cargo
             							#cp -f ${(v-utils.files.rust.config { inherit pkgs; })} ./.cargo/config.toml
-            							cp -f ${
-                     (v-utils.files.rust.toolchain {
-                       inherit pkgs;
-                       targets = [ "wasm32-unknown-unknown" ];
-                     })
-                   } ./.cargo/rust-toolchain.toml
             							cp -f ${(v-utils.files.rust.rustfmt { inherit pkgs; })} ./rustfmt.toml
             							cp -f ${(v-utils.files.rust.deny { inherit pkgs; })} ./deny.toml
             							cp -f ${
