@@ -55,6 +55,7 @@ wasm-bindgen = { version = "0.2.104", optional = true } #NB: version must match 
 #,}}}
 
 # optional-ssr {{{
+any_spawner = { version = "^0.3", optional = true }
 axum = { version = "^0.8", optional = true }
 chrono = { version = "^0.4.42", optional = true, features = ["serde"] }
 chrono-tz = { version = "^0.10.4", optional = true }
@@ -78,6 +79,7 @@ hydrate = [
     "dep:wasm-bindgen",
 ]
 ssr = [
+    "dep:any_spawner",
     "dep:serde_json",
     "dep:v_exchanges",
     "dep:axum",

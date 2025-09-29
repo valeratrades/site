@@ -8,7 +8,7 @@ use crate::conf::Settings;
 #[cfg(feature = "ssr")]
 use crate::utils::Mock;
 
-#[component]
+#[island]
 pub fn VolView() -> impl IntoView {
 	let duration = std::time::Duration::from_hours(24);
 	let vol_resource = Resource::new(move || (), move |_| async move { try_pull(duration).await.expect("dbg") });

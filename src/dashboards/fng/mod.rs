@@ -6,7 +6,7 @@ use crate::conf::Settings;
 #[cfg(feature = "ssr")]
 use crate::utils::Mock;
 
-#[component]
+#[island]
 pub fn FngView() -> impl IntoView {
 	let fng_resource = Resource::new(move || (), |_| async move { try_build().await.expect("dbg") });
 	div().child(Suspense(SuspenseProps {

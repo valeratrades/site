@@ -17,6 +17,9 @@ async fn main() {
 	use site::{app::*, conf::Settings};
 	use tracing::info;
 
+	// Initialize global executor for any_spawner
+	let _ = any_spawner::Executor::init_tokio();
+
 	v_utils::clientside!();
 	let cli = Cli::parse();
 	let settings = Settings::try_build(cli.settings).unwrap();
@@ -28,7 +31,10 @@ async fn main() {
 	// Simplified setup for now - routes will be handled by Leptos
 	let leptos_options_clone = leptos_options.clone();
 	let app = Router::new()
-		.fallback(file_and_error_handler(move |_| shell(leptos_options_clone.clone())))
+		.fallback(file_and_error_handler(move |_| {
+			provide_context(settings.clone());
+			shell(leptos_options_clone.clone())
+		}))
 		.with_state(leptos_options);
 
 	// run our app with hyper (`axum::Server` is a re-export of `hyper::Server`)

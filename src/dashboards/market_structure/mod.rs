@@ -2,13 +2,14 @@
 mod data;
 
 use leptos::{html::*, prelude::*};
+#[cfg(feature = "ssr")]
 use v_exchanges::{ExchangeName, Instrument};
 
 use crate::conf::Settings;
 #[cfg(feature = "ssr")]
 use crate::utils::Mock;
 
-#[component]
+#[island]
 pub fn MarketStructureView() -> impl IntoView {
 	//TODO: refresh (am I certain I care for it?)
 	//Q: potentially switch to LocalResource
