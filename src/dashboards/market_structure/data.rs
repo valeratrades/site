@@ -1,30 +1,31 @@
 use std::{collections::HashMap, sync::Arc};
 
-use chrono::{DateTime, Utc};
 use color_eyre::eyre::{Result, bail};
 use futures::future::join_all;
+use jiff::Timestamp;
 use plotly::{Plot, Scatter, common::Line};
 use tracing::instrument;
 use v_exchanges::prelude::*;
 use v_utils::trades::{Pair, Timeframe};
 
 #[instrument]
-pub async fn try_build(limit: RequestRange, tf: Timeframe, market: AbsMarket) -> Result<Plot> {
-	let mut exchange = market.client();
+pub async fn try_build(limit: RequestRange, tf: Timeframe, exchange_name: ExchangeName, instrument: Instrument) -> Result<Plot> {
+	let mut exchange = exchange_name.init_client();
 	exchange.set_max_tries(3);
 
-	let exch_info = exchange.exchange_info(market).await.unwrap();
+	let exch_info = exchange.exchange_info(instrument).await.unwrap();
 	let all_usdt_pairs = exch_info.usdt_pairs().collect::<Vec<Pair>>();
 
-	let (normalized_df, dt_index) = collect_data(all_usdt_pairs.clone(), tf, limit, Arc::new(exchange)).await?;
-	Ok(plotly_closes(normalized_df, dt_index, tf, market, &all_usdt_pairs))
+	let (normalized_df, dt_index) = collect_data(&all_usdt_pairs, tf, limit, instrument, Arc::new(exchange)).await?;
+	Ok(plotly_closes(normalized_df, dt_index, tf, instrument, &all_usdt_pairs))
 }
 
 #[instrument(skip_all)]
-pub async fn collect_data(pairs: Vec<Pair>, tf: Timeframe, range: RequestRange, exchange: Arc<Box<dyn Exchange>>) -> Result<(HashMap<Pair, Vec<f64>>, Vec<DateTime<Utc>>)> {
+pub async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, instrument: Instrument, exchange: Arc<Box<dyn Exchange>>) -> Result<(HashMap<Pair, Vec<f64>>, Vec<Timestamp>)> {
 	//HACK: assumes we're never misaligned here
-	let futures = pairs.into_iter().map(|symbol| {
+	let futures = pairs.into_iter().map(|pair| {
 		let exchange = Arc::clone(&exchange);
+		let symbol = Symbol::new(*pair, instrument);
 		async move {
 			match get_historical_data(symbol, tf, range, exchange).await {
 				Ok(series) => Ok((symbol, series)),
@@ -41,11 +42,11 @@ pub async fn collect_data(pairs: Vec<Pair>, tf: Timeframe, range: RequestRange, 
 	let mut dt_index = Vec::new();
 
 	results.into_iter().for_each(|result| {
-		if let Ok((pair, series)) = result {
-			if "BTC-USDT" == pair {
+		if let Ok((symbol, series)) = result {
+			if "BTC-USDT" == symbol.pair {
 				dt_index = series.col_open_times;
 			}
-			data.insert(pair, series.col_closes);
+			data.insert(symbol.pair, series.col_closes);
 		}
 	});
 	tracing::info!("Fetched data for {} pairs", data.len());
@@ -81,7 +82,7 @@ pub async fn collect_data(pairs: Vec<Pair>, tf: Timeframe, range: RequestRange, 
 #[allow(unused)]
 #[derive(Clone, Debug, Default, derive_new::new)]
 pub struct RelevantHistoricalData {
-	col_open_times: Vec<DateTime<Utc>>,
+	col_open_times: Vec<Timestamp>,
 	col_opens: Vec<f64>,
 	col_highs: Vec<f64>,
 	col_lows: Vec<f64>,
@@ -89,8 +90,8 @@ pub struct RelevantHistoricalData {
 	col_volumes: Vec<f64>,
 }
 #[instrument(skip_all)]
-pub async fn get_historical_data(pair: Pair, tf: Timeframe, range: RequestRange, exchange: Arc<Box<dyn Exchange>>) -> Result<RelevantHistoricalData> {
-	let klines = exchange.klines(pair, tf, range, exchange.source_market()).await?;
+pub async fn get_historical_data(symbol: Symbol, tf: Timeframe, range: RequestRange, exchange: Arc<Box<dyn Exchange>>) -> Result<RelevantHistoricalData> {
+	let klines = exchange.klines(symbol, tf, range).await?;
 
 	let mut open_time = Vec::new();
 	let mut open = Vec::new();
@@ -117,7 +118,7 @@ pub async fn get_historical_data(pair: Pair, tf: Timeframe, range: RequestRange,
 }
 
 //TODO!!!: provide additional information: 1) BTCDOM, 2) average, 3) correlation, 4) volatility
-pub fn plotly_closes(normalized_closes: HashMap<Pair, Vec<f64>>, dt_index: Vec<DateTime<Utc>>, tf: Timeframe, m: AbsMarket, all_pairs: &[Pair]) -> Plot {
+pub fn plotly_closes(normalized_closes: HashMap<Pair, Vec<f64>>, dt_index: Vec<Timestamp>, tf: Timeframe, instrument: Instrument, all_pairs: &[Pair]) -> Plot {
 	let mut performance: Vec<(Pair, f64)> = normalized_closes.iter().map(|(k, v)| (*k, (v[v.len() - 1] - v[0]))).collect();
 	performance.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
 
@@ -126,15 +127,15 @@ pub fn plotly_closes(normalized_closes: HashMap<Pair, Vec<f64>>, dt_index: Vec<D
 	let bottom: Vec<Pair> = performance.iter().take(n_samples).map(|x| x.0).collect();
 
 	let mut plot = Plot::new();
-	let hours = (dt_index.first().unwrap().signed_duration_since(dt_index.last().unwrap()) + tf.duration() * 2/*compensate for off-by-ones*/)
-		.num_hours()
+	let hours = (dt_index.first().unwrap().duration_since(*dt_index.last().unwrap()) + tf.signed_duration() * 2/*compensate for off-by-ones*/)
+		.as_hours()
 		.abs();
-	let title = format!("Last {hours}h of {}/{} pairs on {m}", normalized_closes.len(), all_pairs.len());
+	let title = format!("Last {hours}h of {}/{} pairs on {instrument}", normalized_closes.len(), all_pairs.len());
 	plot.set_layout(plotly::Layout::new().title(title));
 
 	let mut add_trace = |name: Pair, width: f64, color: Option<&'static str>, legend: Option<String>| {
 		let y_values: Vec<f64> = normalized_closes.get(&name).unwrap().to_owned();
-		let x_values: Vec<String> = dt_index.iter().map(|dt| dt.to_rfc3339()).collect();
+		let x_values: Vec<String> = dt_index.iter().map(|dt| dt.to_string()).collect();
 
 		let mut line = Line::new().width(width);
 		if let Some(c) = color {

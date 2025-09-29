@@ -1,6 +1,5 @@
 #[cfg(feature = "ssr")]
 mod data;
-use std::time::Duration;
 
 use leptos::{html::*, prelude::*};
 use v_utils::NowThen;

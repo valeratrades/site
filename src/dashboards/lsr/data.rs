@@ -7,23 +7,19 @@ use color_eyre::eyre::{Result, bail};
 use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 use tracing::{info, instrument, warn};
-use v_exchanges::{
-	binance::{self, data::Lsrs},
-	prelude::*,
-};
+use v_exchanges::{Lsrs, prelude::*};
 use v_utils::{trades::Timeframe, xdg_data};
 
 use crate::utils::Mock;
-
-const MARKET: v_exchanges::AbsMarket = v_exchanges::AbsMarket::Binance(v_exchanges::binance::Market::Futures);
+static INSTRUMENT: Instrument = Instrument::Perp;
 
 //Q: potentially fix to "1D", req and store full month of data for both Global and Top Positions, to display when searching for specific one.
 #[instrument]
 pub async fn get(tf: Timeframe, range: RequestRange) -> Result<SortedLsrs> {
-	let mut bn = binance::Binance::default();
+	let mut bn = Binance::default();
 	bn.set_max_tries(3);
 
-	let pairs = bn.exchange_info(MARKET).await.unwrap().usdt_pairs().collect::<Vec<_>>();
+	let pairs = bn.exchange_info(INSTRUMENT).await.unwrap().usdt_pairs().collect::<Vec<_>>();
 	let pairs_len = pairs.len();
 
 	let lsr_no_data_pairs_file = xdg_data!("").join("lsr_no_data_pairs.txt");
@@ -43,16 +39,14 @@ pub async fn get(tf: Timeframe, range: RequestRange) -> Result<SortedLsrs> {
 	};
 	let lsr_pairs = pairs.into_iter().filter(|p| !lsr_no_data_pairs.contains(&p.to_string())).collect::<Vec<_>>();
 
-	let bn_arc = Arc::new(bn);
 	let new_no_data_pairs = Arc::new(Mutex::new(Vec::new()));
 	let handles = lsr_pairs.iter().map(|p| {
-		let bn = Arc::clone(&bn_arc);
 		let new_no_data_pairs = Arc::clone(&new_no_data_pairs);
+		let bn = Arc::new(&bn);
 		async move {
 			match bn.lsr(*p, tf, range, "Global".into()).await {
 				Ok(lsr_vec) if !lsr_vec.is_empty() => Some(lsr_vec),
 				Ok(_) => {
-					//TODO: write all pairs explicitly without data to XDG_STATE, retry for all once a month
 					info!("No data for {}", p);
 					new_no_data_pairs.lock().unwrap().push(p.to_string());
 					None
@@ -121,7 +115,7 @@ impl SortedLsrs {
 		s.push_str(&format!("\n{:-^width$}", "", width = Lsrs::CHANGE_STR_LEN));
 		s.push_str(&format!("\nAverage: {:.2}", self.iter().map(|lsr| lsr.last().unwrap().long()).sum::<f64>() / self.len() as f64));
 		s.push_str(&format!(
-			"\nCollected for {}/{} pairs on {MARKET}",
+			"\nCollected for {}/{} pairs on Binance/{INSTRUMENT}",
 			self.len(),
 			self.__total_pairs_on_exchange.expect("A dumb unwrap, really should be an error")
 		));

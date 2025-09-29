@@ -2,6 +2,7 @@
 mod data;
 
 use leptos::{html::*, prelude::*};
+use v_exchanges::{ExchangeName, Instrument};
 
 use crate::conf::Settings;
 #[cfg(feature = "ssr")]
@@ -64,7 +65,9 @@ pub async fn request_market_structure() -> Result<MarketStructure, ServerFnError
 
 	let tf = "5m".into();
 	let range = (24 * 12 + 1).into(); // 24h, given `5m` tf
-	let plot = data::try_build(range, tf, "Binance/Futures".into()).await.expect("TODO: correct mapping to ServerFnError");
+	let plot = data::try_build(range, tf, ExchangeName::Binance, Instrument::Perp)
+		.await
+		.expect("TODO: correct mapping to ServerFnError");
 	let ms = MarketStructure(plot.to_inline_html(None)); //Q: not sure if provision of div id is necessary
 	ms.persist()?;
 	Ok(ms)

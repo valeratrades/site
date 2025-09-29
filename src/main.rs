@@ -15,7 +15,7 @@ async fn main() {
 	use leptos::prelude::*;
 	use leptos_axum::*;
 	use site::{app::*, conf::Settings};
-	use tracing::{debug, info};
+	use tracing::info;
 
 	v_utils::clientside!();
 	let cli = Cli::parse();

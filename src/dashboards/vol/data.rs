@@ -1,8 +1,6 @@
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 use color_eyre::eyre::{Result, eyre};
-use reqwest::Client;
-use serde_json::{Value, json};
 use v_utils::NowThen;
 
 ///// Fetch VIX volatility index data
