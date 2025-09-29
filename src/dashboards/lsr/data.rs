@@ -115,7 +115,7 @@ impl SortedLsrs {
 		s.push_str(&format!("\n{:-^width$}", "", width = Lsrs::CHANGE_STR_LEN));
 		s.push_str(&format!("\nAverage: {:.2}", self.iter().map(|lsr| lsr.last().unwrap().long()).sum::<f64>() / self.len() as f64));
 		s.push_str(&format!(
-			"\nCollected for {}/{} pairs on Binance/{INSTRUMENT}",
+			"\nCollected for {}/{} pairs on Binance/{INSTRUMENT:?}",
 			self.len(),
 			self.__total_pairs_on_exchange.expect("A dumb unwrap, really should be an error")
 		));
