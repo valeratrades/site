@@ -6,12 +6,31 @@ use leptos::{
 	html::*,
 	prelude::*,
 };
+use leptos_router::hooks::use_query_map;
 use serde::{Deserialize, Serialize};
 use v_utils::trades::Pair;
 
 use crate::conf::Settings;
 #[cfg(feature = "ssr")]
 use crate::utils::Mock;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LsrQuery(pub String);
+
+impl LsrQuery {
+	pub fn from_url() -> Signal<Self> {
+		let query_map = use_query_map();
+		Signal::derive(move || {
+			let query = query_map.read();
+			let lsr_value = query.get("lsr").unwrap_or_default();
+			LsrQuery(lsr_value)
+		})
+	}
+
+	pub fn value(&self) -> &str {
+		&self.0
+	}
+}
 
 #[island]
 pub fn LsrView() -> impl IntoView {
@@ -26,6 +45,7 @@ pub fn LsrView() -> impl IntoView {
 	//TODO: spawn to update every 15m
 
 	let selected_items = RwSignal::new(Vec::<RenderedLsr>::new());
+	let lsr_query = LsrQuery::from_url();
 
 	section().class("p-4 text-center").child((
 		div().child((
@@ -50,6 +70,11 @@ pub fn LsrView() -> impl IntoView {
 			key: |item| item.clone(),
 			children: move |item: RenderedLsr| div().class("flex items-center justify-between p-2 bg-gray-50 rounded").child(span().child(item.rend.clone())),
 		})),
+		// Debug LSR query parameter
+		div().class("mt-4 p-2 bg-yellow-100 border border-yellow-300 rounded").child((
+			span().child("Debug LSR Query: "),
+			span().class("font-mono").child(move || format!("'{}'", lsr_query.get().value())),
+		)),
 	))
 }
 
