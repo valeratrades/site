@@ -1,6 +1,6 @@
 use std::{fs, path::PathBuf};
 
-use v_utils::xdg_cache;
+use v_utils::xdg_cache_dir;
 
 #[cfg(feature = "ssr")]
 pub trait Mock
@@ -11,7 +11,7 @@ where
 		type_path.split("::").last().unwrap_or(type_path)
 	}
 	fn __fpath() -> PathBuf {
-		xdg_cache!("dashboards").join(format!("{}.json", Self::__name()))
+		xdg_cache_dir!("dashboards").join(format!("{}.json", Self::__name()))
 	}
 	fn persist(&self) -> std::io::Result<()> {
 		tracing::info!("Persisting current {}", Self::__name());
