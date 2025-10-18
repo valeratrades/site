@@ -17,7 +17,7 @@ pub fn VolView() -> impl IntoView {
 		fallback: { || pre().child("Loading Vol Block...") }.into(),
 		children: ToChildren::to_children(move || {
 			IntoRender::into_render(move || {
-				let vol_resource_clone = vol_resource.clone();
+				let vol_resource_clone = vol_resource;
 				vol_resource_clone.get().map(|v| pre().child(v.to_string()))
 			})
 		}),

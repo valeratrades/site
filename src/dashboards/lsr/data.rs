@@ -8,7 +8,7 @@ use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 use tracing::{info, instrument, warn};
 use v_exchanges::{Lsrs, prelude::*};
-use v_utils::{trades::Timeframe, xdg_data};
+use v_utils::{trades::Timeframe, xdg_data_file};
 
 use crate::utils::Mock;
 static INSTRUMENT: Instrument = Instrument::Perp;
@@ -22,7 +22,7 @@ pub async fn get(tf: Timeframe, range: RequestRange) -> Result<SortedLsrs> {
 	let pairs = bn.exchange_info(INSTRUMENT).await.unwrap().usdt_pairs().collect::<Vec<_>>();
 	let pairs_len = pairs.len();
 
-	let lsr_no_data_pairs_file = xdg_data!("").join("lsr_no_data_pairs.txt");
+	let lsr_no_data_pairs_file = xdg_data_file!("lsr_no_data_pairs.txt");
 	let lsr_no_data_pairs = match std::fs::metadata(&lsr_no_data_pairs_file) {
 		Ok(metadata) => {
 			let age = metadata.modified().unwrap().elapsed().unwrap();
@@ -47,12 +47,12 @@ pub async fn get(tf: Timeframe, range: RequestRange) -> Result<SortedLsrs> {
 			match bn.lsr(*p, tf, range, "Global".into()).await {
 				Ok(lsr_vec) if !lsr_vec.is_empty() => Some(lsr_vec),
 				Ok(_) => {
-					info!("No data for {}", p);
+					info!("No data for {p}");
 					new_no_data_pairs.lock().unwrap().push(p.to_string());
 					None
 				}
 				Err(e) => {
-					warn!("Couldn't fetch data for {}: {:?}", p, e);
+					warn!("Couldn't fetch data for {p}: {e:?}");
 					None
 				}
 			}

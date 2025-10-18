@@ -23,7 +23,7 @@ pub async fn try_build(limit: RequestRange, tf: Timeframe, exchange_name: Exchan
 #[instrument(skip_all)]
 pub async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, instrument: Instrument, exchange: Arc<Box<dyn Exchange>>) -> Result<(HashMap<Pair, Vec<f64>>, Vec<Timestamp>)> {
 	//HACK: assumes we're never misaligned here
-	let futures = pairs.into_iter().map(|pair| {
+	let futures = pairs.iter().map(|pair| {
 		let exchange = Arc::clone(&exchange);
 		let symbol = Symbol::new(*pair, instrument);
 		async move {
