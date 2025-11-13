@@ -5,25 +5,36 @@ use leptos::{html::*, prelude::*};
 #[cfg(feature = "ssr")]
 use v_exchanges::{ExchangeName, Instrument};
 
-use crate::conf::Settings;
 #[cfg(feature = "ssr")]
-use crate::utils::Mock;
+use crate::{conf::Settings, utils::Mock};
 
 #[island]
 pub fn MarketStructureView() -> impl IntoView {
-	//TODO: refresh (am I certain I care for it?)
 	//Q: potentially switch to LocalResource
 	//TODO: pass <leptos_meta::Script src="https://cdn.plot.ly/plotly-latest.min.js"></Script> from here, so that we don't unconditionally import it during init
 	//TODO: switch to convention of displaying `Loading...` above already loaded data (if any) on reload, instead of replacing it.
-	let ms_resource = Resource::new(move || (), |_| async move { request_market_structure().await.expect("dbg") });
+
+	let trigger = RwSignal::new(());
+	let ms_resource = Resource::new(move || trigger.get(), |_| async move { request_market_structure().await.expect("dbg") });
+
+	// Set up interval to refresh data every 30 minutes
+	#[cfg(feature = "ssr")]
+	{
+		use std::time::Duration;
+		tokio::spawn(async move {
+			loop {
+				tokio::time::sleep(Duration::from_secs(30 * 60)).await;
+				trigger.update(|_| ());
+			}
+		});
+	}
+
 	#[rustfmt::skip]
 	Suspense(SuspenseProps {
 		fallback: { || pre().child("Loading MarketStructure...") }.into(),
 		children: ToChildren::to_children(move || {
 			IntoRender::into_render(move || {
-				ms_resource.get().map(|ms| {
-					div().inner_html(ms.0)
-				})
+				ms_resource.get().map(|ms| div().inner_html(ms.0))
 			})
 		}),
 	})

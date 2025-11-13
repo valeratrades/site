@@ -2,9 +2,8 @@
 mod data;
 use leptos::{html::*, prelude::*};
 
-use crate::conf::Settings;
 #[cfg(feature = "ssr")]
-use crate::utils::Mock;
+use crate::{conf::Settings, utils::Mock};
 
 #[island]
 pub fn FngView() -> impl IntoView {

@@ -53,6 +53,7 @@ web-sys = "^0.3"
 
 # optional-hydrate {{{
 console_error_panic_hook = { version = "^0.1", optional = true }
+gloo-timers = { version = "^0.3", features = ["futures"], optional = true }
 wasm-bindgen = { version = "0.2.104", optional = true } #NB: version must match that of wasm-bindgen-cli I'm compiling the project with
 #,}}}
 
@@ -78,6 +79,7 @@ default = ["ssr", "hydrate"]
 hydrate = [
     "leptos/hydrate",
     "dep:console_error_panic_hook",
+    "dep:gloo-timers",
     "dep:wasm-bindgen",
 ]
 ssr = [

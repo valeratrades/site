@@ -1,5 +1,7 @@
+#[cfg(feature = "ssr")]
 use std::{fs, path::PathBuf};
 
+#[cfg(feature = "ssr")]
 use v_utils::xdg_cache_dir;
 
 #[cfg(feature = "ssr")]

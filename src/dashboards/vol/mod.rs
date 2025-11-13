@@ -4,9 +4,8 @@ mod data;
 use leptos::{html::*, prelude::*};
 use v_utils::NowThen;
 
-use crate::conf::Settings;
 #[cfg(feature = "ssr")]
-use crate::utils::Mock;
+use crate::{conf::Settings, utils::Mock};
 
 #[island]
 pub fn VolView() -> impl IntoView {

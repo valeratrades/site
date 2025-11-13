@@ -66,10 +66,9 @@ fn HomeView() -> impl IntoView {
 }
 #[component]
 fn ParamsView() -> impl IntoView {
-	let location = use_location();
 	section()
 		.class("p-4 text-center")
 		.child((p().child(("TODO: implement query parsing (for defining dashboards to be displayed procedurally)", move || {
-			location.search.get()
+			use_location().search.get()
 		})),))
 }
