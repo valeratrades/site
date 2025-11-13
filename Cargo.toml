@@ -6,6 +6,7 @@ version = "0.1.0"
 edition = "2021"
 
 [package.metadata.leptos]
+output-name = "site"
 site-root = "target/site"
 site-pkg-dir = "pkg"
 style-file = "style/tailwind_out.css"

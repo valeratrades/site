@@ -24,7 +24,7 @@ async fn main() {
 	let cli = Cli::parse();
 	let settings = Settings::try_build(cli.settings).unwrap();
 
-	let conf = get_configuration(None).unwrap();
+	let conf = get_configuration(Some("Cargo.toml")).unwrap();
 	let addr = conf.leptos_options.site_addr;
 	let leptos_options = conf.leptos_options;
 
@@ -39,7 +39,11 @@ async fn main() {
 
 	// run our app with hyper (`axum::Server` is a re-export of `hyper::Server`)
 	let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
-	info!("listening on http://{}", &addr);
+	{
+		let msg = format!("listening on http://{}", &addr);
+		println!("{}", msg);
+		info!("{}", msg);
+	}
 	axum::serve(listener, app.into_make_service()).await.unwrap();
 }
 
