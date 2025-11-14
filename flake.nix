@@ -8,13 +8,13 @@
   };
 
   outputs =
-    {
-      self,
-      nixpkgs,
-      flake-utils,
-      rust-overlay,
-      pre-commit-hooks,
-      v-utils,
+    { self
+    , nixpkgs
+    , flake-utils
+    , rust-overlay
+    , pre-commit-hooks
+    , v-utils
+    ,
     }:
     flake-utils.lib.eachDefaultSystem (
       system:
@@ -138,9 +138,6 @@
 
           shellHook =
             pre-commit-check.shellHook
-            + ''
-              							alias nfup="nix --extra-experimental-features 'nix-command flakes' flake update"
-            ''
             + ''
               							mkdir -p ./.github/workflows
               							rm -f ./.github/workflows/errors.yml; cp ${workflowContents.errors} ./.github/workflows/errors.yml
