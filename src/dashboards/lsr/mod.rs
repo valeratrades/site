@@ -16,6 +16,12 @@ use crate::{conf::Settings, utils::Mock};
 pub fn LsrView() -> impl IntoView {
 	let trigger = RwSignal::new(());
 	let lsrs_resource = Resource::new(move || trigger.get(), |_| async move { build_lsrs().await });
+	let rendered_lsrs = Memo::new(move |_| {
+		match lsrs_resource.get() {
+			Some(Ok(lsrs)) => lsrs.v,
+			_ => vec![], // fallback
+		}
+	});
 
 	// Set up interval to refresh data every 5 minutes
 	#[cfg(feature = "ssr")]
@@ -32,27 +38,25 @@ pub fn LsrView() -> impl IntoView {
 	let selected_items = RwSignal::new(Vec::<RenderedLsr>::new());
 
 	section().class("p-4 text-center").child((
-		div().child(Suspense(SuspenseProps {
-			fallback: { || pre().child("Loading LSR...") }.into(),
-			children: ToChildren::to_children(move || {
-				IntoRender::into_render(move || {
-					(
-						match lsrs_resource.get() {
-							Some(Ok(l)) => pre().child(l.outliers).into_any(),
-							Some(Err(e)) => pre().child(format!("Error loading Lsrs: {e}")).into_any(),
-							None => pre().child("Loading LSR...".to_owned()).into_any(),
-						},
-						LsrSearch(LsrSearchProps {
-							lsrs_resource,
-							selected_items: selected_items.write_only(),
-						}),
-					)
-				})
+		div().child((
+			Suspense(SuspenseProps {
+				fallback: { || pre().child("Loading LSR...") }.into(),
+				children: ToChildren::to_children(move || {
+					IntoRender::into_render(move || match lsrs_resource.get() {
+						Some(Ok(l)) => pre().child(l.outliers),
+						Some(Err(e)) => pre().child(format!("Error loading Lsrs: {e}")),
+						None => pre().child("Loading LSR...".to_owned()),
+					})
+				}),
 			}),
-		})),
+			LsrSearch(LsrSearchProps {
+				rendered_lsrs,
+				selected_items: selected_items.write_only(),
+			}),
+		)),
 		// Selected items display
 		div().class("mt-4 space-y-2").child(For(ForProps {
-			each: move || selected_items.get().to_vec(),
+			each: move || selected_items.read().to_vec(),
 			key: |item| item.clone(),
 			children: move |item: RenderedLsr| div().class("flex items-center justify-between p-2 bg-gray-50 rounded").child(span().child(item.rend.clone())),
 		})),
@@ -60,7 +64,7 @@ pub fn LsrView() -> impl IntoView {
 }
 
 #[component]
-fn LsrSearch(lsrs_resource: Resource<Result<RenderedLsrs, ServerFnError>>, selected_items: WriteSignal<Vec<RenderedLsr>>) -> impl IntoView {
+fn LsrSearch(rendered_lsrs: Memo<Vec<RenderedLsr>>, selected_items: WriteSignal<Vec<RenderedLsr>>) -> impl IntoView {
 	let search_input = RwSignal::new(String::default());
 
 	///HACK: for now, using simple substring matching
@@ -68,12 +72,8 @@ fn LsrSearch(lsrs_resource: Resource<Result<RenderedLsrs, ServerFnError>>, selec
 		available.iter().filter(|v| v.rend.to_lowercase().contains(&s.to_lowercase())).cloned().collect()
 	}
 	let filtered_items = Memo::new(move |_| {
-		let search = search_input.get();
-		let available = lsrs_resource.with(|result| match result {
-			Some(Ok(lsrs)) => lsrs.v.clone(),
-			_ => vec![],
-		});
-		if search.is_empty() { vec![] } else { fzf(&search, &available) }
+		let search = search_input.read();
+		if search.is_empty() { vec![] } else { fzf(&search, &rendered_lsrs.read()) }
 	});
 
 	let handle_search_input = move |ev: web_sys::Event| {
@@ -146,18 +146,12 @@ fn LsrSearch(lsrs_resource: Resource<Result<RenderedLsrs, ServerFnError>>, selec
 		// Dropdown results container
 		div()
 			.class("relative inline-block z-50 overflow-y-auto max-h-96")
-			.style(move || {
-				if filtered_items.with(|items| items.is_empty()) {
-					"display: none;"
-				} else {
-					"display: block;"
-				}
-			})
+			.style(move || if filtered_items.get().is_empty() { "display: none;" } else { "display: block;" })
 			.child(ForEnumerate(ForEnumerateProps {
 				each: move || filtered_items.get(),
 				key: |item| item.clone(),
 				children: move |i: ReadSignal<usize>, item: RenderedLsr| {
-					let is_focused = move || focused_index.get() == i.get() as i32;
+					let is_focused = move || focused_index.get() == *i.read() as i32;
 					static HOVER_BG: &str = "bg-gray-100";
 
 					div()
