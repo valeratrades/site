@@ -8,6 +8,7 @@ use leptos::{
 };
 use serde::{Deserialize, Serialize};
 use v_utils::trades::Pair;
+use web_sys::wasm_bindgen::JsValue;
 
 #[cfg(feature = "ssr")]
 use crate::{conf::Settings, utils::Mock};
@@ -83,11 +84,23 @@ fn LsrSearch(rendered_lsrs: Memo<Vec<RenderedLsr>>, selected_items: WriteSignal<
 
 	let handle_select_click = move |item: RenderedLsr| {
 		let selected = item.clone();
+		let mut updated_items = vec![];
 		selected_items.update(|items| {
 			if !items.contains(&selected) {
 				items.push(selected);
 			}
+			updated_items = items.clone();
 		});
+
+		// Update URL with query parameters using window.location
+		let lsrs_param = updated_items.iter().map(|item| item.pair.to_string()).collect::<Vec<_>>().join(",");
+
+		if let Some(window) = web_sys::window() {
+			if let Some(history) = window.history().ok() {
+				let new_url = format!("/dashboards?lsrs={}", lsrs_param);
+				let _ = history.push_state_with_url(&JsValue::NULL, "", Some(&new_url));
+			}
+		}
 
 		*search_input.write() = String::default();
 	};
