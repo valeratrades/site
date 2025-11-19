@@ -30,7 +30,7 @@ pub async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, in
 			match get_historical_data(symbol, tf, range, exchange).await {
 				Ok(series) => Ok((symbol, series)),
 				Err(e) => {
-					tracing::warn!("Failed to fetch data for symbol: {}. Error: {}", symbol, e);
+					tracing::warn!("Failed to fetch data for symbol: {symbol}. Error: {e}");
 					Err(e)
 				}
 			}
