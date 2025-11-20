@@ -39,7 +39,7 @@ pub fn LsrView() -> impl IntoView {
 					let outliers = rendered_lsrs.outliers.clone();
 					let lsrs_vec = rendered_lsrs.v.clone();
 					(div().child((
-						pre().child(outliers),
+						pre().inner_html(outliers),
 						LsrSearchAndDisplayIsland(LsrSearchAndDisplayIslandProps { rendered_lsrs: lsrs_vec.clone() }),
 					)),)
 						.into_any()

@@ -3,10 +3,91 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 use color_eyre::eyre::{Result, bail};
 use futures::future::join_all;
 use jiff::Timestamp;
-use plotly::{Plot, Scatter, common::Line};
+use plotly::{
+	Plot, Scatter,
+	common::{Line, Title},
+};
+use serde::{Deserialize, Serialize};
 use tracing::instrument;
 use v_exchanges::prelude::*;
-use v_utils::trades::{Pair, Timeframe};
+use v_utils::{
+	trades::{Pair, Timeframe},
+	xdg_state_file,
+};
+
+/// Persisted market structure data with metadata for cache invalidation
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct PersistedMarketData {
+	/// When this data was collected
+	timestamp: std::time::SystemTime,
+	/// Normalized data (pair -> log-normalized closes)
+	normalized_df: HashMap<Pair, Vec<f64>>,
+	/// Time index from BTC-USDT
+	dt_index: Vec<Timestamp>,
+	/// Parameters used to collect this data
+	params: CollectionParams,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+struct CollectionParams {
+	timeframe: Timeframe,
+	range_debug: String,
+	instrument_debug: String,
+}
+
+impl CollectionParams {
+	fn new(timeframe: Timeframe, range: RequestRange, instrument: Instrument) -> Self {
+		Self {
+			timeframe,
+			range_debug: format!("{:?}", range),
+			instrument_debug: format!("{:?}", instrument),
+		}
+	}
+}
+
+impl PersistedMarketData {
+	fn cache_file(params: &CollectionParams) -> std::path::PathBuf {
+		let filename = format!(
+			"market_structure_{}_{:?}_{}.json",
+			params.instrument_debug,
+			params.timeframe,
+			params.range_debug.replace([':', ' ', '{', '}'], "_")
+		);
+		xdg_state_file!(filename)
+	}
+
+	fn try_load(params: &CollectionParams, max_age: Duration) -> Option<Self> {
+		let cache_file = Self::cache_file(params);
+
+		let metadata = std::fs::metadata(&cache_file).ok()?;
+		let age = metadata.modified().ok()?.elapsed().ok()?;
+
+		if age > max_age {
+			tracing::info!("Cache file exists but is too old (age: {:?}, max: {:?})", age, max_age);
+			return None;
+		}
+
+		let json = std::fs::read_to_string(&cache_file).ok()?;
+		let data: Self = serde_json::from_str(&json).ok()?;
+
+		// Verify params match
+		if data.params != *params {
+			tracing::warn!("Cache params mismatch, ignoring cached data");
+			return None;
+		}
+
+		tracing::info!("Loaded market structure data from cache (age: {:?})", age);
+		Some(data)
+	}
+
+	fn save(&self) -> Result<()> {
+		let cache_file = Self::cache_file(&self.params);
+		let json = serde_json::to_string_pretty(self)?;
+		std::fs::write(&cache_file, json)?;
+		tracing::info!("Saved market structure data to {:?}", cache_file);
+		Ok(())
+	}
+}
 
 #[instrument]
 pub async fn try_build(limit: RequestRange, tf: Timeframe, exchange_name: ExchangeName, instrument: Instrument) -> Result<Plot> {
@@ -39,6 +120,20 @@ pub async fn try_build(limit: RequestRange, tf: Timeframe, exchange_name: Exchan
 #[instrument(skip_all)]
 pub async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, instrument: Instrument, exchange: Arc<Box<dyn Exchange>>) -> Result<(HashMap<Pair, Vec<f64>>, Vec<Timestamp>)> {
 	tracing::info!("Starting data collection for {} pairs with tf={:?}, range={:?}", pairs.len(), tf, range);
+
+	let params = CollectionParams::new(tf, range, instrument);
+
+	// Calculate max age based on timeframe - reload cycle should be proportional to the timeframe
+	// For 1h data, reload every hour; for 1d data, reload every day, etc.
+	let max_age = tf.duration();
+
+	// Try to load from cache first
+	if let Some(cached) = PersistedMarketData::try_load(&params, max_age) {
+		tracing::info!("Using cached market structure data");
+		return Ok((cached.normalized_df, cached.dt_index));
+	}
+
+	tracing::info!("No valid cache found, fetching fresh data");
 
 	//HACK: assumes we're never misaligned here
 	let futures = pairs.iter().map(|pair| {
@@ -81,7 +176,23 @@ pub async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, in
 		}
 	});
 
-	tracing::info!("Successfully fetched data for {} pairs, {} pairs failed", data.len(), failed_pairs.len());
+	let total_pairs = pairs.len();
+	let success_rate = (data.len() as f64 / total_pairs as f64) * 100.0;
+	if success_rate < 70.0 {
+		tracing::warn!(
+			"Successfully fetched data for {} pairs, {} pairs failed ({:.1}% success rate - below 70% threshold)",
+			data.len(),
+			failed_pairs.len(),
+			success_rate
+		);
+	} else {
+		tracing::info!(
+			"Successfully fetched data for {} pairs, {} pairs failed ({:.1}% success rate)",
+			data.len(),
+			failed_pairs.len(),
+			success_rate
+		);
+	}
 
 	if dt_index.is_empty() {
 		if !btc_usdt_found {
@@ -119,6 +230,18 @@ pub async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, in
 			eprintln!("misaligned: {key}");
 			aligned_df.remove(key).unwrap();
 		}
+	}
+
+	// Persist the collected data to cache
+	let persisted_data = PersistedMarketData {
+		timestamp: std::time::SystemTime::now(),
+		normalized_df: normalized_df.clone(),
+		dt_index: dt_index.clone(),
+		params,
+	};
+
+	if let Err(e) = persisted_data.save() {
+		tracing::warn!("Failed to save market structure data to cache: {:?}", e);
 	}
 
 	Ok((normalized_df, dt_index))
@@ -187,8 +310,19 @@ pub fn plotly_closes(normalized_closes: HashMap<Pair, Vec<f64>>, dt_index: Vec<T
 	let hours = (dt_index.first().unwrap().duration_since(*dt_index.last().unwrap()) + tf.signed_duration() * 2/*compensate for off-by-ones*/)
 		.as_hours()
 		.abs();
-	let title = format!("Last {hours}h of {}/{} pairs on {instrument}", normalized_closes.len(), all_pairs.len());
-	plot.set_layout(plotly::Layout::new().title(title));
+
+	// Calculate success rate and color only the numerator if below 70%
+	let success_rate = (normalized_closes.len() as f64 / all_pairs.len() as f64) * 100.0;
+	let title_text = if success_rate < 70.0 {
+		format!(
+			"Last {hours}h of <span style=\"color: #f59e0b;\">{}</span>/{} pairs on {instrument}",
+			normalized_closes.len(),
+			all_pairs.len()
+		)
+	} else {
+		format!("Last {hours}h of {}/{} pairs on {instrument}", normalized_closes.len(), all_pairs.len())
+	};
+	plot.set_layout(plotly::Layout::new().title(Title::with_text(&title_text)));
 
 	let mut add_trace = |name: Pair, width: f64, color: Option<&'static str>, legend: Option<String>| {
 		let y_values: Vec<f64> = normalized_closes.get(&name).unwrap().to_owned();

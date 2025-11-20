@@ -18,6 +18,7 @@ static INSTRUMENT: Instrument = Instrument::Perp;
 pub async fn get(tf: Timeframe, range: RequestRange) -> Result<SortedLsrs> {
 	let mut bn = Binance::default();
 	bn.set_max_tries(3);
+	bn.set_recv_window(std::time::Duration::from_secs(60));
 
 	let pairs = bn.exchange_info(INSTRUMENT, None).await.unwrap().usdt_pairs().collect::<Vec<_>>();
 	let pairs_len = pairs.len();
@@ -114,11 +115,24 @@ impl SortedLsrs {
 		}
 		s.push_str(&format!("\n{:-^width$}", "", width = Lsrs::CHANGE_STR_LEN));
 		s.push_str(&format!("\nAverage: {:.2}", self.iter().map(|lsr| lsr.last().unwrap().long()).sum::<f64>() / self.len() as f64));
-		s.push_str(&format!(
-			"\nCollected for {}/{} pairs on Binance/{INSTRUMENT:?}",
-			self.len(),
-			self.__total_pairs_on_exchange.expect("A dumb unwrap, really should be an error")
-		));
+
+		let total_pairs = self.__total_pairs_on_exchange.expect("A dumb unwrap, really should be an error");
+		let success_rate = (self.len() as f64 / total_pairs as f64) * 100.0;
+
+		// Color only the numerator based on success rate
+		let pairs_info = if success_rate < 70.0 {
+			warn!("LSR data: {}/{} pairs loaded ({:.1}% - below 70% threshold)", self.len(), total_pairs, success_rate);
+			format!(
+				"\nCollected for <span style=\"color: #f59e0b;\">{}</span>/{} pairs on Binance/{INSTRUMENT:?}",
+				self.len(),
+				total_pairs
+			)
+		} else {
+			info!("LSR data: {}/{} pairs loaded ({:.1}%)", self.len(), total_pairs, success_rate);
+			format!("\nCollected for {}/{} pairs on Binance/{INSTRUMENT:?}", self.len(), total_pairs)
+		};
+		s.push_str(&pairs_info);
+
 		s
 	}
 }
