@@ -46,9 +46,9 @@ leptos = { version = "^0.8.10", features = ["islands"] }
 leptos-routable = { git = "https://github.com/stefanboere/leptos-routable" }
 leptos_meta = { version = "^0.8.5" }
 leptos_router = { version = "^0.8.8" }
-proc-macro2 = "=1.0.101"
+proc-macro2 = "=1.0.103"
 serde = { version = "^1.0.228", features = ["derive"] }
-v_utils = { version = "^2.7.3", features = [ "cli" ] } #ga: rm path
+v_utils = { path = "../v_utils/v_utils", features = [ "cli" ] } #ga: rm path
 web-sys = "^0.3"
 
 # optional-hydrate {{{
@@ -71,7 +71,7 @@ serde_json = { version = "^1.0.145", optional = true }
 serde_with = { version = "^3.15.0", features = ["chrono"] }
 tokio = { version = "^1", features = ["rt-multi-thread"], optional = true }
 tracing = { version = "^0.1.41", optional = true }
-v_exchanges = { version = "^0.12.4", features = ["binance", "bybit", "data"], optional = true } #ga: rm path
+v_exchanges = { path = "../v_exchanges/v_exchanges", features = ["binance", "bybit", "data"], optional = true } #ga: rm path
 #,}}}
 
 [features]

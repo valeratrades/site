@@ -13,7 +13,7 @@ pub async fn try_build(limit: RequestRange, tf: Timeframe, exchange_name: Exchan
 	let mut exchange = exchange_name.init_client();
 	exchange.set_max_tries(3);
 
-	let exch_info = exchange.exchange_info(instrument).await.unwrap();
+	let exch_info = exchange.exchange_info(instrument, None).await.unwrap();
 	let all_usdt_pairs = exch_info.usdt_pairs().collect::<Vec<Pair>>();
 
 	let (normalized_df, dt_index) = collect_data(&all_usdt_pairs, tf, limit, instrument, Arc::new(exchange)).await?;
@@ -91,7 +91,7 @@ pub struct RelevantHistoricalData {
 }
 #[instrument(skip_all)]
 pub async fn get_historical_data(symbol: Symbol, tf: Timeframe, range: RequestRange, exchange: Arc<Box<dyn Exchange>>) -> Result<RelevantHistoricalData> {
-	let klines = exchange.klines(symbol, tf, range).await?;
+	let klines = exchange.klines(symbol, tf, range, Some(60000)).await?;
 
 	let mut open_time = Vec::new();
 	let mut open = Vec::new();
