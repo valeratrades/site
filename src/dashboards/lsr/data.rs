@@ -19,7 +19,7 @@ pub async fn get(tf: Timeframe, range: RequestRange) -> Result<SortedLsrs> {
 	let mut bn = Binance::default();
 	bn.set_max_tries(3);
 
-	let pairs = bn.exchange_info(INSTRUMENT).await.unwrap().usdt_pairs().collect::<Vec<_>>();
+	let pairs = bn.exchange_info(INSTRUMENT, None).await.unwrap().usdt_pairs().collect::<Vec<_>>();
 	let pairs_len = pairs.len();
 
 	let lsr_no_data_pairs_file = xdg_data_file!("lsr_no_data_pairs.txt");

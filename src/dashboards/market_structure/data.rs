@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use color_eyre::eyre::{Result, bail};
 use futures::future::join_all;
@@ -12,6 +12,7 @@ use v_utils::trades::{Pair, Timeframe};
 pub async fn try_build(limit: RequestRange, tf: Timeframe, exchange_name: ExchangeName, instrument: Instrument) -> Result<Plot> {
 	let mut exchange = exchange_name.init_client();
 	exchange.set_max_tries(3);
+	exchange.set_recv_window(Duration::from_secs(60));
 
 	let exch_info = exchange.exchange_info(instrument, None).await.unwrap();
 	let all_usdt_pairs = exch_info.usdt_pairs().collect::<Vec<Pair>>();
@@ -81,6 +82,7 @@ pub async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, in
 
 #[allow(unused)]
 #[derive(Clone, Debug, Default, derive_new::new)]
+//HACK: manual roll of a DataFrame. No checks for alignment (or proper vectorization, for that matter)...
 pub struct RelevantHistoricalData {
 	col_open_times: Vec<Timestamp>,
 	col_opens: Vec<f64>,
@@ -91,7 +93,7 @@ pub struct RelevantHistoricalData {
 }
 #[instrument(skip_all)]
 pub async fn get_historical_data(symbol: Symbol, tf: Timeframe, range: RequestRange, exchange: Arc<Box<dyn Exchange>>) -> Result<RelevantHistoricalData> {
-	let klines = exchange.klines(symbol, tf, range, Some(60000)).await?;
+	let klines = exchange.klines(symbol, tf, range, None).await?;
 
 	let mut open_time = Vec::new();
 	let mut open = Vec::new();

@@ -114,7 +114,7 @@ fn LsrSearch(rendered_lsrs: Memo<Vec<RenderedLsr>>) -> impl IntoView {
 	let handle_select_click = move |item: RenderedLsr| {
 		// Read current URL params and add the new selection
 		if let Some(window) = web_sys::window() {
-			if let Some(location) = window.location().href().ok() {
+			if let Ok(location) = window.location().href() {
 				// Parse existing lsrs from URL
 				let mut existing_pairs = Vec::new();
 				if let Some(query_start) = location.find("lsrs=") {
@@ -131,7 +131,7 @@ fn LsrSearch(rendered_lsrs: Memo<Vec<RenderedLsr>>) -> impl IntoView {
 
 				// Update URL
 				let lsrs_param = existing_pairs.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(",");
-				if let Some(history) = window.history().ok() {
+				if let Ok(history) = window.history() {
 					let new_url = format!("/dashboards?lsrs={}", lsrs_param);
 					let _ = history.push_state_with_url(&JsValue::NULL, "", Some(&new_url));
 

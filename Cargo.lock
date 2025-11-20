@@ -3154,9 +3154,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.101"
+version = "1.0.103"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89ae43fd86e4158d6db51ad8e2b80f313af9cc74f5c0e03ccb87de09998732de"
+checksum = "5ee95bc4ef87b8d5ba32e8b7714ccc834865276eab0aed5c9958d00ec45f49e8"
 dependencies = [
  "unicode-ident",
 ]
@@ -3909,9 +3909,9 @@ dependencies = [
 
 [[package]]
 name = "serde_with"
-version = "3.15.0"
+version = "3.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6093cd8c01b25262b84927e0f7151692158fab02d961e04c979d3903eba7ecc5"
+checksum = "10574371d41b0d9b2cff89418eda27da52bcaff2cc8741db26382a77c29131f1"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -3928,9 +3928,9 @@ dependencies = [
 
 [[package]]
 name = "serde_with_macros"
-version = "3.15.0"
+version = "3.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7e6c180db0816026a61afa1cff5344fb7ebded7e4d3062772179f2501481c27"
+checksum = "08a72d8216842fdd57820dc78d840bef99248e35fb2554ff923319e60f2d686b"
 dependencies = [
  "darling",
  "proc-macro2",
@@ -4180,9 +4180,9 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
 name = "syn"
-version = "2.0.107"
+version = "2.0.110"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a26dbd934e5451d21ef060c018dae56fc073894c5a7896f882928a76e6d081b"
+checksum = "a99801b5bd34ede4cf3fc688c5919368fea4e4814a4664359503e6015b280aea"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4861,9 +4861,7 @@ dependencies = [
 
 [[package]]
 name = "v_exchanges"
-version = "0.12.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2c42c2869bd6d52ececea528490da3738af3cc29afccd8210226f6475a83702"
+version = "0.15.0"
 dependencies = [
  "async-trait",
  "cfg-if",
@@ -4886,10 +4884,9 @@ dependencies = [
 
 [[package]]
 name = "v_exchanges_adapters"
-version = "0.12.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "18079d97058b4622a1ceb6b27ce9214e8a3326e95c970762101c09bd2727e72e"
+version = "0.15.0"
 dependencies = [
+ "base64 0.22.1",
  "derive-new",
  "derive_more",
  "eyre",
@@ -4911,9 +4908,7 @@ dependencies = [
 
 [[package]]
 name = "v_exchanges_api_generics"
-version = "0.14.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ffef414e41765563164a69642bb72ecb32225c48b05e6d6ff3947be86d7a9d2f"
+version = "0.17.0"
 dependencies = [
  "bytes",
  "derive-new",
@@ -4946,9 +4941,7 @@ dependencies = [
 
 [[package]]
 name = "v_utils"
-version = "2.7.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6004ab599e0ead645eb5c5ed4a1e942b965c7f32bc092417e246c7ac80dd898d"
+version = "2.9.3"
 dependencies = [
  "config",
  "const_format",
@@ -4975,9 +4968,7 @@ dependencies = [
 
 [[package]]
 name = "v_utils_macros"
-version = "2.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f448418f7550f88c21737132389de81267fc59ed18c1ecb9a95514b43bc466c5"
+version = "2.5.3"
 dependencies = [
  "eyre",
  "heck 0.5.0",
