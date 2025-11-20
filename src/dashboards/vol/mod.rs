@@ -36,7 +36,7 @@ async fn try_pull(duration: std::time::Duration) -> Result<VolData, ServerFnErro
 #[cfg(feature = "ssr")]
 impl Mock for VolData {}
 //TODO!!!!: NowThen it
-#[derive(Clone, Debug, Default, derive_new::new, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize, derive_new::new)]
 pub struct VolData {
 	vix: NowThen,
 	bvol: NowThen,

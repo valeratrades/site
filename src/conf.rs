@@ -1,6 +1,6 @@
 extern crate clap;
 
-#[derive(Debug, Clone, v_utils::macros::MyConfigPrimitives)]
+#[derive(Clone, Debug, v_utils::macros::MyConfigPrimitives)]
 #[cfg_attr(feature = "ssr", derive(v_utils::macros::Settings))]
 pub struct Settings {
 	pub mock: Option<bool>,

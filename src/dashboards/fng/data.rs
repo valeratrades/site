@@ -4,7 +4,7 @@ use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_with::{DisplayFromStr, serde_as};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct FngResponse {
 	name: String,
 	data: Vec<FngRaw>,
@@ -12,7 +12,7 @@ pub struct FngResponse {
 }
 
 #[serde_as]
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct FngRaw {
 	#[serde_as(as = "DisplayFromStr")]
 	value: f64,
@@ -25,12 +25,12 @@ pub struct FngRaw {
 	seconds_until_update: Option<u64>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Metadata {
 	error: Option<String>,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct Fng {
 	pub value: f64,
 	pub timestamp: DateTime<Utc>,

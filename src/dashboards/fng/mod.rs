@@ -32,7 +32,7 @@ async fn try_build() -> Result<FngRendered, ServerFnError> {
 }
 #[cfg(feature = "ssr")]
 impl Mock for data::Fng {}
-#[derive(Clone, Debug, Default, derive_new::new, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize, derive_new::new)]
 pub struct FngRendered(String);
 #[cfg(feature = "ssr")]
 impl From<data::Fng> for FngRendered {

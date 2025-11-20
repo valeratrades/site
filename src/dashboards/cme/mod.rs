@@ -27,7 +27,7 @@ async fn try_build() -> Result<CftcReportRendered, ServerFnError> {
 }
 #[cfg(feature = "ssr")]
 impl Mock for data::CftcReport {}
-#[derive(Clone, Debug, Default, derive_new::new, serde::Deserialize, serde::Serialize)]
+#[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize, derive_new::new)]
 pub struct CftcReportRendered {
 	short: String,
 	markdown: String,

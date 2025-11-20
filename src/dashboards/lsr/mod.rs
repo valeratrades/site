@@ -230,12 +230,12 @@ async fn build_lsrs() -> Result<RenderedLsrs, ServerFnError> {
 	lsrs.persist()?;
 	Ok(lsrs.into())
 }
-#[derive(Debug, Default, Clone, derive_new::new, Hash, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize, derive_new::new)]
 pub struct RenderedLsr {
 	pub pair: Pair,
 	pub rend: String,
 }
-#[derive(Debug, Default, Clone, Hash, PartialEq, Eq, Serialize, Deserialize, derive_more::Deref)]
+#[derive(Clone, Debug, Default, derive_more::Deref, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct RenderedLsrs {
 	#[deref]
 	pub v: Vec<RenderedLsr>,

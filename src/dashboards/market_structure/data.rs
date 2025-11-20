@@ -16,7 +16,7 @@ use v_utils::{
 };
 
 /// Persisted market structure data with metadata for cache invalidation
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct PersistedMarketData {
 	/// When this data was collected
 	timestamp: std::time::SystemTime,
@@ -28,7 +28,7 @@ struct PersistedMarketData {
 	params: CollectionParams,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 struct CollectionParams {
 	timeframe: Timeframe,
 	range_debug: String,

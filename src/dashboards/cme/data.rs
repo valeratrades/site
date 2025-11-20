@@ -5,7 +5,7 @@ use v_utils::prelude::*;
 static CFTC_CODE_BTC: u32 = 133741;
 
 #[allow(unused)]
-#[derive(Clone, Debug, Default, derive_new::new, Copy, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, derive_new::new)]
 struct PositionsInfo {
 	current: f64,
 	change_since_last_week: f64,
@@ -14,7 +14,7 @@ struct PositionsInfo {
 }
 
 #[allow(unused)]
-#[derive(Clone, Debug, Default, derive_new::new, Copy, Deserialize, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, derive_new::new)]
 pub struct Positions {
 	long: PositionsInfo,
 	short: PositionsInfo,
@@ -22,7 +22,7 @@ pub struct Positions {
 }
 
 #[allow(unused)]
-#[derive(Clone, Debug, Default, derive_new::new, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, derive_new::new)]
 pub struct CftcReport {
 	// pub asset: String,
 	pub date: DateTime<Utc>,
@@ -204,7 +204,7 @@ impl std::fmt::Display for CftcReport {
 	}
 }
 
-#[derive(Clone, Debug, Default, derive_new::new, Copy)]
+#[derive(Clone, Copy, Debug, Default, derive_new::new)]
 struct DirectionalPositionsChange {
 	name: &'static str,
 	long: NowThen,

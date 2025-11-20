@@ -37,6 +37,35 @@ lib-profile-release = "wasm-release"
 [package.metadata.cargo-all-features]
 skip_feature_sets = [["ssr", "hydrate"]]
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+#,}}}
+
+[features]
+default = ["ssr", "hydrate"]
+hydrate = [
+    "leptos/hydrate",
+    "dep:console_error_panic_hook",
+    "dep:gloo-timers",
+    "dep:wasm-bindgen",
+]
+ssr = [
+    "dep:any_spawner",
+    "dep:serde_json",
+    "dep:v_exchanges",
+    "dep:axum",
+    "dep:tokio",
+    "dep:tracing",
+    "dep:leptos_axum",
+    "dep:reqwest",
+    "dep:chrono",
+    "dep:chrono-tz",
+    "dep:plotly",
+    "leptos/ssr",
+    "leptos_meta/ssr",
+    "leptos_router/ssr",
+]
+
 [dependencies]
 color-eyre = "0.6.5"
 derive-new = "0.7.0"
@@ -72,35 +101,6 @@ serde_with = { version = "^3.15.0", features = ["chrono"] }
 tokio = { version = "^1", features = ["rt-multi-thread"], optional = true }
 tracing = { version = "^0.1.41", optional = true }
 v_exchanges = { path = "../v_exchanges/v_exchanges", features = ["binance", "bybit", "data"], optional = true } #ga: rm path
-#,}}}
-
-[features]
-default = ["ssr", "hydrate"]
-hydrate = [
-    "leptos/hydrate",
-    "dep:console_error_panic_hook",
-    "dep:gloo-timers",
-    "dep:wasm-bindgen",
-]
-ssr = [
-    "dep:any_spawner",
-    "dep:serde_json",
-    "dep:v_exchanges",
-    "dep:axum",
-    "dep:tokio",
-    "dep:tracing",
-    "dep:leptos_axum",
-    "dep:reqwest",
-    "dep:chrono",
-    "dep:chrono-tz",
-    "dep:plotly",
-    "leptos/ssr",
-    "leptos_meta/ssr",
-    "leptos_router/ssr",
-]
-
-[lib]
-crate-type = ["cdylib", "rlib"]
 
 [profile.wasm-release]
 inherits = "release"
