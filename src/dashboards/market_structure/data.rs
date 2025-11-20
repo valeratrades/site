@@ -10,12 +10,27 @@ use v_utils::trades::{Pair, Timeframe};
 
 #[instrument]
 pub async fn try_build(limit: RequestRange, tf: Timeframe, exchange_name: ExchangeName, instrument: Instrument) -> Result<Plot> {
+	tracing::info!("Building market structure for {} {} with limit={:?}, tf={:?}", exchange_name, instrument, limit, tf);
+
 	let mut exchange = exchange_name.init_client();
 	exchange.set_max_tries(3);
 	exchange.set_recv_window(Duration::from_secs(60));
 
-	let exch_info = exchange.exchange_info(instrument, None).await.unwrap();
+	tracing::debug!("Fetching exchange info for {}", instrument);
+	let exch_info = match exchange.exchange_info(instrument, None).await {
+		Ok(info) => info,
+		Err(e) => {
+			tracing::error!("Failed to fetch exchange info: {:?}", e);
+			return Err(e.into());
+		}
+	};
+
 	let all_usdt_pairs = exch_info.usdt_pairs().collect::<Vec<Pair>>();
+	tracing::info!("Found {} USDT pairs from exchange info", all_usdt_pairs.len());
+
+	// Check if BTC-USDT is in the list
+	let has_btc_usdt = all_usdt_pairs.iter().any(|p| p.to_string() == "BTC-USDT");
+	tracing::info!("BTC-USDT in pairs list: {}", has_btc_usdt);
 
 	let (normalized_df, dt_index) = collect_data(&all_usdt_pairs, tf, limit, instrument, Arc::new(exchange)).await?;
 	Ok(plotly_closes(normalized_df, dt_index, tf, instrument, &all_usdt_pairs))
@@ -23,15 +38,20 @@ pub async fn try_build(limit: RequestRange, tf: Timeframe, exchange_name: Exchan
 
 #[instrument(skip_all)]
 pub async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, instrument: Instrument, exchange: Arc<Box<dyn Exchange>>) -> Result<(HashMap<Pair, Vec<f64>>, Vec<Timestamp>)> {
+	tracing::info!("Starting data collection for {} pairs with tf={:?}, range={:?}", pairs.len(), tf, range);
+
 	//HACK: assumes we're never misaligned here
 	let futures = pairs.iter().map(|pair| {
 		let exchange = Arc::clone(&exchange);
 		let symbol = Symbol::new(*pair, instrument);
 		async move {
 			match get_historical_data(symbol, tf, range, exchange).await {
-				Ok(series) => Ok((symbol, series)),
+				Ok(series) => {
+					tracing::debug!("Successfully fetched {} data points for {}", series.col_closes.len(), symbol);
+					Ok((symbol, series))
+				}
 				Err(e) => {
-					tracing::warn!("Failed to fetch data for symbol: {symbol}. Error: {e}");
+					tracing::warn!("Failed to fetch data for symbol: {symbol}. Error: {e:?}");
 					Err(e)
 				}
 			}
@@ -41,18 +61,42 @@ pub async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, in
 	let results = join_all(futures).await;
 	let mut data: HashMap<Pair, Vec<f64>> = HashMap::new();
 	let mut dt_index = Vec::new();
+	let mut failed_pairs = Vec::new();
+	let mut btc_usdt_found = false;
 
 	results.into_iter().for_each(|result| {
-		if let Ok((symbol, series)) = result {
-			if "BTC-USDT" == symbol.pair {
-				dt_index = series.col_open_times;
+		match result {
+			Ok((symbol, series)) => {
+				if "BTC-USDT" == symbol.pair {
+					btc_usdt_found = true;
+					dt_index = series.col_open_times.clone();
+					tracing::info!("BTC-USDT data fetched successfully with {} data points", series.col_closes.len());
+				}
+				data.insert(symbol.pair, series.col_closes);
 			}
-			data.insert(symbol.pair, series.col_closes);
+			Err(e) => {
+				// Track which pairs failed - the symbol info is lost here, but we logged it above
+				failed_pairs.push(format!("{:?}", e));
+			}
 		}
 	});
-	tracing::info!("Fetched data for {} pairs", data.len());
+
+	tracing::info!("Successfully fetched data for {} pairs, {} pairs failed", data.len(), failed_pairs.len());
+
 	if dt_index.is_empty() {
-		bail!("Failed to fetch data for BTC-USDT, aborting");
+		if !btc_usdt_found {
+			tracing::error!(
+				"BTC-USDT was not in the successful results. Total pairs attempted: {}, succeeded: {}, failed: {}",
+				pairs.len(),
+				data.len(),
+				failed_pairs.len()
+			);
+			tracing::error!("BTC-USDT present in pairs list: {}", pairs.iter().any(|p| p.to_string() == "BTC-USDT"));
+			bail!("Failed to fetch data for BTC-USDT, aborting. Check logs for individual fetch errors.");
+		} else {
+			tracing::error!("BTC-USDT was found but dt_index is empty - this shouldn't happen!");
+			bail!("BTC-USDT data appears corrupted (empty time index)");
+		}
 	}
 
 	let mut normalized_df: HashMap<Pair, Vec<f64>> = HashMap::new();
@@ -91,9 +135,20 @@ pub struct RelevantHistoricalData {
 	col_closes: Vec<f64>,
 	col_volumes: Vec<f64>,
 }
-#[instrument(skip_all)]
+#[instrument(skip_all, fields(symbol = %symbol))]
 pub async fn get_historical_data(symbol: Symbol, tf: Timeframe, range: RequestRange, exchange: Arc<Box<dyn Exchange>>) -> Result<RelevantHistoricalData> {
-	let klines = exchange.klines(symbol, tf, range, None).await?;
+	tracing::debug!("Fetching klines for {} (tf={:?}, range={:?})", symbol, tf, range);
+
+	let klines = match exchange.klines(symbol, tf, range, None).await {
+		Ok(k) => {
+			tracing::debug!("Received {} klines for {}", k.len(), symbol);
+			k
+		}
+		Err(e) => {
+			tracing::error!("Failed to fetch klines for {}: {:?}", symbol, e);
+			return Err(e.into());
+		}
+	};
 
 	let mut open_time = Vec::new();
 	let mut open = Vec::new();

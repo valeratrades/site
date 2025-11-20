@@ -77,10 +77,27 @@ pub async fn request_market_structure() -> Result<MarketStructure, ServerFnError
 
 	let tf = "5m".into();
 	let range = (24 * 12 + 1).into(); // 24h, given `5m` tf
-	let plot = data::try_build(range, tf, ExchangeName::Binance, Instrument::Perp)
-		.await
-		.expect("TODO: correct mapping to ServerFnError");
-	let ms = MarketStructure(plot.to_inline_html(None)); //Q: not sure if provision of div id is necessary
+
+	let result = data::try_build(range, tf, ExchangeName::Binance, Instrument::Perp).await;
+
+	let html = match result {
+		Ok(plot) => plot.to_inline_html(None),
+		Err(e) => {
+			// Log error with full trace
+			tracing::error!("Failed to build market structure: {:?}", e);
+			// Return error HTML to display to user
+			format!(
+				r#"<div style="padding: 20px; background-color: #fee; border: 1px solid #c33; border-radius: 4px; color: #c33;">
+					<h3>Error loading Market Structure</h3>
+					<p>{}</p>
+					<p style="font-size: 0.9em; color: #666;">Check server logs for details.</p>
+				</div>"#,
+				e
+			)
+		}
+	};
+
+	let ms = MarketStructure(html);
 	ms.persist()?;
 	Ok(ms)
 }

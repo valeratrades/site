@@ -6,7 +6,6 @@ use leptos::{
 	html::*,
 	prelude::*,
 };
-use leptos_router::hooks::use_location;
 use serde::{Deserialize, Serialize};
 use v_utils::trades::Pair;
 use web_sys::wasm_bindgen::JsValue;
@@ -39,10 +38,10 @@ pub fn LsrView() -> impl IntoView {
 				Some(Ok(rendered_lsrs)) => {
 					let outliers = rendered_lsrs.outliers.clone();
 					let lsrs_vec = rendered_lsrs.v.clone();
-					(
-						div().child((pre().child(outliers), LsrSearchIsland(LsrSearchIslandProps { rendered_lsrs: lsrs_vec.clone() }))),
-						SelectedLsrsDisplay(SelectedLsrsDisplayProps { rendered_lsrs: lsrs_vec }),
-					)
+					(div().child((
+						pre().child(outliers),
+						LsrSearchAndDisplayIsland(LsrSearchAndDisplayIslandProps { rendered_lsrs: lsrs_vec.clone() }),
+					)),)
 						.into_any()
 				}
 				Some(Err(e)) => (pre().child(format!("Error loading Lsrs: {e}")), ().into_any()).into_any(),
@@ -52,32 +51,48 @@ pub fn LsrView() -> impl IntoView {
 	}))
 }
 
-/// Component that displays selected LSRs based on URL query params
-/// This is NOT an island so it can access the router context
-#[component]
-pub fn SelectedLsrsDisplay(rendered_lsrs: Vec<RenderedLsr>) -> impl IntoView {
-	let location = use_location();
+#[island]
+pub fn LsrSearchAndDisplayIsland(rendered_lsrs: Vec<RenderedLsr>) -> impl IntoView {
+	let rendered_lsrs_memo = Memo::new(move |_| rendered_lsrs.clone());
 
-	let selected_lsrs = Memo::new(move |_| {
-		// Force reactivity by reading location.search
-		let search = location.search.get();
+	// Signal to track selected pairs from URL
+	let selected_pairs = RwSignal::new(Vec::<Pair>::new());
 
-		// Parse lsrs parameter from query string
-		if let Some(lsrs_start) = search.find("lsrs=") {
-			let after_lsrs = &search[lsrs_start + 5..];
-			let end = after_lsrs.find('&').unwrap_or(after_lsrs.len());
-			let lsrs_str = &after_lsrs[..end];
-
-			lsrs_str
-				.split(',')
-				.filter_map(|pair_str| {
-					let pair = pair_str.trim().parse::<Pair>().ok()?;
-					rendered_lsrs.iter().find(|lsr| lsr.pair == pair).cloned()
-				})
-				.collect::<Vec<_>>()
-		} else {
-			vec![]
+	// Read URL params on mount and update selected_pairs
+	#[cfg(not(feature = "ssr"))]
+	{
+		if let Some(window) = web_sys::window() {
+			if let Ok(search) = window.location().search() {
+				if let Some(lsrs_start) = search.find("lsrs=") {
+					let after_lsrs = &search[lsrs_start + 5..];
+					let end = after_lsrs.find('&').unwrap_or(after_lsrs.len());
+					let lsrs_str = &after_lsrs[..end];
+					let pairs: Vec<Pair> = lsrs_str.split(',').filter_map(|s| s.trim().parse::<Pair>().ok()).collect();
+					selected_pairs.set(pairs);
+				}
+			}
 		}
+	}
+
+	(
+		LsrSearch(LsrSearchProps {
+			rendered_lsrs: rendered_lsrs_memo,
+			selected_pairs,
+		}),
+		LsrDisplay(LsrDisplayProps {
+			rendered_lsrs: rendered_lsrs_memo,
+			selected_pairs,
+		}),
+	)
+}
+
+#[component]
+fn LsrDisplay(rendered_lsrs: Memo<Vec<RenderedLsr>>, selected_pairs: RwSignal<Vec<Pair>>) -> impl IntoView {
+	let selected_lsrs = Memo::new(move |_| {
+		let pairs = selected_pairs.get();
+		let all_lsrs = rendered_lsrs.get();
+
+		pairs.into_iter().filter_map(|pair| all_lsrs.iter().find(|lsr| lsr.pair == pair).cloned()).collect::<Vec<_>>()
 	});
 
 	div().class("mt-4 space-y-2").child(For(ForProps {
@@ -87,14 +102,8 @@ pub fn SelectedLsrsDisplay(rendered_lsrs: Vec<RenderedLsr>) -> impl IntoView {
 	}))
 }
 
-#[island]
-pub fn LsrSearchIsland(rendered_lsrs: Vec<RenderedLsr>) -> impl IntoView {
-	let rendered_lsrs_memo = Memo::new(move |_| rendered_lsrs.clone());
-	LsrSearch(LsrSearchProps { rendered_lsrs: rendered_lsrs_memo })
-}
-
 #[component]
-fn LsrSearch(rendered_lsrs: Memo<Vec<RenderedLsr>>) -> impl IntoView {
+fn LsrSearch(rendered_lsrs: Memo<Vec<RenderedLsr>>, selected_pairs: RwSignal<Vec<Pair>>) -> impl IntoView {
 	let search_input = RwSignal::new(String::default());
 
 	///HACK: for now, using simple substring matching
@@ -111,40 +120,26 @@ fn LsrSearch(rendered_lsrs: Memo<Vec<RenderedLsr>>) -> impl IntoView {
 		*search_input.write() = new_input;
 	};
 
-	let handle_select_click = move |item: RenderedLsr| {
-		// Read current URL params and add the new selection
+	let handle_select_click = StoredValue::new(move |item: RenderedLsr| {
+		// Add to selected pairs
+		selected_pairs.update(|pairs| {
+			if !pairs.contains(&item.pair) {
+				pairs.push(item.pair);
+			}
+		});
+
+		// Update URL to reflect selection
 		if let Some(window) = web_sys::window() {
-			if let Ok(location) = window.location().href() {
-				// Parse existing lsrs from URL
-				let mut existing_pairs = Vec::new();
-				if let Some(query_start) = location.find("lsrs=") {
-					let query_part = &location[query_start + 5..];
-					let end = query_part.find('&').unwrap_or(query_part.len());
-					let lsrs_str = &query_part[..end];
-					existing_pairs = lsrs_str.split(',').filter_map(|s| s.trim().parse::<Pair>().ok()).collect();
-				}
-
-				// Add new pair if not already present
-				if !existing_pairs.contains(&item.pair) {
-					existing_pairs.push(item.pair);
-				}
-
-				// Update URL
-				let lsrs_param = existing_pairs.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(",");
-				if let Ok(history) = window.history() {
-					let new_url = format!("/dashboards?lsrs={}", lsrs_param);
-					let _ = history.push_state_with_url(&JsValue::NULL, "", Some(&new_url));
-
-					// Trigger popstate event to notify Leptos router of URL change
-					if let Ok(event) = web_sys::PopStateEvent::new("popstate") {
-						let _ = window.dispatch_event(&event);
-					}
-				}
+			let pairs = selected_pairs.get();
+			let lsrs_param = pairs.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(",");
+			if let Ok(history) = window.history() {
+				let new_url = format!("/dashboards?lsrs={}", lsrs_param);
+				let _ = history.push_state_with_url(&JsValue::NULL, "", Some(&new_url));
 			}
 		}
 
 		*search_input.write() = String::default();
-	};
+	});
 
 	let focused_index = RwSignal::new(0);
 	let handle_key_nav = move |ev: web_sys::KeyboardEvent| {
@@ -177,7 +172,7 @@ fn LsrSearch(rendered_lsrs: Memo<Vec<RenderedLsr>>) -> impl IntoView {
 					let idx = focused_index.get();
 					if idx >= 0 && (idx as usize) < items_count {
 						let selected_item = filtered_items.get()[idx as usize].clone();
-						handle_select_click(selected_item);
+						handle_select_click.with_value(|f| f(selected_item));
 					}
 					focused_index.set(0);
 				}
@@ -217,7 +212,7 @@ fn LsrSearch(rendered_lsrs: Memo<Vec<RenderedLsr>>) -> impl IntoView {
 						})
 						.on(ev::click, {
 							let item_clone = item.clone();
-							move |_| handle_select_click(item_clone.clone()) //wtf, why must I clone twice?
+							move |_| handle_select_click.with_value(|f| f(item_clone.clone())) //wtf, why must I clone twice?
 						})
 						.child(item.rend.clone())
 				},
