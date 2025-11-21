@@ -20,7 +20,7 @@ pub async fn get(tf: Timeframe, range: RequestRange) -> Result<SortedLsrs> {
 	bn.set_max_tries(3);
 	bn.set_recv_window(std::time::Duration::from_secs(60));
 
-	let pairs = bn.exchange_info(INSTRUMENT, None).await.unwrap().usdt_pairs().collect::<Vec<_>>();
+	let pairs = bn.exchange_info(INSTRUMENT, None).await?.usdt_pairs().collect::<Vec<_>>();
 	let pairs_len = pairs.len();
 
 	let lsr_no_data_pairs_file = xdg_data_file!("lsr_no_data_pairs.txt");

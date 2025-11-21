@@ -226,7 +226,13 @@ async fn build_lsrs() -> Result<RenderedLsrs, ServerFnError> {
 
 	let tf = "5m".into();
 	let range = (24 * 12 + 1).into(); // 24h, given `5m` tf
-	let lsrs = data::get(tf, range).await.expect("TODO: proper error handling");
+	let lsrs = match data::get(tf, range).await {
+		Ok(lsrs) => lsrs,
+		Err(e) => {
+			tracing::error!("Failed to fetch LSR data: {e:?}");
+			return Err(ServerFnError::new(format!("Failed to fetch LSR data: {e}")));
+		}
+	};
 	lsrs.persist()?;
 	Ok(lsrs.into())
 }
