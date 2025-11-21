@@ -10,14 +10,15 @@ use crate::{conf::Settings, utils::Mock};
 #[island]
 pub fn VolView() -> impl IntoView {
 	let duration = std::time::Duration::from_hours(24);
-	let vol_resource = Resource::new(move || (), move |_| async move { try_pull(duration).await.expect("dbg") });
+	let vol_resource = Resource::new(move || (), move |_| async move { try_pull(duration).await });
 
 	div().child(Suspense(SuspenseProps {
 		fallback: { || pre().child("Loading Vol Block...") }.into(),
 		children: ToChildren::to_children(move || {
-			IntoRender::into_render(move || {
-				let vol_resource_clone = vol_resource;
-				vol_resource_clone.get().map(|v| pre().child(v.to_string()))
+			IntoRender::into_render(move || match vol_resource.get() {
+				Some(Ok(vol_data)) => (pre().child(vol_data.to_string()),).into_any(),
+				Some(Err(e)) => (pre().child(format!("Error loading Vol data: {e}")),).into_any(),
+				None => (pre().child("Loading Vol Block..."),).into_any(),
 			})
 		}),
 	}))
@@ -27,7 +28,13 @@ pub fn VolView() -> impl IntoView {
 async fn try_pull(duration: std::time::Duration) -> Result<VolData, ServerFnError> {
 	crate::try_load_mock!(VolData);
 
-	let (vix, bvol) = tokio::try_join!(data::vix(duration), data::bvol(duration)).expect("TODO: conversion eyre -> SererFnError");
+	let (vix, bvol) = match tokio::try_join!(data::vix(duration), data::bvol(duration)) {
+		Ok(results) => results,
+		Err(e) => {
+			tracing::error!("Failed to fetch volatility data: {e:?}");
+			return Err(ServerFnError::new(format!("Failed to fetch volatility data: {e}")));
+		}
+	};
 	let data = VolData::new(vix, bvol);
 
 	data.persist()?;
