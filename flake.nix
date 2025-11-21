@@ -93,8 +93,6 @@
         };
       in
       {
-        #TODO: actually implement build process (ref: https://book.leptos.dev/deployment/ssr.html)
-        #TODO; figure out what's the equivalent of docker's `EXPOSE 8080`
         packages =
           let
             rustc = rust;
@@ -108,18 +106,101 @@
               inherit pname;
               version = manifest.version;
 
-              preBuild = sourceTailwind ++ ''
-                							mkdir ./build/app
-                							cp -r ./target/site/ ./build/app/site
-                							cp ./target/release/${pname} ./build/app/
-                						'';
+              # Copy the current directory and manually link dependencies
+              src = pkgs.lib.cleanSource ./.;
+
+              # Link sibling dependencies before build
+              prePatch = ''
+                # Create parent structure and link sibling crates
+                mkdir -p ../v_utils ../v_exchanges
+                cp -r ${../../v_utils/v_utils}/* ../v_utils/ || true
+                cp -r ${../../v_exchanges/v_exchanges}/* ../v_exchanges/ || true
+              '';
+              cargoLock = {
+                lockFile = ./Cargo.lock;
+                outputHashes = {
+                  "leptos-routable-0.2.0" = "sha256-w17sr9fLbUaCHP6x/fVSmR5dYduTGBlXBDna7Ksq+ZM=";
+                };
+              };
+
               buildInputs = with pkgs; [
                 openssl.dev
               ];
-              nativeBuildInputs = with pkgs; [ pkg-config ];
 
-              cargoLock.lockFile = ./Cargo.lock;
-              src = pkgs.lib.cleanSource ./.;
+              nativeBuildInputs = with pkgs; [
+                pkg-config
+                tailwindcss
+                wasm-bindgen-cli
+              ] ++ frontendTools;
+
+              # Build tailwind CSS before cargo build
+              preBuild = sourceTailwind;
+
+              # Custom build phase: build server binary and WASM client separately
+              buildPhase = ''
+                runHook preBuild
+
+                # Build the server binary with SSR feature
+                echo "Building server binary..."
+                cargo build --release --bin ${pname} --features ssr --no-default-features
+
+                # Build the WASM client with hydrate feature
+                echo "Building WASM client..."
+                cargo build --release --lib --target wasm32-unknown-unknown --features hydrate --no-default-features
+
+                # Run wasm-bindgen to generate JS glue code
+                echo "Running wasm-bindgen..."
+                mkdir -p target/site/pkg
+                wasm-bindgen --target web \
+                  --out-dir target/site/pkg \
+                  --out-name ${pname} \
+                  target/wasm32-unknown-unknown/release/${pname}.wasm
+
+                # Optimize WASM with wasm-opt
+                echo "Optimizing WASM..."
+                wasm-opt -Oz target/site/pkg/${pname}_bg.wasm -o target/site/pkg/${pname}_bg.wasm
+
+                runHook postBuild
+              '';
+
+              # Install the binary and site assets
+              installPhase = ''
+                                runHook preInstall
+
+                                mkdir -p $out/bin
+                                mkdir -p $out/share/${pname}/pkg
+
+                                # Copy the server binary
+                                cp target/release/${pname} $out/bin/${pname}
+
+                                # Copy the WASM and JS assets
+                                cp -r target/site/pkg/* $out/share/${pname}/pkg/
+
+                                # Copy CSS
+                                mkdir -p $out/share/${pname}/style
+                                cp style/tailwind_out.css $out/share/${pname}/style/
+
+                                # Copy public assets if they exist
+                                if [ -d public ]; then
+                                  cp -r public/* $out/share/${pname}/
+                                fi
+
+                                # Create a wrapper script that sets LEPTOS_SITE_ROOT
+                                cat > $out/bin/${pname}-wrapped <<EOF
+                #!/bin/sh
+                export LEPTOS_SITE_ROOT="$out/share/${pname}"
+                exec "$out/bin/${pname}" "\$@"
+                EOF
+                                chmod +x $out/bin/${pname}-wrapped
+
+                                # Make the wrapped version the default
+                                rm $out/bin/${pname}
+                                mv $out/bin/${pname}-wrapped $out/bin/${pname}
+
+                                runHook postInstall
+              '';
+
+              doCheck = false; # Skip tests in build
             };
           };
 

@@ -71,19 +71,19 @@ color-eyre = "0.6.5"
 derive-new = "0.7.0"
 derive_more = { version = "2.0.1", features = ["from", "display", "deref", "deref_mut", "debug"] }
 futures = "0.3.31"
-leptos = { version = "^0.8.10", features = ["islands"] }
+leptos = { version = "^0.8.12", features = ["islands"] }
 leptos-routable = { git = "https://github.com/stefanboere/leptos-routable" }
 leptos_meta = { version = "^0.8.5" }
-leptos_router = { version = "^0.8.8" }
+leptos_router = { version = "^0.8.9" }
 proc-macro2 = "=1.0.103"
 serde = { version = "^1.0.228", features = ["derive"] }
-v_utils = { path = "../v_utils/v_utils", features = [ "cli" ] } #ga: rm path
+v_utils = { version = "2.9.4", features = [ "cli" ] }
 web-sys = "^0.3"
 
 # optional-hydrate {{{
 console_error_panic_hook = { version = "^0.1", optional = true }
 gloo-timers = { version = "^0.3", features = ["futures"], optional = true }
-wasm-bindgen = { version = "0.2.104", optional = true } #NB: version must match that of wasm-bindgen-cli I'm compiling the project with
+wasm-bindgen = { version = "0.2.105", optional = true } #NB: version must match that of wasm-bindgen-cli I'm compiling the project with
 #,}}}
 
 # optional-ssr {{{
@@ -91,16 +91,16 @@ any_spawner = { version = "^0.3", optional = true }
 axum = { version = "^0.8", optional = true }
 chrono = { version = "^0.4.42", optional = true, features = ["serde"] }
 chrono-tz = { version = "^0.10.4", optional = true }
-clap = { version = "^4.5.49", features = ["derive"] }
-jiff = { version = "0.2.15", features = ["serde"] }
+clap = { version = "^4.5.53", features = ["derive"] }
+jiff = { version = "0.2.16", features = ["serde"] }
 leptos_axum = { version = "^0.8", optional = true }
 plotly = { version = "^0.13.5", features = ["image", "kaleido"], optional = true }
 reqwest = { version = "^0.12.24", optional = true }
 serde_json = { version = "^1.0.145", optional = true }
-serde_with = { version = "^3.15.0", features = ["chrono"] }
+serde_with = { version = "^3.16.0", features = ["chrono"] }
 tokio = { version = "^1", features = ["rt-multi-thread"], optional = true }
 tracing = { version = "^0.1.41", optional = true }
-v_exchanges = { path = "../v_exchanges/v_exchanges", features = ["binance", "bybit", "data"], optional = true } #ga: rm path
+v_exchanges = { version = "0.15.0", features = ["binance", "bybit", "data"], optional = true }
 
 [profile.wasm-release]
 inherits = "release"
