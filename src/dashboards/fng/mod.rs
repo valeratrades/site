@@ -7,12 +7,31 @@ use crate::{conf::Settings, utils::Mock};
 
 #[island]
 pub fn FngView() -> impl IntoView {
-	let fng_resource = Resource::new(move || (), |_| async move { try_build().await.expect("dbg") });
+	let trigger = RwSignal::new(());
+	let fng_resource = Resource::new(move || trigger.get(), |_| async move { try_build().await });
+
+	// Set up retry interval - retry every 1 minute on error
+	#[cfg(not(feature = "ssr"))]
+	{
+		Effect::new(move || {
+			if let Some(Err(_)) = fng_resource.get() {
+				set_timeout(
+					move || {
+						trigger.update(|_| ());
+					},
+					std::time::Duration::from_secs(60),
+				);
+			}
+		});
+	}
+
 	div().child(Suspense(SuspenseProps {
 		fallback: { || pre().child("Loading Fng block...") }.into(),
 		#[rustfmt::skip]
-		children: ToChildren::to_children(move || IntoRender::into_render(move || {
-			fng_resource.get().map(|ms| pre().child(ms.0))
+		children: ToChildren::to_children(move || IntoRender::into_render(move || match fng_resource.get() {
+			Some(Ok(fng_data)) => (pre().child(fng_data.0),).into_any(),
+			Some(Err(e)) => (pre().child(format!("Error loading Fear & Greed: {e} (retrying...)")),).into_any(),
+			None => (pre().child("Loading Fng block..."),).into_any(),
 		})),
 	}))
 }
@@ -21,12 +40,16 @@ pub fn FngView() -> impl IntoView {
 async fn try_build() -> Result<FngRendered, ServerFnError> {
 	crate::try_load_mock!(data::Fng; .into());
 
-	let fng = data::btc_fngs_hourly(1)
-		.await
-		.expect("TODO: proper error handling")
-		.into_iter()
-		.next()
-		.expect("TODO: error mapping");
+	let fngs = data::btc_fngs_hourly(1).await.map_err(|e| {
+		tracing::error!("Failed to fetch Fear & Greed Index: {e:?}");
+		ServerFnError::new(format!("Failed to fetch Fear & Greed Index: {e}"))
+	})?;
+
+	let fng = fngs.into_iter().next().ok_or_else(|| {
+		tracing::error!("Fear & Greed Index response was empty");
+		ServerFnError::new("Fear & Greed Index response was empty")
+	})?;
+
 	fng.persist()?;
 	Ok(fng.into())
 }

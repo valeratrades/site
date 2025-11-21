@@ -10,14 +10,30 @@ use crate::{conf::Settings, utils::Mock};
 #[island]
 pub fn VolView() -> impl IntoView {
 	let duration = std::time::Duration::from_hours(24);
-	let vol_resource = Resource::new(move || (), move |_| async move { try_pull(duration).await });
+	let trigger = RwSignal::new(());
+	let vol_resource = Resource::new(move || trigger.get(), move |_| async move { try_pull(duration).await });
+
+	// Set up retry interval - retry every 1 minute on error
+	#[cfg(not(feature = "ssr"))]
+	{
+		Effect::new(move || {
+			if let Some(Err(_)) = vol_resource.get() {
+				set_timeout(
+					move || {
+						trigger.update(|_| ());
+					},
+					std::time::Duration::from_secs(60),
+				);
+			}
+		});
+	}
 
 	div().child(Suspense(SuspenseProps {
 		fallback: { || pre().child("Loading Vol Block...") }.into(),
 		children: ToChildren::to_children(move || {
 			IntoRender::into_render(move || match vol_resource.get() {
 				Some(Ok(vol_data)) => (pre().child(vol_data.to_string()),).into_any(),
-				Some(Err(e)) => (pre().child(format!("Error loading Vol data: {e}")),).into_any(),
+				Some(Err(e)) => (pre().child(format!("Error loading Vol data: {e} (retrying...)")),).into_any(),
 				None => (pre().child("Loading Vol Block..."),).into_any(),
 			})
 		}),

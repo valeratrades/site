@@ -31,6 +31,21 @@ pub fn LsrView() -> impl IntoView {
 		});
 	}
 
+	// Set up retry interval - retry every 1 minute on error (client-side)
+	#[cfg(not(feature = "ssr"))]
+	{
+		Effect::new(move || {
+			if let Some(Err(_)) = lsrs_resource.get() {
+				set_timeout(
+					move || {
+						trigger.update(|_| ());
+					},
+					std::time::Duration::from_secs(60),
+				);
+			}
+		});
+	}
+
 	section().class("p-4 text-center").child(Suspense(SuspenseProps {
 		fallback: { || pre().child("Loading LSR...") }.into(),
 		children: ToChildren::to_children(move || {
@@ -44,7 +59,7 @@ pub fn LsrView() -> impl IntoView {
 					)),)
 						.into_any()
 				}
-				Some(Err(e)) => (pre().child(format!("Error loading Lsrs: {e}")), ().into_any()).into_any(),
+				Some(Err(e)) => (pre().child(format!("Error loading Lsrs: {e} (retrying...)")), ().into_any()).into_any(),
 				None => (pre().child("Loading LSR..."), ().into_any()).into_any(),
 			})
 		}),

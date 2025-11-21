@@ -7,12 +7,31 @@ use crate::{conf::Settings, utils::Mock};
 
 #[island]
 pub fn CftcReportView() -> impl IntoView {
-	let report_resource = Resource::new(move || (), |_| async move { try_build().await.expect("dbg") });
+	let trigger = RwSignal::new(());
+	let report_resource = Resource::new(move || trigger.get(), |_| async move { try_build().await });
+
+	// Set up retry interval - retry every 1 minute on error
+	#[cfg(not(feature = "ssr"))]
+	{
+		Effect::new(move || {
+			if let Some(Err(_)) = report_resource.get() {
+				set_timeout(
+					move || {
+						trigger.update(|_| ());
+					},
+					std::time::Duration::from_secs(60),
+				);
+			}
+		});
+	}
+
 	div().child(Suspense(SuspenseProps {
 		fallback: { || pre().child("Loading CFTC Report...") }.into(),
 		#[rustfmt::skip]
-		children: ToChildren::to_children(move || IntoRender::into_render(move || {
-			report_resource.get().map(|ms| pre().child(ms.short))
+		children: ToChildren::to_children(move || IntoRender::into_render(move || match report_resource.get() {
+			Some(Ok(report_data)) => (pre().child(report_data.short),).into_any(),
+			Some(Err(e)) => (pre().child(format!("Error loading CFTC Report: {e} (retrying...)")),).into_any(),
+			None => (pre().child("Loading CFTC Report..."),).into_any(),
 		})),
 	}))
 }
@@ -21,7 +40,10 @@ pub fn CftcReportView() -> impl IntoView {
 async fn try_build() -> Result<CftcReportRendered, ServerFnError> {
 	crate::try_load_mock!(data::CftcReport; .into());
 
-	let report = data::fetch_cftc_positions().await.expect("TODO: proper error handling");
+	let report = data::fetch_cftc_positions().await.map_err(|e| {
+		tracing::error!("Failed to fetch CFTC positions: {e:?}");
+		ServerFnError::new(format!("Failed to fetch CFTC positions: {e}"))
+	})?;
 	report.persist()?;
 	Ok(report.into())
 }
