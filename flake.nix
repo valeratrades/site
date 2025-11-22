@@ -239,15 +239,19 @@
 
               							cp -f ${readme} ./README.md
 
-              							# Check and sync cargo-leptos version with leptos version
-              							LEPTOS_VERSION=$(grep -E '^leptos = ' Cargo.toml | sed 's/.*"\^\?\([0-9.]*\)".*/\1/')
-              							if [ -n "$LEPTOS_VERSION" ]; then
-              							  CARGO_LEPTOS_VERSION=$(cargo leptos --version 2>/dev/null | awk '{print $2}')
-              							  if [ "$CARGO_LEPTOS_VERSION" != "$LEPTOS_VERSION" ]; then
-              							    echo "cargo-leptos version ($CARGO_LEPTOS_VERSION) doesn't match leptos version ($LEPTOS_VERSION)"
-              							    echo "Installing cargo-leptos $LEPTOS_VERSION..."
-              							    cargo install cargo-leptos --version $LEPTOS_VERSION
+              							# Check if newer cargo-leptos version is available
+              							CARGO_LEPTOS_INSTALLED=$(cargo leptos --version 2>/dev/null | awk '{print $2}')
+              							if [ -n "$CARGO_LEPTOS_INSTALLED" ]; then
+              							  # Check if a newer version exists on crates.io
+              							  CARGO_LEPTOS_LATEST=$(cargo search cargo-leptos --limit 1 2>/dev/null | grep '^cargo-leptos' | awk '{print $3}' | tr -d '"')
+              							  if [ -n "$CARGO_LEPTOS_LATEST" ] && [ "$CARGO_LEPTOS_INSTALLED" != "$CARGO_LEPTOS_LATEST" ]; then
+              							    echo "cargo-leptos update available: $CARGO_LEPTOS_INSTALLED -> $CARGO_LEPTOS_LATEST"
+              							    echo "Installing latest cargo-leptos..."
+              							    cargo install cargo-leptos
               							  fi
+              							else
+              							  echo "cargo-leptos not found, installing..."
+              							  cargo install cargo-leptos
               							fi
 
               							alias lw="cargo leptos watch --hot-reload"
