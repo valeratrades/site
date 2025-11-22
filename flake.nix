@@ -109,13 +109,6 @@
               # Copy the current directory and manually link dependencies
               src = pkgs.lib.cleanSource ./.;
 
-              # Link sibling dependencies before build
-              prePatch = ''
-                # Create parent structure and link sibling crates
-                mkdir -p ../v_utils ../v_exchanges
-                cp -r ${../../v_utils/v_utils}/* ../v_utils/ || true
-                cp -r ${../../v_exchanges/v_exchanges}/* ../v_exchanges/ || true
-              '';
               cargoLock = {
                 lockFile = ./Cargo.lock;
                 outputHashes = {
@@ -201,8 +194,14 @@
               '';
 
               doCheck = false; # Skip tests in build
+              auditable = false; # Disable cargo-auditable (doesn't support edition 2024)
             };
           };
+
+        apps.default = {
+          type = "app";
+          program = "${self.packages.${system}.default}/bin/${pname}";
+        };
 
         devShells.default = pkgs.mkShell {
           inherit stdenv;
@@ -239,6 +238,17 @@
                      } ./.gitignore
 
               							cp -f ${readme} ./README.md
+
+              							# Check and sync cargo-leptos version with leptos version
+              							LEPTOS_VERSION=$(grep -E '^leptos = ' Cargo.toml | sed 's/.*"\^\?\([0-9.]*\)".*/\1/')
+              							if [ -n "$LEPTOS_VERSION" ]; then
+              							  CARGO_LEPTOS_VERSION=$(cargo leptos --version 2>/dev/null | awk '{print $2}')
+              							  if [ "$CARGO_LEPTOS_VERSION" != "$LEPTOS_VERSION" ]; then
+              							    echo "cargo-leptos version ($CARGO_LEPTOS_VERSION) doesn't match leptos version ($LEPTOS_VERSION)"
+              							    echo "Installing cargo-leptos $LEPTOS_VERSION..."
+              							    cargo install cargo-leptos --version $LEPTOS_VERSION
+              							  fi
+              							fi
 
               							alias lw="cargo leptos watch --hot-reload"
 
