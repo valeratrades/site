@@ -95,7 +95,7 @@ pub async fn try_build(limit: RequestRange, tf: Timeframe, exchange_name: Exchan
 
 	let mut exchange = exchange_name.init_client();
 	exchange.set_max_tries(3);
-	exchange.set_recv_window(Duration::from_secs(60));
+	exchange.set_timeout(Duration::from_secs(60));
 
 	tracing::debug!("Fetching exchange info for {}", instrument);
 	let exch_info = match exchange.exchange_info(instrument, None).await {

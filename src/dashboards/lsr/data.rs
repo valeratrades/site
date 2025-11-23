@@ -18,7 +18,7 @@ static INSTRUMENT: Instrument = Instrument::Perp;
 pub async fn get(tf: Timeframe, range: RequestRange) -> Result<SortedLsrs> {
 	let mut bn = Binance::default();
 	bn.set_max_tries(3);
-	bn.set_recv_window(std::time::Duration::from_secs(60));
+	bn.set_timeout(std::time::Duration::from_secs(60));
 
 	let pairs = bn.exchange_info(INSTRUMENT, None).await?.usdt_pairs().collect::<Vec<_>>();
 	let pairs_len = pairs.len();
