@@ -98,7 +98,7 @@ pub async fn try_build(limit: RequestRange, tf: Timeframe, exchange_name: Exchan
 	exchange.set_timeout(Duration::from_secs(60));
 
 	tracing::debug!("Fetching exchange info for {}", instrument);
-	let exch_info = match exchange.exchange_info(instrument, None).await {
+	let exch_info = match exchange.exchange_info(instrument).await {
 		Ok(info) => info,
 		Err(e) => {
 			tracing::error!("Failed to fetch exchange info: {:?}", e);
@@ -262,7 +262,7 @@ pub struct RelevantHistoricalData {
 pub async fn get_historical_data(symbol: Symbol, tf: Timeframe, range: RequestRange, exchange: Arc<Box<dyn Exchange>>) -> Result<RelevantHistoricalData> {
 	tracing::debug!("Fetching klines for {} (tf={:?}, range={:?})", symbol, tf, range);
 
-	let klines = match exchange.klines(symbol, tf, range, None).await {
+	let klines = match exchange.klines(symbol, tf, range).await {
 		Ok(k) => {
 			tracing::debug!("Received {} klines for {}", k.len(), symbol);
 			k

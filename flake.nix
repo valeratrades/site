@@ -239,26 +239,28 @@
 
               							cp -f ${readme} ./README.md
 
-              							# Check if newer cargo-leptos version is available
-              							CARGO_LEPTOS_INSTALLED=$(cargo leptos --version 2>/dev/null | awk '{print $2}')
-              							if [ -n "$CARGO_LEPTOS_INSTALLED" ]; then
-              							  # Check if a newer version exists on crates.io
-              							  CARGO_LEPTOS_LATEST=$(cargo search cargo-leptos --limit 1 2>/dev/null | grep '^cargo-leptos' | awk '{print $3}' | tr -d '"')
-              							  if [ -n "$CARGO_LEPTOS_LATEST" ] && [ "$CARGO_LEPTOS_INSTALLED" != "$CARGO_LEPTOS_LATEST" ]; then
-              							    echo "cargo-leptos update available: $CARGO_LEPTOS_INSTALLED -> $CARGO_LEPTOS_LATEST"
-              							    echo "Installing latest cargo-leptos..."
-              							    cargo install cargo-leptos
-              							  fi
-              							else
-              							  echo "cargo-leptos not found, installing..."
-              							  cargo install cargo-leptos
-              							fi
-
-              							alias lw="cargo leptos watch --hot-reload"
+                            #BUG: \
+              							## Check if newer cargo-leptos version is available
+              							#CARGO_LEPTOS_INSTALLED=$(cargo leptos --version 2>/dev/null | awk '{print $2}')
+              							#if [ -n "$CARGO_LEPTOS_INSTALLED" ]; then
+              							#  # Check if a newer version exists on crates.io
+              							#  CARGO_LEPTOS_LATEST=$(cargo search cargo-leptos --limit 1 2>/dev/null | grep '^cargo-leptos' | awk '{print $3}' | tr -d '"')
+              							#  if [ -n "$CARGO_LEPTOS_LATEST" ] && [ "$CARGO_LEPTOS_INSTALLED" != "$CARGO_LEPTOS_LATEST" ]; then
+              							#    echo "cargo-leptos update available: $CARGO_LEPTOS_INSTALLED -> $CARGO_LEPTOS_LATEST"
+              							#    echo "Installing latest cargo-leptos..."
+              							#    cargo install cargo-leptos
+              							#  fi
+              							#else
+              							#  echo "cargo-leptos not found, installing..."
+              							#  cargo install cargo-leptos
+              							#fi
+                     #
+              							#alias lw="cargo leptos watch --hot-reload"
 
               							${sourceTailwind}
             '';
           env.RUSTFLAGS = "-Zmacro-backtrace"; # XXX: would be overriding existing RUSTFLAGS
+          env.LEPTOS_WASM_BINDGEN_VERSION = "0.2.106"; #NB: must be in sync with `leptos` crate's version. Suggestion of `-f` wasm-bindgen install in their error is wrong, - this is how you actually do it.
 
           packages = with pkgs; [
             mold-wrapped
