@@ -13,12 +13,28 @@ struct Cli {
 async fn main() {
 	use std::path::Path;
 
-	use axum::Router;
+	use axum::{
+		Router,
+		extract::Path as AxumPath,
+		http::StatusCode,
+		response::{Html, IntoResponse},
+	};
 	use leptos::prelude::*;
 	use leptos_axum::*;
 	use site::{app::*, auth::Database, blog, conf::Settings};
-	use tower_http::services::ServeDir;
 	use tracing::info;
+
+	async fn serve_blog_post(uri: axum::extract::OriginalUri, AxumPath((month, day, slug)): AxumPath<(String, String, String)>) -> impl IntoResponse {
+		let Some(year) = uri.path().split('/').nth(1) else {
+			return (StatusCode::BAD_REQUEST, "Invalid URL").into_response();
+		};
+
+		let file_path = format!("target/site/blog/{}/{}/{}/{}", year, month, day, slug);
+		match tokio::fs::read_to_string(&file_path).await {
+			Ok(content) => Html(content).into_response(),
+			Err(_) => (StatusCode::NOT_FOUND, "Post not found").into_response(),
+		}
+	}
 
 	// Initialize global executor for any_spawner
 	let _ = any_spawner::Executor::init_tokio();
@@ -53,9 +69,11 @@ async fn main() {
 	// Build the router with server functions
 	let leptos_options_clone = leptos_options.clone();
 	let settings_clone = settings.clone();
+
+	// Blog post routes nested under year prefixes
+	let blog_router = Router::new().route("/{month}/{day}/{slug}", axum::routing::get(serve_blog_post));
+
 	let app = Router::new()
-		// Serve static blog HTML files at /YYYY/MM/DD/slug.html
-		.nest_service("/20", ServeDir::new("target/site/blog/20"))
 		.leptos_routes_with_context(
 			&leptos_options,
 			generate_route_list(App),
@@ -67,6 +85,11 @@ async fn main() {
 				move || shell(leptos_options.clone())
 			},
 		)
+		// Nest blog routes under year prefixes (add more years as needed)
+		.nest("/2024", blog_router.clone())
+		.nest("/2025", blog_router.clone())
+		.nest("/2026", blog_router.clone())
+		.nest("/2027", blog_router)
 		.fallback(file_and_error_handler(move |_| {
 			provide_context(settings.clone());
 			shell(leptos_options_clone.clone())

@@ -438,6 +438,7 @@ fn TopBar() -> impl IntoView {
 				href: "/dashboards",
 				label: "Dashboards",
 			}),
+			NavLink(NavLinkProps { href: "/blog", label: "Blog" }),
 			NavLink(NavLinkProps {
 				href: "/contacts",
 				label: "Contacts",

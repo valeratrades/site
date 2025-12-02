@@ -1,6 +1,7 @@
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/23e89b7da85c3640bbc2173fe04f4bd114342367";
+    nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
     rust-overlay.url = "github:oxalica/rust-overlay";
     pre-commit-hooks.url = "github:cachix/git-hooks.nix";
@@ -10,6 +11,7 @@
   outputs =
     { self
     , nixpkgs
+    , nixpkgs-unstable
     , flake-utils
     , rust-overlay
     , pre-commit-hooks
@@ -24,12 +26,15 @@
           inherit system overlays;
           config.allowUnfree = true;
         };
+        pkgs-unstable = import nixpkgs-unstable {
+          inherit system;
+        };
 
         frontendTools = with pkgs; [
           sassc # Native Sass compiler
           #wasm-bindgen-cli #NB: substituted by manually installing v100 via cargo
           binaryen # For wasm-opt
-          typst # For blog .typ -> .html compilation
+          pkgs-unstable.typst # For blog .typ -> .html compilation (needs 0.14+ for HTML export)
         ];
 
         rust = pkgs.rust-bin.selectLatestNightlyWith (

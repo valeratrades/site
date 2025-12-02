@@ -1,7 +1,6 @@
 use leptos::{html::*, prelude::*};
 use leptos_meta::{Title, TitleProps};
 use leptos_routable::prelude::*;
-use leptos_router::components::{A, AProps};
 
 #[cfg(feature = "ssr")]
 pub mod compile;
@@ -26,15 +25,9 @@ pub fn BlogView() -> impl IntoView {
 fn NotFoundView() -> impl IntoView {
 	section().class("p-4 text-center").child((
 		h1().class("text-2xl font-bold").child("Post Not Found"),
-		A(AProps {
-			href: "/blog".to_string(),
-			children: Box::new(|| view! { "Back to Blog" }.into_any()),
-			target: None,
-			exact: false,
-			strict_trailing_slash: false,
-			scroll: true,
-		})
-		.attr("class", "inline-block px-4 py-2 bg-green-600 text-white rounded mt-2"),
+		a().attr("href", "/blog")
+			.class("inline-block px-4 py-2 bg-green-600 text-white rounded mt-2")
+			.child("Back to Blog"),
 	))
 }
 
@@ -53,6 +46,7 @@ pub async fn get_posts() -> Result<Vec<(String, String, String)>, ServerFnError>
 		.collect())
 }
 
+// Matklad-style blog list
 #[component]
 fn HomeView() -> impl IntoView {
 	section().class("max-w-2xl mx-auto px-4 py-8").child((
@@ -60,26 +54,6 @@ fn HomeView() -> impl IntoView {
 			formatter: None,
 			text: Some("Blog".into()),
 		}),
-		// Navigation header like matklad
-		nav().class("mb-8 flex gap-4 text-gray-600").child((
-			A(AProps {
-				href: "/".to_string(),
-				children: Box::new(|| span().class("hover:text-gray-900").child("home").into_any()),
-				target: None,
-				exact: false,
-				strict_trailing_slash: false,
-				scroll: true,
-			}),
-			A(AProps {
-				href: "/contacts".to_string(),
-				children: Box::new(|| span().class("hover:text-gray-900").child("contacts").into_any()),
-				target: None,
-				exact: false,
-				strict_trailing_slash: false,
-				scroll: true,
-			}),
-		)),
-		// Blog post list
 		BlogPostList(),
 	))
 }
@@ -89,16 +63,18 @@ fn BlogPostList() -> impl IntoView {
 	let posts = LocalResource::new(get_posts);
 
 	move || match posts.get() {
-		None => div().child("Loading...").into_any(),
+		None => div().class("text-gray-500").child("Loading...").into_any(),
 		Some(Ok(posts)) => ul()
-			.class("space-y-0")
+			.class("list-none p-0 m-0")
 			.child(
 				posts
 					.into_iter()
 					.map(|(date, title, url)| {
-						li().class("py-2 border-b border-gray-200").child((
-							span().class("text-gray-500 mr-4 font-mono text-sm").child(date),
-							a().attr("href", url).class("text-blue-600 hover:text-blue-800 hover:underline").child(title),
+						li().class("py-1").child((
+							span().class("text-gray-500 tabular-nums").child(date),
+							span().child(" "),
+							a().attr("href", url).child(h2().class("inline text-base font-normal text-black hover:underline").child(title)),
+							hr().class("border-gray-300 mt-1"),
 						))
 					})
 					.collect::<Vec<_>>(),
