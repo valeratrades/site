@@ -13,9 +13,7 @@ My sity site
   <summary>
     <h3>Installation</h3>
   </summary>
-<div class="markdown-content"># Installation
-
-Full setup instructions to get the site running locally or on a server.
+<div class="markdown-content">Full setup instructions to get the site running locally or on a server.
 
 ## Prerequisites
 

@@ -1,5 +1,3 @@
-# Installation
-
 Full setup instructions to get the site running locally or on a server.
 
 ## Prerequisites
