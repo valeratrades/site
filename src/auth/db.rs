@@ -44,6 +44,20 @@ CREATE TABLE IF NOT EXISTS site.email_tokens (
 ORDER BY token
 PRIMARY KEY token
 "#,
+	// Migration 4: Create OAuth state table for CSRF protection
+	r#"
+CREATE TABLE IF NOT EXISTS site.oauth_states (
+    state String,
+    created_at DateTime DEFAULT now(),
+    expires_at DateTime
+) ENGINE = MergeTree()
+ORDER BY state
+PRIMARY KEY state
+"#,
+	// Migration 5: Add google_id column for OAuth users
+	r#"
+ALTER TABLE site.users ADD COLUMN IF NOT EXISTS google_id String DEFAULT ''
+"#,
 ];
 
 #[derive(Clone)]
@@ -306,5 +320,71 @@ PRIMARY KEY version
 		let query = format!("SELECT email_verified FROM site.users WHERE id = '{}' LIMIT 1", user_id.replace('\'', "''"));
 		let verified: u8 = self.client.query(&query).fetch_one::<u8>().await.unwrap_or(0);
 		Ok(verified == 1)
+	}
+
+	// OAuth state management
+	pub async fn create_oauth_state(&self, state: &str, expires_minutes: u32) -> Result<()> {
+		let query = format!(
+			"INSERT INTO site.oauth_states (state, expires_at) VALUES ('{}', now() + INTERVAL {} MINUTE)",
+			state.replace('\'', "''"),
+			expires_minutes
+		);
+		self.client.query(&query).execute().await?;
+		Ok(())
+	}
+
+	pub async fn verify_oauth_state(&self, state: &str) -> Result<bool> {
+		let query = format!("SELECT count() FROM site.oauth_states WHERE state = '{}' AND expires_at > now()", state.replace('\'', "''"));
+		let count: u64 = self.client.query(&query).fetch_one::<u64>().await.unwrap_or(0);
+		Ok(count > 0)
+	}
+
+	pub async fn delete_oauth_state(&self, state: &str) -> Result<()> {
+		let query = format!("ALTER TABLE site.oauth_states DELETE WHERE state = '{}'", state.replace('\'', "''"));
+		self.client.query(&query).execute().await?;
+		Ok(())
+	}
+
+	// Google OAuth user management
+	pub async fn get_user_by_google_id(&self, google_id: &str) -> Result<Option<User>> {
+		let query = format!("SELECT id, email, username FROM site.users WHERE google_id = '{}' LIMIT 1", google_id.replace('\'', "''"));
+
+		#[derive(serde::Deserialize, clickhouse::Row)]
+		struct UserRow {
+			id: String,
+			email: String,
+			username: String,
+		}
+
+		match self.client.query(&query).fetch_one::<UserRow>().await {
+			Ok(row) => Ok(Some(User {
+				id: row.id,
+				email: row.email,
+				username: row.username,
+			})),
+			Err(_) => Ok(None),
+		}
+	}
+
+	pub async fn create_google_user(&self, id: &str, email: &str, username: &str, google_id: &str) -> Result<()> {
+		let query = format!(
+			"INSERT INTO site.users (id, email, username, password_hash, email_verified, google_id) VALUES ('{}', '{}', '{}', '', 1, '{}')",
+			id.replace('\'', "''"),
+			email.replace('\'', "''"),
+			username.replace('\'', "''"),
+			google_id.replace('\'', "''")
+		);
+		self.client.query(&query).execute().await?;
+		Ok(())
+	}
+
+	pub async fn link_google_to_user(&self, user_id: &str, google_id: &str) -> Result<()> {
+		let query = format!(
+			"ALTER TABLE site.users UPDATE google_id = '{}', email_verified = 1 WHERE id = '{}'",
+			google_id.replace('\'', "''"),
+			user_id.replace('\'', "''")
+		);
+		self.client.query(&query).execute().await?;
+		Ok(())
 	}
 }

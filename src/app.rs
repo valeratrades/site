@@ -88,10 +88,10 @@ mod server_impl {
 			.get_user_by_email(&email)
 			.await
 			.map_err(|e| ServerFnError::new(format!("Database error: {}", e)))?
-			.ok_or_else(|| ServerFnError::new("Invalid email or password"))?;
+			.ok_or_else(|| ServerFnError::new("No account found with this email address"))?;
 
 		if !bcrypt::verify(&password, &password_hash).unwrap_or(false) {
-			return Err(ServerFnError::new("Invalid email or password"));
+			return Err(ServerFnError::new("Incorrect password"));
 		}
 
 		// Check email verification
@@ -180,6 +180,138 @@ mod server_impl {
 
 		Ok(())
 	}
+
+	pub async fn google_auth_start_impl() -> Result<String, ServerFnError> {
+		use oauth2::{AuthUrl, ClientId, ClientSecret, CsrfToken, RedirectUrl, Scope, basic::BasicClient};
+
+		let settings = get_settings()?;
+		if !settings.google_oauth.is_configured() {
+			return Err(ServerFnError::new("Google OAuth is not configured"));
+		}
+
+		let db = get_db()?;
+
+		let client = BasicClient::new(ClientId::new(settings.google_oauth.client_id.clone()))
+			.set_client_secret(ClientSecret::new(settings.google_oauth.client_secret.clone()))
+			.set_auth_uri(AuthUrl::new("https://accounts.google.com/o/oauth2/v2/auth".to_string()).unwrap())
+			.set_redirect_uri(RedirectUrl::new(format!("{}/auth/google/callback", settings.site_url)).unwrap());
+
+		let csrf_token = CsrfToken::new_random();
+		let state = csrf_token.secret().clone();
+
+		// Store the state for verification
+		db.create_oauth_state(&state, 10) // 10 minutes expiry
+			.await
+			.map_err(|e| ServerFnError::new(format!("Failed to store OAuth state: {}", e)))?;
+
+		let (auth_url, _) = client
+			.authorize_url(|| csrf_token)
+			.add_scope(Scope::new("openid".to_string()))
+			.add_scope(Scope::new("email".to_string()))
+			.add_scope(Scope::new("profile".to_string()))
+			.url();
+
+		Ok(auth_url.to_string())
+	}
+
+	pub async fn google_auth_callback_impl(code: String, state: String) -> Result<User, ServerFnError> {
+		use oauth2::{AuthUrl, AuthorizationCode, ClientId, ClientSecret, RedirectUrl, TokenResponse, TokenUrl, basic::BasicClient};
+
+		let settings = get_settings()?;
+		let db = get_db()?;
+
+		// Verify state
+		if !db.verify_oauth_state(&state).await.map_err(|e| ServerFnError::new(format!("Database error: {}", e)))? {
+			return Err(ServerFnError::new("Invalid or expired OAuth state"));
+		}
+
+		// Delete used state
+		let _ = db.delete_oauth_state(&state).await;
+
+		let client = BasicClient::new(ClientId::new(settings.google_oauth.client_id.clone()))
+			.set_client_secret(ClientSecret::new(settings.google_oauth.client_secret.clone()))
+			.set_auth_uri(AuthUrl::new("https://accounts.google.com/o/oauth2/v2/auth".to_string()).unwrap())
+			.set_token_uri(TokenUrl::new("https://oauth2.googleapis.com/token".to_string()).unwrap())
+			.set_redirect_uri(RedirectUrl::new(format!("{}/auth/google/callback", settings.site_url)).unwrap());
+
+		// Create HTTP client for token exchange
+		let http_client = reqwest::ClientBuilder::new()
+			.redirect(reqwest::redirect::Policy::none())
+			.build()
+			.map_err(|e| ServerFnError::new(format!("Failed to create HTTP client: {}", e)))?;
+
+		// Exchange code for token
+		let token_result = client
+			.exchange_code(AuthorizationCode::new(code))
+			.request_async(&http_client)
+			.await
+			.map_err(|e| ServerFnError::new(format!("Failed to exchange code for token: {}", e)))?;
+
+		let access_token = token_result.access_token().secret();
+
+		// Fetch user info from Google
+		let http_client = reqwest::Client::new();
+		let user_info: GoogleUserInfo = http_client
+			.get("https://www.googleapis.com/oauth2/v2/userinfo")
+			.bearer_auth(access_token)
+			.send()
+			.await
+			.map_err(|e| ServerFnError::new(format!("Failed to fetch user info: {}", e)))?
+			.json()
+			.await
+			.map_err(|e| ServerFnError::new(format!("Failed to parse user info: {}", e)))?;
+
+		// Check if user exists by Google ID
+		let user = if let Some(user) = db.get_user_by_google_id(&user_info.id).await.map_err(|e| ServerFnError::new(format!("Database error: {}", e)))? {
+			user
+		} else if let Some((existing_user, _)) = db.get_user_by_email(&user_info.email).await.map_err(|e| ServerFnError::new(format!("Database error: {}", e)))? {
+			// Link Google account to existing user
+			db.link_google_to_user(&existing_user.id, &user_info.id)
+				.await
+				.map_err(|e| ServerFnError::new(format!("Failed to link Google account: {}", e)))?;
+			existing_user
+		} else {
+			// Create new user
+			let user_id = uuid::Uuid::new_v4().to_string();
+			let username = user_info.name.unwrap_or_else(|| user_info.email.split('@').next().unwrap_or("user").to_string());
+			db.create_google_user(&user_id, &user_info.email, &username, &user_info.id)
+				.await
+				.map_err(|e| ServerFnError::new(format!("Failed to create user: {}", e)))?;
+			User {
+				id: user_id,
+				email: user_info.email,
+				username,
+			}
+		};
+
+		// Create session
+		let session_id = uuid::Uuid::new_v4().to_string();
+		db.create_session(&session_id, &user.id, 24 * 7)
+			.await
+			.map_err(|e| ServerFnError::new(format!("Failed to create session: {}", e)))?;
+
+		// Set cookie
+		use leptos_axum::ResponseOptions;
+		if let Some(response) = use_context::<ResponseOptions>() {
+			response.insert_header(
+				axum::http::header::SET_COOKIE,
+				axum::http::HeaderValue::from_str(&format!("session_id={}; Path=/; HttpOnly; SameSite=Lax; Max-Age={}", session_id, 60 * 60 * 24 * 7)).unwrap(),
+			);
+		}
+
+		Ok(user)
+	}
+
+	#[derive(serde::Deserialize)]
+	pub struct GoogleUserInfo {
+		pub id: String,
+		pub email: String,
+		pub name: Option<String>,
+	}
+
+	pub fn is_google_oauth_configured_impl() -> bool {
+		get_settings().map(|s| s.google_oauth.is_configured()).unwrap_or(false)
+	}
 }
 
 #[server(RegisterUser)]
@@ -205,6 +337,21 @@ pub async fn logout_user() -> Result<(), ServerFnError> {
 #[server(VerifyEmail)]
 pub async fn verify_email(token: String) -> Result<(), ServerFnError> {
 	server_impl::verify_email_impl(token).await
+}
+
+#[server(GoogleAuthStart)]
+pub async fn google_auth_start() -> Result<String, ServerFnError> {
+	server_impl::google_auth_start_impl().await
+}
+
+#[server(GoogleAuthCallback)]
+pub async fn google_auth_callback(code: String, state: String) -> Result<User, ServerFnError> {
+	server_impl::google_auth_callback_impl(code, state).await
+}
+
+#[server(IsGoogleOAuthConfigured)]
+pub async fn is_google_oauth_configured() -> Result<bool, ServerFnError> {
+	Ok(server_impl::is_google_oauth_configured_impl())
 }
 
 #[component]
@@ -245,7 +392,7 @@ fn TopBar() -> impl IntoView {
 
 #[island]
 fn UserButton() -> impl IntoView {
-	let user_resource = Resource::new(|| (), |_| get_current_user());
+	let user_resource = LocalResource::new(get_current_user);
 
 	move || {
 		match user_resource.get() {
@@ -361,6 +508,8 @@ pub enum AppRoutes {
 	Login,
 	#[route(path = "/verify")]
 	Verify,
+	#[route(path = "/auth/google/callback")]
+	GoogleCallback,
 	#[fallback]
 	#[route(path = "/404")]
 	NotFound,
@@ -424,7 +573,8 @@ fn LoginView() -> impl IntoView {
 
 #[island]
 fn LoginForm() -> impl IntoView {
-	let user_resource = Resource::new(|| (), |_| get_current_user());
+	let user_resource = LocalResource::new(get_current_user);
+	let google_oauth_configured = LocalResource::new(is_google_oauth_configured);
 
 	let email = RwSignal::new(String::new());
 	let username = RwSignal::new(String::new());
@@ -433,6 +583,7 @@ fn LoginForm() -> impl IntoView {
 	let success_message = RwSignal::new(Option::<String>::None);
 	let is_register_mode = RwSignal::new(false);
 	let is_loading = RwSignal::new(false);
+	let google_loading = RwSignal::new(false);
 
 	let on_submit = move |e: web_sys::SubmitEvent| {
 		e.prevent_default();
@@ -609,6 +760,67 @@ fn LoginForm() -> impl IntoView {
 								.on(ev::click, move |_| is_register_mode.update(|v| *v = !*v))
 								.child(toggle_text),
 						),
+						// Google Sign-in button (only shown if configured and not in register mode)
+						move || {
+							let show_google = google_oauth_configured.get().map(|r| r.unwrap_or(false)).unwrap_or(false);
+							if show_google && !is_register_mode.get() {
+								Some(
+									div().class("mt-6").child((
+										div().class("relative flex items-center justify-center mb-4").child((
+											div().class("flex-grow border-t border-gray-300"),
+											span().class("px-3 text-gray-500 text-sm").child("or"),
+											div().class("flex-grow border-t border-gray-300"),
+										)),
+										button()
+											.attr("type", "button")
+											.attr("disabled", move || google_loading.get())
+											.class(
+												"w-full flex items-center justify-center gap-3 bg-white border border-gray-300 text-gray-700 py-2 px-4 rounded hover:bg-gray-50 transition-colors disabled:opacity-50",
+											)
+											.on(ev::click, move |_| {
+												google_loading.set(true);
+												error.set(None);
+												wasm_bindgen_futures::spawn_local(async move {
+													match google_auth_start().await {
+														Ok(url) =>
+															if let Some(window) = web_sys::window() {
+																let _ = window.location().set_href(&url);
+															},
+														Err(e) => {
+															error.set(Some(e.to_string()));
+															google_loading.set(false);
+														}
+													}
+												});
+											})
+											.child((
+												// Google icon
+												svg().attr("viewBox", "0 0 24 24").class("w-5 h-5").child((
+													leptos::svg::path().attr("fill", "#4285F4").attr(
+														"d",
+														"M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z",
+													),
+													leptos::svg::path().attr("fill", "#34A853").attr(
+														"d",
+														"M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z",
+													),
+													leptos::svg::path().attr("fill", "#FBBC05").attr(
+														"d",
+														"M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z",
+													),
+													leptos::svg::path().attr("fill", "#EA4335").attr(
+														"d",
+														"M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z",
+													),
+												)),
+												span().child(move || if google_loading.get() { "Redirecting..." } else { "Sign in with Google" }),
+											)),
+									)),
+								)
+							} else {
+								None
+							}
+						},
 					))
 					.into_any()
 			}
@@ -697,6 +909,87 @@ fn VerifyForm() -> impl IntoView {
 					.into_any(),
 				None => div().class("text-center").child("Loading...").into_any(),
 			}
+		}
+	}
+}
+
+#[component]
+fn GoogleCallbackView() -> impl IntoView {
+	section().class("p-4 max-w-md mx-auto mt-8").child((
+		Title(TitleProps {
+			formatter: None,
+			text: Some("Google Sign-in".into()),
+		}),
+		GoogleCallbackHandler(),
+	))
+}
+
+#[island]
+fn GoogleCallbackHandler() -> impl IntoView {
+	let status = RwSignal::new(Option::<Result<(), String>>::None);
+	let is_loading = RwSignal::new(true);
+
+	Effect::new(move |_| {
+		if let Some(window) = web_sys::window() {
+			if let Ok(search) = window.location().search() {
+				let params = web_sys::UrlSearchParams::new_with_str(&search).ok();
+				let code = params.as_ref().and_then(|p| p.get("code"));
+				let state = params.as_ref().and_then(|p| p.get("state"));
+
+				match (code, state) {
+					(Some(code), Some(state)) => {
+						wasm_bindgen_futures::spawn_local(async move {
+							match google_auth_callback(code, state).await {
+								Ok(_) => {
+									// Redirect to home on success
+									if let Some(window) = web_sys::window() {
+										let _ = window.location().set_href("/");
+									}
+								}
+								Err(e) => {
+									status.set(Some(Err(e.to_string())));
+									is_loading.set(false);
+								}
+							}
+						});
+					}
+					_ => {
+						status.set(Some(Err("Missing code or state parameter".to_string())));
+						is_loading.set(false);
+					}
+				}
+			}
+		}
+	});
+
+	move || {
+		if is_loading.get() {
+			div()
+				.class("text-center")
+				.child((
+					div().class("text-lg").child("Signing you in with Google..."),
+					div().class("mt-4 animate-spin inline-block w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full"),
+				))
+				.into_any()
+		} else if let Some(Err(e)) = status.get() {
+			div()
+				.class("text-center")
+				.child((
+					h1().class("text-2xl font-bold mb-4 text-red-600").child("Sign-in Failed"),
+					div().class("bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4").child(e),
+					A(AProps {
+						href: "/login".to_string(),
+						children: Box::new(|| view! { "Try Again" }.into_any()),
+						target: None,
+						exact: false,
+						strict_trailing_slash: false,
+						scroll: true,
+					})
+					.attr("class", "inline-block px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"),
+				))
+				.into_any()
+		} else {
+			div().class("text-center").child("Redirecting...").into_any()
 		}
 	}
 }

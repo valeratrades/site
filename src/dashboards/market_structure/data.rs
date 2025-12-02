@@ -8,6 +8,7 @@ use plotly::{
 	common::{Line, Title},
 };
 use serde::{Deserialize, Serialize};
+use tokio::sync::Semaphore;
 use tracing::instrument;
 use v_exchanges::prelude::*;
 use v_utils::{
@@ -97,7 +98,7 @@ pub async fn try_build(limit: RequestRange, tf: Timeframe, exchange_name: Exchan
 	exchange.set_max_tries(3);
 	exchange.set_timeout(Duration::from_secs(60));
 
-	tracing::debug!("Fetching exchange info for {}", instrument);
+	tracing::debug!("Fetching exchange info for {instrument}");
 	let exch_info = match exchange.exchange_info(instrument).await {
 		Ok(info) => info,
 		Err(e) => {
@@ -110,7 +111,7 @@ pub async fn try_build(limit: RequestRange, tf: Timeframe, exchange_name: Exchan
 	tracing::info!("Found {} USDT pairs from exchange info", all_usdt_pairs.len());
 
 	// Check if BTC-USDT is in the list
-	let has_btc_usdt = all_usdt_pairs.iter().any(|p| p.to_string() == "BTC-USDT");
+	let has_btc_usdt = all_usdt_pairs.iter().any(|p| "BTC-USDT" == *p);
 	tracing::info!("BTC-USDT in pairs list: {}", has_btc_usdt);
 
 	let (normalized_df, dt_index) = collect_data(&all_usdt_pairs, tf, limit, instrument, Arc::new(exchange)).await?;
@@ -135,11 +136,16 @@ pub async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, in
 
 	tracing::info!("No valid cache found, fetching fresh data");
 
+	// Limit concurrent requests to avoid "Too many open files" errors
+	let semaphore = Arc::new(Semaphore::new(50));
+
 	//HACK: assumes we're never misaligned here
 	let futures = pairs.iter().map(|pair| {
 		let exchange = Arc::clone(&exchange);
+		let semaphore = Arc::clone(&semaphore);
 		let symbol = Symbol::new(*pair, instrument);
 		async move {
+			let _permit = semaphore.acquire().await.unwrap();
 			match get_historical_data(symbol, tf, range, exchange).await {
 				Ok(series) => {
 					tracing::debug!("Successfully fetched {} data points for {}", series.col_closes.len(), symbol);
@@ -202,7 +208,7 @@ pub async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, in
 				data.len(),
 				failed_pairs.len()
 			);
-			tracing::error!("BTC-USDT present in pairs list: {}", pairs.iter().any(|p| p.to_string() == "BTC-USDT"));
+			tracing::error!("BTC-USDT present in pairs list: {}", pairs.iter().any(|p| "BTC-USDT" == *p));
 			bail!("Failed to fetch data for BTC-USDT, aborting. Check logs for individual fetch errors.");
 		} else {
 			tracing::error!("BTC-USDT was found but dt_index is empty - this shouldn't happen!");
@@ -227,7 +233,7 @@ pub async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, in
 	for (key, closes) in normalized_df.iter() {
 		if closes.len() != dt_index.len() {
 			//HACK: maybe we want to fill the missing fields instead if there are not many of them
-			eprintln!("misaligned: {key}");
+			tracing::warn!("misaligned: {key}");
 			aligned_df.remove(key).unwrap();
 		}
 	}

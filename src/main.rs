@@ -30,6 +30,14 @@ async fn main() {
 		tracing::warn!("Database migration failed (ClickHouse may not be running): {}", e);
 	}
 
+	// Warn about missing configurations
+	if !settings.google_oauth.is_configured() {
+		tracing::warn!("Google OAuth is not configured. Add [google_oauth] section with client_id and client_secret to enable Google sign-in.");
+	}
+	if settings.smtp.username.is_empty() {
+		tracing::warn!("SMTP is not configured. Email verification will be skipped in development mode.");
+	}
+
 	let conf = get_configuration(Some("Cargo.toml")).unwrap();
 	let addr = conf.leptos_options.site_addr;
 	let leptos_options = conf.leptos_options;

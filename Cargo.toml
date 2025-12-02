@@ -66,6 +66,7 @@ ssr = [
     "dep:uuid",
     "dep:tower-cookies",
     "dep:lettre",
+    "dep:oauth2",
     "leptos/ssr",
     "leptos_meta/ssr",
     "leptos_router/ssr",
@@ -82,7 +83,7 @@ leptos_meta = { version = "^0.8.5" }
 leptos_router = { version = "^0.8.10" }
 proc-macro2 = "=1.0.103"
 serde = { version = "^1.0.228", features = ["derive"] }
-v_utils = { version = "2.9.10", features = [ "cli", "xdg" ] }
+v_utils = { version = "2.11.1", features = [ "cli", "xdg" ] }
 web-sys = "^0.3"
 
 # optional-hydrate {{{
@@ -99,10 +100,11 @@ bcrypt = { version = "^0.17", optional = true }
 chrono = { version = "^0.4.42", optional = true, features = ["serde"] }
 chrono-tz = { version = "^0.10.4", optional = true }
 clap = { version = "^4.5.53", features = ["derive"] }
-clickhouse = { version = "^0.13", features = ["time"], optional = true }
+clickhouse = { version = "^0.14", features = ["time"], optional = true }
 jiff = { version = "0.2.16", features = ["serde"] }
 leptos_axum = { version = "^0.8", optional = true }
 lettre = { version = "0.11", features = ["tokio1-native-tls", "builder"], optional = true }
+oauth2 = { version = "5.0.0", optional = true }
 plotly = { version = "^0.13.5", features = ["image", "kaleido"], optional = true }
 reqwest = { version = "^0.12.24", optional = true }
 serde_json = { version = "^1.0.145", optional = true }
@@ -110,7 +112,7 @@ serde_with = { version = "^3.16.1", features = ["chrono"] }
 tokio = { version = "^1", features = ["rt-multi-thread"], optional = true }
 tower-cookies = { version = "^0.11", optional = true }
 tracing = { version = "^0.1.43", optional = true }
-uuid = { version = "^1.16", features = ["v4"], optional = true }
+uuid = { version = "^1.19", features = ["v4"], optional = true }
 v_exchanges = { version = "0.15.5", features = ["binance", "bybit", "data"], optional = true }
 
 [profile.wasm-release]

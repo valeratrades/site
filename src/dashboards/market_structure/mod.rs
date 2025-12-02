@@ -69,6 +69,7 @@ pub fn MarketStructureView() -> impl IntoView {
 /// Contains [Plot](plotly::Plot) represented as an html string (for csr compat)
 #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
 pub struct MarketStructure(pub String);
+
 #[cfg(feature = "ssr")]
 impl Mock for MarketStructure {}
 #[server]
@@ -80,20 +81,24 @@ pub async fn request_market_structure() -> Result<MarketStructure, ServerFnError
 
 	let result = data::try_build(range, tf, ExchangeName::Binance, Instrument::Perp).await;
 
+	#[cfg(feature = "ssr")]
+	fn render_error_html(error_msg: &str) -> String {
+		use leptos::tachys::view::RenderHtml as _;
+
+		div()
+			.attr("style", "padding: 20px; background-color: #fee; border: 1px solid #c33; border-radius: 4px; color: #c33;")
+			.child((
+				h3().child("Error loading Market Structure"),
+				p().child(error_msg.to_owned()),
+				p().attr("style", "font-size: 0.9em; color: #666;").child("Check server logs for details."),
+			))
+			.to_html()
+	}
 	let html = match result {
 		Ok(plot) => plot.to_inline_html(None),
 		Err(e) => {
-			// Log error with full trace
 			tracing::error!("Failed to build market structure: {:?}", e);
-			// Return error HTML to display to user
-			format!(
-				r#"<div style="padding: 20px; background-color: #fee; border: 1px solid #c33; border-radius: 4px; color: #c33;">
-					<h3>Error loading Market Structure</h3>
-					<p>{}</p>
-					<p style="font-size: 0.9em; color: #666;">Check server logs for details.</p>
-				</div>"#,
-				e
-			)
+			render_error_html(&e.to_string())
 		}
 	};
 

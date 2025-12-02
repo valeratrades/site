@@ -8,6 +8,8 @@ pub struct Settings {
 	pub clickhouse: ClickHouseConfig,
 	#[serde(default)]
 	pub smtp: SmtpConfig,
+	#[serde(default)]
+	pub google_oauth: GoogleOAuthConfig,
 	/// Base URL for the site (used in email links)
 	#[serde(default = "__default_site_url")]
 	#[primitives(skip)]
@@ -24,6 +26,7 @@ impl Default for Settings {
 			mock: Some(false),
 			clickhouse: ClickHouseConfig::default(),
 			smtp: SmtpConfig::default(),
+			google_oauth: GoogleOAuthConfig::default(),
 			site_url: __default_site_url(),
 		}
 	}
@@ -90,5 +93,19 @@ impl Default for SmtpConfig {
 			from_email: String::new(),
 			from_name: "My Site".to_string(),
 		}
+	}
+}
+
+#[derive(Clone, Debug, Default, serde::Deserialize)]
+pub struct GoogleOAuthConfig {
+	/// Google OAuth2 Client ID (from Google Cloud Console)
+	pub client_id: String,
+	/// Google OAuth2 Client Secret (from Google Cloud Console)
+	pub client_secret: String,
+}
+
+impl GoogleOAuthConfig {
+	pub fn is_configured(&self) -> bool {
+		!self.client_id.is_empty() && !self.client_secret.is_empty()
 	}
 }
