@@ -5283,9 +5283,9 @@ dependencies = [
 
 [[package]]
 name = "v_exchanges"
-version = "0.15.5"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fac40e9d5ac179846407e84d22cdec367de0cf5c77755bdffcd18fd82862182b"
+checksum = "493c780355a5fb8eaf8cb0da70580de9d619a9e360560662a13cc2fa91ed1bf5"
 dependencies = [
  "async-trait",
  "cfg-if",
@@ -5308,9 +5308,9 @@ dependencies = [
 
 [[package]]
 name = "v_exchanges_adapters"
-version = "0.15.5"
+version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "74a7046d3fb24612b2262b6a8849e9c5b30c5bee3469405565b90f911b11869d"
+checksum = "b004f8691b388c5b483d863180e770ca34fbbf4253ea5e8320c7299b36d22b37"
 dependencies = [
  "base64",
  "derive-new",
@@ -5326,6 +5326,7 @@ dependencies = [
  "serde_urlencoded",
  "sha2",
  "thiserror 2.0.17",
+ "tokio",
  "tracing",
  "url",
  "v_exchanges_api_generics",
@@ -5334,9 +5335,9 @@ dependencies = [
 
 [[package]]
 name = "v_exchanges_api_generics"
-version = "0.17.5"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06b754f2814107a5713c23b94f2daf233e719d40bcffcc63b2f8444a426d48f2"
+checksum = "73a1c4e2341f1e9678fa8a497fbdb371499545e911c35ae90a162d5b9d068b10"
 dependencies = [
  "bytes",
  "derive-new",

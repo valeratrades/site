@@ -8,7 +8,6 @@ use plotly::{
 	common::{Line, Title},
 };
 use serde::{Deserialize, Serialize};
-use tokio::sync::Semaphore;
 use tracing::instrument;
 use v_exchanges::prelude::*;
 use v_utils::{
@@ -136,16 +135,11 @@ pub async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, in
 
 	tracing::info!("No valid cache found, fetching fresh data");
 
-	// Limit concurrent requests to avoid "Too many open files" errors
-	let semaphore = Arc::new(Semaphore::new(50));
-
 	//HACK: assumes we're never misaligned here
 	let futures = pairs.iter().map(|pair| {
 		let exchange = Arc::clone(&exchange);
-		let semaphore = Arc::clone(&semaphore);
 		let symbol = Symbol::new(*pair, instrument);
 		async move {
-			let _permit = semaphore.acquire().await.unwrap();
 			match get_historical_data(symbol, tf, range, exchange).await {
 				Ok(series) => {
 					tracing::debug!("Successfully fetched {} data points for {}", series.col_closes.len(), symbol);

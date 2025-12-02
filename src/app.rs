@@ -1,7 +1,10 @@
 use leptos::{ev, html::*, prelude::*, svg::svg};
 use leptos_meta::{MetaTags, Stylesheet, StylesheetProps, Title, TitleProps, provide_meta_context};
 use leptos_routable::prelude::*;
-use leptos_router::components::{A, AProps, Router};
+use leptos_router::{
+	components::{A, AProps, Router},
+	hooks::use_location,
+};
 
 use crate::{
 	auth::User,
@@ -354,37 +357,55 @@ pub async fn is_google_oauth_configured() -> Result<bool, ServerFnError> {
 	Ok(server_impl::is_google_oauth_configured_impl())
 }
 
+/// Navigation link that highlights when the current route matches (or is a child of) the href.
+/// For the root path "/", uses exact matching.
+#[component]
+fn NavLink(href: &'static str, label: &'static str) -> impl IntoView {
+	let location = use_location();
+
+	let is_active = Memo::new(move |_| {
+		let pathname = location.pathname.get();
+		if href == "/" {
+			pathname == "/"
+		} else {
+			pathname == href || pathname.starts_with(&format!("{}/", href))
+		}
+	});
+
+	A(AProps {
+		href: href.to_string(),
+		children: Box::new(move || {
+			span()
+				.class(move || {
+					if is_active.get() {
+						"px-3 py-1 rounded bg-gray-700 text-white transition-colors"
+					} else {
+						"px-3 py-1 rounded hover:bg-gray-700/50 transition-colors"
+					}
+				})
+				.child(label)
+				.into_any()
+		}),
+		target: None,
+		exact: false,
+		strict_trailing_slash: false,
+		scroll: true,
+	})
+}
+
 #[component]
 fn TopBar() -> impl IntoView {
-	nav().class("flex items-center p-4 bg-gray-800 text-white").child((
-		div().class("flex gap-4").child((
-			A(AProps {
-				href: "/".to_string(),
-				children: Box::new(|| view! { "Home" }.into_any()),
-				target: None,
-				exact: false,
-				strict_trailing_slash: false,
-				scroll: true,
-			})
-			.attr("class", "hover:text-blue-300 transition-colors"),
-			A(AProps {
-				href: "/dashboards".to_string(),
-				children: Box::new(|| view! { "Dashboards" }.into_any()),
-				target: None,
-				exact: false,
-				strict_trailing_slash: false,
-				scroll: true,
-			})
-			.attr("class", "hover:text-blue-300 transition-colors"),
-			A(AProps {
-				href: "/contacts".to_string(),
-				children: Box::new(|| view! { "Contacts" }.into_any()),
-				target: None,
-				exact: false,
-				strict_trailing_slash: false,
-				scroll: true,
-			})
-			.attr("class", "hover:text-blue-300 transition-colors"),
+	nav().class("flex items-center px-4 py-2 bg-gray-800 text-white").child((
+		div().class("flex gap-2").child((
+			NavLink(NavLinkProps { href: "/", label: "Home" }),
+			NavLink(NavLinkProps {
+				href: "/dashboards",
+				label: "Dashboards",
+			}),
+			NavLink(NavLinkProps {
+				href: "/contacts",
+				label: "Contacts",
+			}),
 		)),
 		div().class("ml-auto").child(UserButton()),
 	))
@@ -401,35 +422,27 @@ fn UserButton() -> impl IntoView {
 				div().class("w-8 h-8 rounded-full bg-gray-700 animate-pulse").into_any()
 			}
 			Some(Ok(Some(user))) => {
-				// Logged in - show initial
+				// Logged in - show initial, link to profile
 				let initial = user.initial().to_string();
 				let colors = ["bg-blue-500", "bg-green-500", "bg-purple-500", "bg-pink-500", "bg-orange-500", "bg-teal-500"];
 				let color_idx = user.username.bytes().map(|b| b as usize).sum::<usize>() % colors.len();
 				let bg_color = colors[color_idx];
 
-				A(AProps {
-					href: "/login".to_string(),
-					children: Box::new(move || {
+				a().attr("href", "/profile")
+					.child(
 						div()
 							.class(format!(
 								"w-8 h-8 rounded-full {} flex items-center justify-center font-bold text-white hover:opacity-80 transition-opacity",
 								bg_color
 							))
-							.child(initial.clone())
-							.into_any()
-					}),
-					target: None,
-					exact: false,
-					strict_trailing_slash: false,
-					scroll: true,
-				})
-				.into_any()
+							.child(initial),
+					)
+					.into_any()
 			}
 			Some(Ok(None)) | Some(Err(_)) => {
-				// Not logged in - show silhouette
-				A(AProps {
-					href: "/login".to_string(),
-					children: Box::new(|| {
+				// Not logged in - show silhouette, link to profile (will redirect to login)
+				a().attr("href", "/profile")
+					.child(
 						div()
 							.class("w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center hover:bg-gray-500 transition-colors")
 							.child(
@@ -440,15 +453,9 @@ fn UserButton() -> impl IntoView {
 									.attr("stroke-width", "2")
 									.class("w-5 h-5")
 									.child(leptos::svg::path().attr("d", "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z")),
-							)
-							.into_any()
-					}),
-					target: None,
-					exact: false,
-					strict_trailing_slash: false,
-					scroll: true,
-				})
-				.into_any()
+							),
+					)
+					.into_any()
 			}
 		}
 	}
@@ -504,6 +511,8 @@ pub enum AppRoutes {
 	Dashboards(dashboards::Routes),
 	#[route(path = "/contacts")]
 	Contacts,
+	#[route(path = "/profile")]
+	Profile,
 	#[route(path = "/login")]
 	Login,
 	#[route(path = "/verify")]
@@ -584,6 +593,20 @@ fn LoginForm() -> impl IntoView {
 	let is_register_mode = RwSignal::new(false);
 	let is_loading = RwSignal::new(false);
 	let google_loading = RwSignal::new(false);
+	let redirect_to = RwSignal::new("/".to_string());
+
+	// Get redirect_to from URL query params (only on client)
+	Effect::new(move |_| {
+		if let Some(window) = web_sys::window() {
+			if let Ok(search) = window.location().search() {
+				if let Ok(params) = web_sys::UrlSearchParams::new_with_str(&search) {
+					if let Some(redirect) = params.get("redirect_to") {
+						redirect_to.set(redirect);
+					}
+				}
+			}
+		}
+	});
 
 	let on_submit = move |e: web_sys::SubmitEvent| {
 		e.prevent_default();
@@ -593,6 +616,7 @@ fn LoginForm() -> impl IntoView {
 
 		let email_val = email.get();
 		let password_val = password.get();
+		let redirect = redirect_to.get();
 
 		if is_register_mode.get() {
 			let username_val = username.get();
@@ -613,7 +637,7 @@ fn LoginForm() -> impl IntoView {
 				match login_user(email_val, password_val).await {
 					Ok(_) =>
 						if let Some(window) = web_sys::window() {
-							let _ = window.location().reload();
+							let _ = window.location().set_href(&redirect);
 						},
 					Err(e) => {
 						error.set(Some(e.to_string()));
@@ -624,34 +648,17 @@ fn LoginForm() -> impl IntoView {
 		}
 	};
 
-	let on_logout = move |_| {
-		wasm_bindgen_futures::spawn_local(async move {
-			let _ = logout_user().await;
-			if let Some(window) = web_sys::window() {
-				let _ = window.location().reload();
-			}
-		});
-	};
-
 	move || {
 		match user_resource.get() {
 			None => div().class("text-center").child("Loading...").into_any(),
-			Some(Ok(Some(user))) => {
-				// Logged in view
-				div()
-					.class("text-center")
-					.child((
-						h1().class("text-2xl font-bold mb-4").child("Account"),
-						div().class("bg-gray-100 rounded-lg p-6 mb-4").child((
-							p().class("text-lg mb-2").child(format!("Logged in as {}", user.username)),
-							p().class("text-gray-600").child(user.email.clone()),
-						)),
-						button()
-							.class("w-full bg-red-500 text-white py-2 px-4 rounded hover:bg-red-600 transition-colors")
-							.on(ev::click, on_logout)
-							.child("Logout"),
-					))
-					.into_any()
+			Some(Ok(Some(_user))) => {
+				// Already logged in - redirect to destination
+				Effect::new(move |_| {
+					if let Some(window) = web_sys::window() {
+						let _ = window.location().set_href(&redirect_to.get());
+					}
+				});
+				div().class("text-center").child("Already logged in, redirecting...").into_any()
 			}
 			Some(Ok(None)) | Some(Err(_)) => {
 				// Check for success message first
@@ -823,6 +830,66 @@ fn LoginForm() -> impl IntoView {
 						},
 					))
 					.into_any()
+			}
+		}
+	}
+}
+
+#[component]
+fn ProfileView() -> impl IntoView {
+	section().class("p-4 max-w-md mx-auto mt-8").child((
+		Title(TitleProps {
+			formatter: None,
+			text: Some("Profile".into()),
+		}),
+		ProfileContent(),
+	))
+}
+
+#[island]
+fn ProfileContent() -> impl IntoView {
+	let user_resource = LocalResource::new(get_current_user);
+
+	let on_logout = move |_| {
+		wasm_bindgen_futures::spawn_local(async move {
+			let _ = logout_user().await;
+			if let Some(window) = web_sys::window() {
+				let _ = window.location().set_href("/");
+			}
+		});
+	};
+
+	move || {
+		match user_resource.get() {
+			None => {
+				// Loading
+				div().class("text-center").child("Loading...").into_any()
+			}
+			Some(Ok(Some(user))) => {
+				// Logged in - show profile
+				div()
+					.class("text-center")
+					.child((
+						h1().class("text-2xl font-bold mb-4").child("Profile"),
+						div().class("bg-gray-100 rounded-lg p-6 mb-4").child((
+							p().class("text-lg mb-2").child(format!("Username: {}", user.username)),
+							p().class("text-gray-600").child(format!("Email: {}", user.email)),
+						)),
+						button()
+							.class("w-full bg-red-500 text-white py-2 px-4 rounded hover:bg-red-600 transition-colors")
+							.on(ev::click, on_logout)
+							.child("Logout"),
+					))
+					.into_any()
+			}
+			Some(Ok(None)) | Some(Err(_)) => {
+				// Not logged in - redirect to login with return URL
+				Effect::new(move |_| {
+					if let Some(window) = web_sys::window() {
+						let _ = window.location().set_href("/login?redirect_to=/profile");
+					}
+				});
+				div().class("text-center").child("Redirecting to login...").into_any()
 			}
 		}
 	}
