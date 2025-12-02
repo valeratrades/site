@@ -3,6 +3,7 @@
 #![feature(duration_constructors)]
 pub mod app;
 pub mod auth;
+pub mod blog;
 pub mod conf;
 pub mod dashboards;
 pub(crate) mod utils;

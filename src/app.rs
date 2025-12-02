@@ -8,6 +8,7 @@ use leptos_router::{
 
 use crate::{
 	auth::User,
+	blog::{self, BlogView},
 	dashboards::{self, DashboardsView},
 };
 
@@ -544,6 +545,8 @@ pub enum AppRoutes {
 	Home,
 	#[parent_route(path = "/dashboards")]
 	Dashboards(dashboards::Routes),
+	#[parent_route(path = "/blog")]
+	Blog(blog::Routes),
 	#[route(path = "/contacts")]
 	Contacts,
 	#[route(path = "/profile")]

@@ -65,6 +65,7 @@ ssr = [
     "dep:bcrypt",
     "dep:uuid",
     "dep:tower-cookies",
+    "dep:tower-http",
     "dep:lettre",
     "dep:oauth2",
     "leptos/ssr",
@@ -111,6 +112,7 @@ serde_json = { version = "^1.0.145", optional = true }
 serde_with = { version = "^3.16.1", features = ["chrono"] }
 tokio = { version = "^1", features = ["rt-multi-thread"], optional = true }
 tower-cookies = { version = "^0.11", optional = true }
+tower-http = { version = "^0.6", features = ["fs"], optional = true }
 tracing = { version = "^0.1.43", optional = true }
 uuid = { version = "^1.19", features = ["v4"], optional = true }
 v_exchanges = { version = "0.16.0", features = ["binance", "bybit", "data"], optional = true }

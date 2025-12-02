@@ -29,6 +29,7 @@
           sassc # Native Sass compiler
           #wasm-bindgen-cli #NB: substituted by manually installing v100 via cargo
           binaryen # For wasm-opt
+          typst # For blog .typ -> .html compilation
         ];
 
         rust = pkgs.rust-bin.selectLatestNightlyWith (

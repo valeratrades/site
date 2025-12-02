@@ -4492,6 +4492,7 @@ dependencies = [
  "serde_with",
  "tokio",
  "tower-cookies",
+ "tower-http",
  "tracing",
  "uuid",
  "v_exchanges",

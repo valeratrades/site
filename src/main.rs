@@ -11,10 +11,13 @@ struct Cli {
 #[cfg(feature = "ssr")]
 #[tokio::main]
 async fn main() {
+	use std::path::Path;
+
 	use axum::Router;
 	use leptos::prelude::*;
 	use leptos_axum::*;
-	use site::{app::*, auth::Database, conf::Settings};
+	use site::{app::*, auth::Database, blog, conf::Settings};
+	use tower_http::services::ServeDir;
 	use tracing::info;
 
 	// Initialize global executor for any_spawner
@@ -42,10 +45,17 @@ async fn main() {
 	let addr = conf.leptos_options.site_addr;
 	let leptos_options = conf.leptos_options;
 
+	// Compile blog posts from .typ files to HTML
+	let blog_source_dir = Path::new("public/blog");
+	let blog_output_dir = Path::new("target/site/blog");
+	blog::compile::init_blog_posts(blog_source_dir, blog_output_dir);
+
 	// Build the router with server functions
 	let leptos_options_clone = leptos_options.clone();
 	let settings_clone = settings.clone();
 	let app = Router::new()
+		// Serve static blog HTML files at /YYYY/MM/DD/slug.html
+		.nest_service("/20", ServeDir::new("target/site/blog/20"))
 		.leptos_routes_with_context(
 			&leptos_options,
 			generate_route_list(App),
