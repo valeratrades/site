@@ -2,6 +2,7 @@
 #![feature(const_type_name)]
 #![feature(duration_constructors)]
 pub mod app;
+pub mod auth;
 pub mod conf;
 pub mod dashboards;
 pub(crate) mod utils;

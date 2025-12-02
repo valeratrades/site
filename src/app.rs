@@ -3,7 +3,209 @@ use leptos_meta::{MetaTags, Stylesheet, StylesheetProps, Title, TitleProps, prov
 use leptos_routable::prelude::*;
 use leptos_router::components::{A, AProps, Router};
 
-use crate::dashboards::{self, DashboardsView};
+use crate::{
+	auth::User,
+	dashboards::{self, DashboardsView},
+};
+
+// Server functions for authentication
+#[cfg(feature = "ssr")]
+mod server_impl {
+	use leptos::server_fn::error::ServerFnError;
+
+	use super::*;
+	use crate::{
+		auth::{Database, EmailSender},
+		conf::Settings,
+	};
+
+	fn get_settings() -> Result<Settings, ServerFnError> {
+		use_context::<Settings>().ok_or_else(|| ServerFnError::new("Settings not available"))
+	}
+
+	fn get_db() -> Result<Database, ServerFnError> {
+		let settings = get_settings()?;
+		Ok(Database::new(&settings.clickhouse))
+	}
+
+	pub async fn register_impl(email: String, username: String, password: String) -> Result<String, ServerFnError> {
+		let settings = get_settings()?;
+		let db = Database::new(&settings.clickhouse);
+
+		if db.email_exists(&email).await.map_err(|e| ServerFnError::new(format!("Database error: {}", e)))? {
+			return Err(ServerFnError::new("Email already registered"));
+		}
+
+		let user_id = uuid::Uuid::new_v4().to_string();
+		db.create_user(&user_id, &email, &username, &password)
+			.await
+			.map_err(|e| ServerFnError::new(format!("Failed to create user: {}", e)))?;
+
+		// Create verification token and send email
+		let token = uuid::Uuid::new_v4().to_string();
+		db.create_email_token(&token, &user_id, 24) // 24 hours
+			.await
+			.map_err(|e| ServerFnError::new(format!("Failed to create verification token: {}", e)))?;
+
+		// Send verification email
+		if !settings.smtp.username.is_empty() {
+			let email_sender = EmailSender::new(&settings.smtp).map_err(|e| ServerFnError::new(format!("Email configuration error: {}", e)))?;
+
+			let verification_link = format!("{}/verify?token={}", settings.site_url, token);
+			email_sender
+				.send_verification_email(&email, &username, &verification_link)
+				.await
+				.map_err(|e| ServerFnError::new(format!("Failed to send verification email: {}", e)))?;
+
+			Ok("Please check your email to verify your account".to_string())
+		} else {
+			// SMTP not configured, auto-verify for dev
+			db.mark_email_verified(&user_id).await.map_err(|e| ServerFnError::new(format!("Failed to verify email: {}", e)))?;
+			Ok("Account created (email verification skipped - SMTP not configured)".to_string())
+		}
+	}
+
+	pub async fn verify_email_impl(token: String) -> Result<(), ServerFnError> {
+		let db = get_db()?;
+
+		let user_id = db
+			.verify_email_token(&token)
+			.await
+			.map_err(|e| ServerFnError::new(format!("Database error: {}", e)))?
+			.ok_or_else(|| ServerFnError::new("Invalid or expired verification token"))?;
+
+		db.mark_email_verified(&user_id).await.map_err(|e| ServerFnError::new(format!("Failed to verify email: {}", e)))?;
+
+		db.delete_email_token(&token).await.map_err(|e| ServerFnError::new(format!("Failed to delete token: {}", e)))?;
+
+		Ok(())
+	}
+
+	pub async fn login_impl(email: String, password: String) -> Result<User, ServerFnError> {
+		let db = get_db()?;
+
+		let (user, password_hash) = db
+			.get_user_by_email(&email)
+			.await
+			.map_err(|e| ServerFnError::new(format!("Database error: {}", e)))?
+			.ok_or_else(|| ServerFnError::new("Invalid email or password"))?;
+
+		if !bcrypt::verify(&password, &password_hash).unwrap_or(false) {
+			return Err(ServerFnError::new("Invalid email or password"));
+		}
+
+		// Check email verification
+		if !db.is_email_verified(&user.id).await.map_err(|e| ServerFnError::new(format!("Database error: {}", e)))? {
+			return Err(ServerFnError::new("Please verify your email before logging in"));
+		}
+
+		// Create session
+		let session_id = uuid::Uuid::new_v4().to_string();
+		db.create_session(&session_id, &user.id, 24 * 7) // 1 week
+			.await
+			.map_err(|e| ServerFnError::new(format!("Failed to create session: {}", e)))?;
+
+		// Set cookie via response header
+		use leptos_axum::ResponseOptions;
+		if let Some(response) = use_context::<ResponseOptions>() {
+			response.insert_header(
+				axum::http::header::SET_COOKIE,
+				axum::http::HeaderValue::from_str(&format!(
+					"session_id={}; Path=/; HttpOnly; SameSite=Lax; Max-Age={}",
+					session_id,
+					60 * 60 * 24 * 7 // 1 week in seconds
+				))
+				.unwrap(),
+			);
+		}
+
+		Ok(user)
+	}
+
+	pub async fn get_current_user_impl() -> Result<Option<User>, ServerFnError> {
+		use axum::http::header::COOKIE;
+		use leptos_axum::extract;
+
+		let headers: axum::http::HeaderMap = extract().await.map_err(|e| ServerFnError::new(format!("Failed to extract headers: {}", e)))?;
+
+		let session_id = headers.get(COOKIE).and_then(|v| v.to_str().ok()).and_then(|cookies| {
+			cookies.split(';').find_map(|cookie| {
+				let cookie = cookie.trim();
+				if cookie.starts_with("session_id=") {
+					Some(cookie.trim_start_matches("session_id=").to_string())
+				} else {
+					None
+				}
+			})
+		});
+
+		let Some(session_id) = session_id else {
+			return Ok(None);
+		};
+
+		let db = get_db()?;
+
+		db.get_session_user(&session_id).await.map_err(|e| ServerFnError::new(format!("Database error: {}", e)))
+	}
+
+	pub async fn logout_impl() -> Result<(), ServerFnError> {
+		use axum::http::header::COOKIE;
+		use leptos_axum::{ResponseOptions, extract};
+
+		let headers: axum::http::HeaderMap = extract().await.map_err(|e| ServerFnError::new(format!("Failed to extract headers: {}", e)))?;
+
+		let session_id = headers.get(COOKIE).and_then(|v| v.to_str().ok()).and_then(|cookies| {
+			cookies.split(';').find_map(|cookie| {
+				let cookie = cookie.trim();
+				if cookie.starts_with("session_id=") {
+					Some(cookie.trim_start_matches("session_id=").to_string())
+				} else {
+					None
+				}
+			})
+		});
+
+		if let Some(session_id) = session_id {
+			let db = get_db()?;
+			let _ = db.delete_session(&session_id).await;
+		}
+
+		// Clear cookie
+		if let Some(response) = use_context::<ResponseOptions>() {
+			response.insert_header(
+				axum::http::header::SET_COOKIE,
+				axum::http::HeaderValue::from_str("session_id=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0").unwrap(),
+			);
+		}
+
+		Ok(())
+	}
+}
+
+#[server(RegisterUser)]
+pub async fn register_user(email: String, username: String, password: String) -> Result<String, ServerFnError> {
+	server_impl::register_impl(email, username, password).await
+}
+
+#[server(LoginUser)]
+pub async fn login_user(email: String, password: String) -> Result<User, ServerFnError> {
+	server_impl::login_impl(email, password).await
+}
+
+#[server(GetCurrentUser)]
+pub async fn get_current_user() -> Result<Option<User>, ServerFnError> {
+	server_impl::get_current_user_impl().await
+}
+
+#[server(LogoutUser)]
+pub async fn logout_user() -> Result<(), ServerFnError> {
+	server_impl::logout_impl().await
+}
+
+#[server(VerifyEmail)]
+pub async fn verify_email(token: String) -> Result<(), ServerFnError> {
+	server_impl::verify_email_impl(token).await
+}
 
 #[component]
 fn TopBar() -> impl IntoView {
@@ -37,28 +239,72 @@ fn TopBar() -> impl IntoView {
 			})
 			.attr("class", "hover:text-blue-300 transition-colors"),
 		)),
-		div().class("ml-auto").child(A(AProps {
-			href: "/login".to_string(),
-			children: Box::new(|| {
-				div()
-					.class("w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center hover:bg-gray-500 transition-colors")
-					.child(
-						svg()
-							.attr("viewBox", "0 0 24 24")
-							.attr("fill", "none")
-							.attr("stroke", "currentColor")
-							.attr("stroke-width", "2")
-							.class("w-5 h-5")
-							.child(leptos::svg::path().attr("d", "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z")),
-					)
-					.into_any()
-			}),
-			target: None,
-			exact: false,
-			strict_trailing_slash: false,
-			scroll: true,
-		})),
+		div().class("ml-auto").child(UserButton()),
 	))
+}
+
+#[island]
+fn UserButton() -> impl IntoView {
+	let user_resource = Resource::new(|| (), |_| get_current_user());
+
+	move || {
+		match user_resource.get() {
+			None => {
+				// Loading state
+				div().class("w-8 h-8 rounded-full bg-gray-700 animate-pulse").into_any()
+			}
+			Some(Ok(Some(user))) => {
+				// Logged in - show initial
+				let initial = user.initial().to_string();
+				let colors = ["bg-blue-500", "bg-green-500", "bg-purple-500", "bg-pink-500", "bg-orange-500", "bg-teal-500"];
+				let color_idx = user.username.bytes().map(|b| b as usize).sum::<usize>() % colors.len();
+				let bg_color = colors[color_idx];
+
+				A(AProps {
+					href: "/login".to_string(),
+					children: Box::new(move || {
+						div()
+							.class(format!(
+								"w-8 h-8 rounded-full {} flex items-center justify-center font-bold text-white hover:opacity-80 transition-opacity",
+								bg_color
+							))
+							.child(initial.clone())
+							.into_any()
+					}),
+					target: None,
+					exact: false,
+					strict_trailing_slash: false,
+					scroll: true,
+				})
+				.into_any()
+			}
+			Some(Ok(None)) | Some(Err(_)) => {
+				// Not logged in - show silhouette
+				A(AProps {
+					href: "/login".to_string(),
+					children: Box::new(|| {
+						div()
+							.class("w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center hover:bg-gray-500 transition-colors")
+							.child(
+								svg()
+									.attr("viewBox", "0 0 24 24")
+									.attr("fill", "none")
+									.attr("stroke", "currentColor")
+									.attr("stroke-width", "2")
+									.class("w-5 h-5")
+									.child(leptos::svg::path().attr("d", "M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z")),
+							)
+							.into_any()
+					}),
+					target: None,
+					exact: false,
+					strict_trailing_slash: false,
+					scroll: true,
+				})
+				.into_any()
+			}
+		}
+	}
 }
 
 pub fn shell(options: LeptosOptions) -> impl IntoView {
@@ -113,6 +359,8 @@ pub enum AppRoutes {
 	Contacts,
 	#[route(path = "/login")]
 	Login,
+	#[route(path = "/verify")]
+	Verify,
 	#[fallback]
 	#[route(path = "/404")]
 	NotFound,
@@ -170,9 +418,287 @@ fn LoginView() -> impl IntoView {
 			formatter: None,
 			text: Some("Login".into()),
 		}),
-		h1().class("text-2xl font-bold mb-4").child("Login"),
-		p().class("text-gray-600 mb-4").child("Login functionality coming soon"),
+		LoginForm(),
 	))
+}
+
+#[island]
+fn LoginForm() -> impl IntoView {
+	let user_resource = Resource::new(|| (), |_| get_current_user());
+
+	let email = RwSignal::new(String::new());
+	let username = RwSignal::new(String::new());
+	let password = RwSignal::new(String::new());
+	let error = RwSignal::new(Option::<String>::None);
+	let success_message = RwSignal::new(Option::<String>::None);
+	let is_register_mode = RwSignal::new(false);
+	let is_loading = RwSignal::new(false);
+
+	let on_submit = move |e: web_sys::SubmitEvent| {
+		e.prevent_default();
+		is_loading.set(true);
+		error.set(None);
+		success_message.set(None);
+
+		let email_val = email.get();
+		let password_val = password.get();
+
+		if is_register_mode.get() {
+			let username_val = username.get();
+			wasm_bindgen_futures::spawn_local(async move {
+				match register_user(email_val, username_val, password_val).await {
+					Ok(msg) => {
+						success_message.set(Some(msg));
+						is_loading.set(false);
+					}
+					Err(e) => {
+						error.set(Some(e.to_string()));
+						is_loading.set(false);
+					}
+				}
+			});
+		} else {
+			wasm_bindgen_futures::spawn_local(async move {
+				match login_user(email_val, password_val).await {
+					Ok(_) =>
+						if let Some(window) = web_sys::window() {
+							let _ = window.location().reload();
+						},
+					Err(e) => {
+						error.set(Some(e.to_string()));
+						is_loading.set(false);
+					}
+				}
+			});
+		}
+	};
+
+	let on_logout = move |_| {
+		wasm_bindgen_futures::spawn_local(async move {
+			let _ = logout_user().await;
+			if let Some(window) = web_sys::window() {
+				let _ = window.location().reload();
+			}
+		});
+	};
+
+	move || {
+		match user_resource.get() {
+			None => div().class("text-center").child("Loading...").into_any(),
+			Some(Ok(Some(user))) => {
+				// Logged in view
+				div()
+					.class("text-center")
+					.child((
+						h1().class("text-2xl font-bold mb-4").child("Account"),
+						div().class("bg-gray-100 rounded-lg p-6 mb-4").child((
+							p().class("text-lg mb-2").child(format!("Logged in as {}", user.username)),
+							p().class("text-gray-600").child(user.email.clone()),
+						)),
+						button()
+							.class("w-full bg-red-500 text-white py-2 px-4 rounded hover:bg-red-600 transition-colors")
+							.on(ev::click, on_logout)
+							.child("Logout"),
+					))
+					.into_any()
+			}
+			Some(Ok(None)) | Some(Err(_)) => {
+				// Check for success message first
+				if let Some(msg) = success_message.get() {
+					return div()
+						.class("text-center")
+						.child((
+							h1().class("text-2xl font-bold mb-4 text-green-600").child("Registration Successful"),
+							div().class("bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4").child(msg),
+							button()
+								.attr("type", "button")
+								.class("text-blue-500 hover:underline")
+								.on(ev::click, move |_| {
+									success_message.set(None);
+									is_register_mode.set(false);
+								})
+								.child("Go to Login"),
+						))
+						.into_any();
+				}
+
+				// Login/Register form
+				let form_title = move || if is_register_mode.get() { "Register" } else { "Login" };
+				let toggle_text = move || {
+					if is_register_mode.get() {
+						"Already have an account? Login"
+					} else {
+						"Don't have an account? Register"
+					}
+				};
+
+				form()
+					.on(ev::submit, on_submit)
+					.child((
+						h1().class("text-2xl font-bold mb-6 text-center").child(form_title),
+						// Error message
+						move || error.get().map(|e| div().class("bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4").child(e)),
+						// Email field
+						div().class("mb-4").child((
+							label().class("block text-gray-700 text-sm font-bold mb-2").attr("for", "email").child("Email"),
+							input()
+								.attr("type", "email")
+								.attr("id", "email")
+								.attr("required", "")
+								.attr("placeholder", "you@example.com")
+								.class("w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500")
+								.prop("value", move || email.get())
+								.on(ev::input, move |e| {
+									let val = event_target_value(&e);
+									email.set(val);
+								}),
+						)),
+						// Username field (only for register)
+						move || {
+							is_register_mode.get().then(|| {
+								div().class("mb-4").child((
+									label().class("block text-gray-700 text-sm font-bold mb-2").attr("for", "username").child("Username"),
+									input()
+										.attr("type", "text")
+										.attr("id", "username")
+										.attr("required", "")
+										.attr("placeholder", "johndoe")
+										.class("w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500")
+										.prop("value", move || username.get())
+										.on(ev::input, move |e| {
+											let val = event_target_value(&e);
+											username.set(val);
+										}),
+								))
+							})
+						},
+						// Password field
+						div().class("mb-6").child((
+							label().class("block text-gray-700 text-sm font-bold mb-2").attr("for", "password").child("Password"),
+							input()
+								.attr("type", "password")
+								.attr("id", "password")
+								.attr("required", "")
+								.attr("placeholder", "••••••••")
+								.class("w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500")
+								.prop("value", move || password.get())
+								.on(ev::input, move |e| {
+									let val = event_target_value(&e);
+									password.set(val);
+								}),
+						)),
+						// Submit button
+						button()
+							.attr("type", "submit")
+							.attr("disabled", move || is_loading.get())
+							.class("w-full bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600 transition-colors disabled:opacity-50")
+							.child(move || {
+								if is_loading.get() {
+									"Loading..."
+								} else if is_register_mode.get() {
+									"Register"
+								} else {
+									"Login"
+								}
+							}),
+						// Toggle link
+						div().class("mt-4 text-center").child(
+							button()
+								.attr("type", "button")
+								.class("text-blue-500 hover:underline")
+								.on(ev::click, move |_| is_register_mode.update(|v| *v = !*v))
+								.child(toggle_text),
+						),
+					))
+					.into_any()
+			}
+		}
+	}
+}
+
+#[component]
+fn VerifyView() -> impl IntoView {
+	section().class("p-4 max-w-md mx-auto mt-8").child((
+		Title(TitleProps {
+			formatter: None,
+			text: Some("Verify Email".into()),
+		}),
+		VerifyForm(),
+	))
+}
+
+#[island]
+fn VerifyForm() -> impl IntoView {
+	let status = RwSignal::new(Option::<Result<(), String>>::None);
+	let is_loading = RwSignal::new(true);
+
+	// Get token from URL query params
+	Effect::new(move |_| {
+		if let Some(window) = web_sys::window() {
+			if let Ok(search) = window.location().search() {
+				let params = web_sys::UrlSearchParams::new_with_str(&search).ok();
+				if let Some(token) = params.and_then(|p| p.get("token")) {
+					wasm_bindgen_futures::spawn_local(async move {
+						match verify_email(token).await {
+							Ok(()) => {
+								status.set(Some(Ok(())));
+								is_loading.set(false);
+							}
+							Err(e) => {
+								status.set(Some(Err(e.to_string())));
+								is_loading.set(false);
+							}
+						}
+					});
+				} else {
+					status.set(Some(Err("No verification token provided".to_string())));
+					is_loading.set(false);
+				}
+			}
+		}
+	});
+
+	move || {
+		if is_loading.get() {
+			div().class("text-center").child("Verifying your email...").into_any()
+		} else {
+			match status.get() {
+				Some(Ok(())) => div()
+					.class("text-center")
+					.child((
+						h1().class("text-2xl font-bold mb-4 text-green-600").child("Email Verified!"),
+						p().class("mb-4").child("Your email has been successfully verified. You can now log in."),
+						A(AProps {
+							href: "/login".to_string(),
+							children: Box::new(|| view! { "Go to Login" }.into_any()),
+							target: None,
+							exact: false,
+							strict_trailing_slash: false,
+							scroll: true,
+						})
+						.attr("class", "inline-block px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"),
+					))
+					.into_any(),
+				Some(Err(e)) => div()
+					.class("text-center")
+					.child((
+						h1().class("text-2xl font-bold mb-4 text-red-600").child("Verification Failed"),
+						div().class("bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4").child(e),
+						A(AProps {
+							href: "/login".to_string(),
+							children: Box::new(|| view! { "Go to Login" }.into_any()),
+							target: None,
+							exact: false,
+							strict_trailing_slash: false,
+							scroll: true,
+						})
+						.attr("class", "inline-block px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"),
+					))
+					.into_any(),
+				None => div().class("text-center").child("Loading...").into_any(),
+			}
+		}
+	}
 }
 
 //dbg

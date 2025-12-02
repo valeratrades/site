@@ -239,34 +239,16 @@
 
               							cp -f ${readme} ./README.md
 
-                            #BUG: \
-              							## Check if newer cargo-leptos version is available
-              							#CARGO_LEPTOS_INSTALLED=$(cargo leptos --version 2>/dev/null | awk '{print $2}')
-              							#if [ -n "$CARGO_LEPTOS_INSTALLED" ]; then
-              							#  # Check if a newer version exists on crates.io
-              							#  CARGO_LEPTOS_LATEST=$(cargo search cargo-leptos --limit 1 2>/dev/null | grep '^cargo-leptos' | awk '{print $3}' | tr -d '"')
-              							#  if [ -n "$CARGO_LEPTOS_LATEST" ] && [ "$CARGO_LEPTOS_INSTALLED" != "$CARGO_LEPTOS_LATEST" ]; then
-              							#    echo "cargo-leptos update available: $CARGO_LEPTOS_INSTALLED -> $CARGO_LEPTOS_LATEST"
-              							#    echo "Installing latest cargo-leptos..."
-              							#    cargo install cargo-leptos
-              							#  fi
-              							#else
-              							#  echo "cargo-leptos not found, installing..."
-              							#  cargo install cargo-leptos
-              							#fi
-                     #
-              							#alias lw="cargo leptos watch --hot-reload"
+                            cargo install cargo-leptos #NB: must match leptos crate's version; thus can't install through nixpkgs
 
               							${sourceTailwind}
             '';
           env.RUSTFLAGS = "-Zmacro-backtrace"; # XXX: would be overriding existing RUSTFLAGS
-          env.LEPTOS_WASM_BINDGEN_VERSION = "0.2.106"; #NB: must be in sync with `leptos` crate's version. Suggestion of `-f` wasm-bindgen install in their error is wrong, - this is how you actually do it.
+          #env.LEPTOS_WASM_BINDGEN_VERSION = "0.2.106"; #NB: must be in sync with `leptos` crate's version. Suggestion of `-f` wasm-bindgen install in their error is wrong, - this is how you actually do it.
 
           packages = with pkgs; [
             mold-wrapped
             openssl
-            #cargo-leptos #TODO: figure out if I need this, or if `cargo leptos` is the more correct way to use it (that is guaranteed to stay up-to-date)
-            #NB: with what I currently understand, atm need to install cargo-leptos through cargo exclusively, as I need absolute latest
             pkg-config
             sccache
             rust

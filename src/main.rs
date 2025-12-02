@@ -14,7 +14,7 @@ async fn main() {
 	use axum::Router;
 	use leptos::prelude::*;
 	use leptos_axum::*;
-	use site::{app::*, conf::Settings};
+	use site::{app::*, auth::Database, conf::Settings};
 	use tracing::info;
 
 	// Initialize global executor for any_spawner
@@ -23,6 +23,12 @@ async fn main() {
 	v_utils::clientside!();
 	let cli = Cli::parse();
 	let settings = Settings::try_build(cli.settings).unwrap();
+
+	// Initialize database and run migrations
+	let db = Database::new(&settings.clickhouse);
+	if let Err(e) = db.migrate().await {
+		tracing::warn!("Database migration failed (ClickHouse may not be running): {}", e);
+	}
 
 	let conf = get_configuration(Some("Cargo.toml")).unwrap();
 	let addr = conf.leptos_options.site_addr;

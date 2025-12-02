@@ -61,6 +61,11 @@ ssr = [
     "dep:chrono",
     "dep:chrono-tz",
     "dep:plotly",
+    "dep:clickhouse",
+    "dep:bcrypt",
+    "dep:uuid",
+    "dep:tower-cookies",
+    "dep:lettre",
     "leptos/ssr",
     "leptos_meta/ssr",
     "leptos_router/ssr",
@@ -84,22 +89,28 @@ web-sys = "^0.3"
 console_error_panic_hook = { version = "^0.1", optional = true }
 gloo-timers = { version = "^0.3", features = ["futures"], optional = true }
 wasm-bindgen = { version = "0.2.106", optional = true } #NB: version must match that of wasm-bindgen-cli I'm compiling the project with
+wasm-bindgen-futures = "0.4"
 #,}}}
 
 # optional-ssr {{{
 any_spawner = { version = "^0.3", optional = true }
 axum = { version = "^0.8", optional = true }
+bcrypt = { version = "^0.17", optional = true }
 chrono = { version = "^0.4.42", optional = true, features = ["serde"] }
 chrono-tz = { version = "^0.10.4", optional = true }
 clap = { version = "^4.5.53", features = ["derive"] }
+clickhouse = { version = "^0.13", features = ["time"], optional = true }
 jiff = { version = "0.2.16", features = ["serde"] }
 leptos_axum = { version = "^0.8", optional = true }
+lettre = { version = "0.11", features = ["tokio1-native-tls", "builder"], optional = true }
 plotly = { version = "^0.13.5", features = ["image", "kaleido"], optional = true }
 reqwest = { version = "^0.12.24", optional = true }
 serde_json = { version = "^1.0.145", optional = true }
 serde_with = { version = "^3.16.1", features = ["chrono"] }
 tokio = { version = "^1", features = ["rt-multi-thread"], optional = true }
+tower-cookies = { version = "^0.11", optional = true }
 tracing = { version = "^0.1.43", optional = true }
+uuid = { version = "^1.16", features = ["v4"], optional = true }
 v_exchanges = { version = "0.15.5", features = ["binance", "bybit", "data"], optional = true }
 
 [profile.wasm-release]
