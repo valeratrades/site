@@ -62,14 +62,9 @@ fn HomeView() -> impl IntoView {
 	))
 }
 
-/// Animated loading indicator that cycles through "Loading.", "Loading..", "Loading..."
+/// Animated loading indicator that blinks "..." on and off.
 /// Uses CSS animation so it works immediately from SSR without waiting for hydration.
 #[component]
 pub fn LoadingIndicator(label: String) -> impl IntoView {
-	pre().child((
-		format!("Loading {label}"),
-		span().class("loading-dots").child("."),
-		span().class("loading-dots loading-dots-2").child("."),
-		span().class("loading-dots loading-dots-3").child("."),
-	))
+	pre().child((format!("Loading {label}"), span().class("loading-dots").child("...")))
 }

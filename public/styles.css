@@ -1159,24 +1159,12 @@ body {
   }
 }
 
-/* Loading dots animation */
-@keyframes loading-dots {
-  0% {
-    opacity: 0;
-  }
-  25%, 100% {
-    opacity: 1;
-  }
+/* Loading dots animation - blink on/off */
+@keyframes loading-dots-blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
 }
 
 .loading-dots {
-  animation: loading-dots 0.8s infinite;
-}
-
-.loading-dots-2 {
-  animation-delay: 0.2s;
-}
-
-.loading-dots-3 {
-  animation-delay: 0.4s;
+  animation: loading-dots-blink 0.4s infinite;
 }

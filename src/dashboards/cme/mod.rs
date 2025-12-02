@@ -2,6 +2,7 @@
 mod data;
 use leptos::{html::*, prelude::*};
 
+use super::{LoadingIndicator, LoadingIndicatorProps};
 #[cfg(feature = "ssr")]
 use crate::{conf::Settings, utils::Mock};
 
@@ -26,12 +27,12 @@ pub fn CftcReportView() -> impl IntoView {
 	}
 
 	div().child(Suspense(SuspenseProps {
-		fallback: { || pre().child("Loading CFTC Report...") }.into(),
+		fallback: { || LoadingIndicator(LoadingIndicatorProps { label: "CFTC Report".into() }) }.into(),
 		#[rustfmt::skip]
 		children: ToChildren::to_children(move || IntoRender::into_render(move || match report_resource.get() {
 			Some(Ok(report_data)) => (pre().child(report_data.short),).into_any(),
 			Some(Err(e)) => (pre().child(format!("Error loading CFTC Report: {e} (retrying...)")),).into_any(),
-			None => (pre().child("Loading CFTC Report..."),).into_any(),
+			None => (LoadingIndicator(LoadingIndicatorProps { label: "CFTC Report".into() }),).into_any(),
 		})),
 	}))
 }

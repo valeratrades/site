@@ -2,6 +2,7 @@
 mod data;
 use leptos::{html::*, prelude::*};
 
+use super::{LoadingIndicator, LoadingIndicatorProps};
 #[cfg(feature = "ssr")]
 use crate::{conf::Settings, utils::Mock};
 
@@ -26,12 +27,12 @@ pub fn FngView() -> impl IntoView {
 	}
 
 	div().child(Suspense(SuspenseProps {
-		fallback: { || pre().child("Loading Fng block...") }.into(),
+		fallback: { || LoadingIndicator(LoadingIndicatorProps { label: "Fear & Greed".into() }) }.into(),
 		#[rustfmt::skip]
 		children: ToChildren::to_children(move || IntoRender::into_render(move || match fng_resource.get() {
 			Some(Ok(fng_data)) => (pre().child(fng_data.0),).into_any(),
 			Some(Err(e)) => (pre().child(format!("Error loading Fear & Greed: {e} (retrying...)")),).into_any(),
-			None => (pre().child("Loading Fng block..."),).into_any(),
+			None => (LoadingIndicator(LoadingIndicatorProps { label: "Fear & Greed".into() }),).into_any(),
 		})),
 	}))
 }

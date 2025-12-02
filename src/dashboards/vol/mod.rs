@@ -4,6 +4,7 @@ mod data;
 use leptos::{html::*, prelude::*};
 use v_utils::NowThen;
 
+use super::{LoadingIndicator, LoadingIndicatorProps};
 #[cfg(feature = "ssr")]
 use crate::{conf::Settings, utils::Mock};
 
@@ -29,12 +30,12 @@ pub fn VolView() -> impl IntoView {
 	}
 
 	div().child(Suspense(SuspenseProps {
-		fallback: { || pre().child("Loading Vol Block...") }.into(),
+		fallback: { || LoadingIndicator(LoadingIndicatorProps { label: "Vol".into() }) }.into(),
 		children: ToChildren::to_children(move || {
 			IntoRender::into_render(move || match vol_resource.get() {
 				Some(Ok(vol_data)) => (pre().child(vol_data.to_string()),).into_any(),
 				Some(Err(e)) => (pre().child(format!("Error loading Vol data: {e} (retrying...)")),).into_any(),
-				None => (pre().child("Loading Vol Block..."),).into_any(),
+				None => (LoadingIndicator(LoadingIndicatorProps { label: "Vol".into() }),).into_any(),
 			})
 		}),
 	}))
