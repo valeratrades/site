@@ -433,7 +433,6 @@ fn NavLink(href: &'static str, label: &'static str) -> impl IntoView {
 fn TopBar() -> impl IntoView {
 	nav().class("flex items-center px-4 py-2 bg-gray-800 text-white").child((
 		div().class("flex gap-2").child((
-			NavLink(NavLinkProps { href: "/", label: "Home" }),
 			NavLink(NavLinkProps {
 				href: "/dashboards",
 				label: "Dashboards",
@@ -560,15 +559,20 @@ pub enum AppRoutes {
 	NotFound,
 }
 
-/// Renders the home page of your application.
+/// Renders the home page - redirects to /dashboards
 #[component]
 fn HomeView() -> impl IntoView {
-	div().child((
-		h1().child("Welcome to Leptos!"),
-		HomeButton(),
-		p().class("bg-purple-500 text-white p-2 rounded m-2")
-			.child("Tailwind check: this should have purple background and rounded corners"), //dbg
-	))
+	// SSR redirect
+	#[cfg(feature = "ssr")]
+	{
+		use leptos_axum::ResponseOptions;
+		if let Some(response) = use_context::<ResponseOptions>() {
+			response.set_status(axum::http::StatusCode::TEMPORARY_REDIRECT);
+			response.insert_header(axum::http::header::LOCATION, axum::http::HeaderValue::from_static("/dashboards"));
+		}
+	}
+	// Return minimal content (won't be seen due to redirect)
+	()
 }
 
 #[component]
@@ -1113,15 +1117,6 @@ fn GoogleCallbackHandler() -> impl IntoView {
 			div().class("text-center").child("Redirecting...").into_any()
 		}
 	}
-}
-
-//dbg
-#[island]
-fn HomeButton() -> impl IntoView {
-	let count = RwSignal::new(0);
-	let on_click = move |_| *count.write() += 1;
-
-	button().on(ev::click, on_click).child(move || format!("Click Me: {}", count.read()))
 }
 
 #[component]

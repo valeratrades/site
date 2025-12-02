@@ -42,9 +42,21 @@ async fn main() {
 	let addr = conf.leptos_options.site_addr;
 	let leptos_options = conf.leptos_options;
 
-	// Simplified setup for now - routes will be handled by Leptos
+	// Build the router with server functions
 	let leptos_options_clone = leptos_options.clone();
+	let settings_clone = settings.clone();
 	let app = Router::new()
+		.leptos_routes_with_context(
+			&leptos_options,
+			generate_route_list(App),
+			move || {
+				provide_context(settings_clone.clone());
+			},
+			{
+				let leptos_options = leptos_options_clone.clone();
+				move || shell(leptos_options.clone())
+			},
+		)
 		.fallback(file_and_error_handler(move |_| {
 			provide_context(settings.clone());
 			shell(leptos_options_clone.clone())
