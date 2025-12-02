@@ -239,7 +239,13 @@
 
               							cp -f ${readme} ./README.md
 
-                            cargo install cargo-leptos #NB: must match leptos crate's version; thus can't install through nixpkgs
+                            # cargo-leptos must match leptos crate's version; thus can't install through nixpkgs
+                            # Use binstall on Ubuntu (faster), cargo install elsewhere
+                            if grep -qi ubuntu /etc/os-release 2>/dev/null; then
+                              cargo binstall -y cargo-leptos
+                            else
+                              cargo install cargo-leptos
+                            fi
 
               							${sourceTailwind}
             '';
