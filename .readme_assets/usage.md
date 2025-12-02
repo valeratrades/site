@@ -1,5 +1,3 @@
-# Usage & Deployment
-
 Instructions for deploying the site with HTTPS using nginx or Caddy, and configuring DNS.
 
 ## Table of Contents
