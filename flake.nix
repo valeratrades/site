@@ -59,7 +59,7 @@
           #flyctl # might end up using it for deployment
         ];
 
-        sourceTailwind = ''tailwindcss -i ./style/tailwind_in.css -o ./style/tailwind_out.css '';
+        sourceTailwind = ''tailwindcss -i ./style/tailwind_in.css -o ./public/styles.css '';
 
         pre-commit-check = pre-commit-hooks.lib.${system}.run (v-utils.files.preCommit { inherit pkgs; });
         manifest = (pkgs.lib.importTOML ./Cargo.toml).package;
@@ -175,9 +175,7 @@
                                 # Copy the WASM and JS assets
                                 cp -r target/site/pkg/* $out/share/${pname}/pkg/
 
-                                # Copy CSS
-                                mkdir -p $out/share/${pname}/style
-                                cp style/tailwind_out.css $out/share/${pname}/style/
+                                # CSS is already in public/, which gets copied above
 
                                 # Copy public assets if they exist
                                 if [ -d public ]; then

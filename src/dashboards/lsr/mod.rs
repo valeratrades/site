@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use v_utils::trades::Pair;
 use web_sys::wasm_bindgen::JsValue;
 
+use super::{LoadingIndicator, LoadingIndicatorProps};
 #[cfg(feature = "ssr")]
 use crate::{conf::Settings, utils::Mock};
 
@@ -47,7 +48,7 @@ pub fn LsrView() -> impl IntoView {
 	}
 
 	section().class("p-4 text-center").child(Suspense(SuspenseProps {
-		fallback: { || pre().child("Loading LSR...") }.into(),
+		fallback: { || LoadingIndicator(LoadingIndicatorProps { label: "LSR".into() }) }.into(),
 		children: ToChildren::to_children(move || {
 			IntoRender::into_render(move || match lsrs_resource.get() {
 				Some(Ok(rendered_lsrs)) => {
@@ -60,7 +61,7 @@ pub fn LsrView() -> impl IntoView {
 						.into_any()
 				}
 				Some(Err(e)) => (pre().child(format!("Error loading Lsrs: {e} (retrying...)")), ().into_any()).into_any(),
-				None => (pre().child("Loading LSR..."), ().into_any()).into_any(),
+				None => (LoadingIndicator(LoadingIndicatorProps { label: "LSR".into() }), ().into_any()).into_any(),
 			})
 		}),
 	}))

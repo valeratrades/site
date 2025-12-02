@@ -1158,3 +1158,25 @@ body {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Loading dots animation */
+@keyframes loading-dots {
+  0% {
+    opacity: 0;
+  }
+  25%, 100% {
+    opacity: 1;
+  }
+}
+
+.loading-dots {
+  animation: loading-dots 0.8s infinite;
+}
+
+.loading-dots-2 {
+  animation-delay: 0.2s;
+}
+
+.loading-dots-3 {
+  animation-delay: 0.4s;
+}

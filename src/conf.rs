@@ -14,6 +14,10 @@ pub struct Settings {
 	#[serde(default = "__default_site_url")]
 	#[primitives(skip)]
 	pub site_url: String,
+	/// Usernames that have admin access
+	#[serde(default)]
+	#[primitives(skip)]
+	pub admins: Vec<String>,
 }
 
 fn __default_site_url() -> String {
@@ -28,6 +32,7 @@ impl Default for Settings {
 			smtp: SmtpConfig::default(),
 			google_oauth: GoogleOAuthConfig::default(),
 			site_url: __default_site_url(),
+			admins: Vec::new(),
 		}
 	}
 }

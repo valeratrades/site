@@ -14,7 +14,7 @@ use crate::{
 
 // Server functions for authentication
 #[cfg(feature = "ssr")]
-mod server_impl {
+pub mod server_impl {
 	use leptos::server_fn::error::ServerFnError;
 	use tracing::{error, info, instrument};
 
@@ -558,6 +558,8 @@ pub enum AppRoutes {
 	Verify,
 	#[route(path = "/auth/google/callback")]
 	GoogleCallback,
+	#[route(path = "/tmp")]
+	Tmp,
 	#[fallback]
 	#[route(path = "/404")]
 	NotFound,
@@ -1139,3 +1141,5 @@ pub fn NotFoundView() -> impl IntoView {
 		.attr("class", "inline-block px-4 py-2 bg-green-500 text-white rounded mt-4"),
 	))
 }
+
+pub use crate::tmp::TmpView;

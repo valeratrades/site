@@ -6,6 +6,7 @@ pub mod auth;
 pub mod blog;
 pub mod conf;
 pub mod dashboards;
+pub mod tmp;
 pub(crate) mod utils;
 
 #[cfg(feature = "hydrate")]

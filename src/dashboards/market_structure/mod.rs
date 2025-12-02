@@ -5,6 +5,7 @@ use leptos::{html::*, prelude::*};
 #[cfg(feature = "ssr")]
 use v_exchanges::{ExchangeName, Instrument};
 
+use super::{LoadingIndicator, LoadingIndicatorProps};
 #[cfg(feature = "ssr")]
 use crate::{conf::Settings, utils::Mock};
 
@@ -31,7 +32,7 @@ pub fn MarketStructureView() -> impl IntoView {
 
 	#[rustfmt::skip]
 	Suspense(SuspenseProps {
-		fallback: { || pre().child("Loading MarketStructure...") }.into(),
+		fallback: { || LoadingIndicator(LoadingIndicatorProps { label: "MarketStructure".into() }) }.into(),
 		children: ToChildren::to_children(move || {
 			IntoRender::into_render(move || {
 				ms_resource.get().map(|ms| div().inner_html(ms.0))
