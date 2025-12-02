@@ -54,21 +54,10 @@ fn HomeView() -> impl IntoView {
 			formatter: None,
 			text: Some("Dashboards".into()),
 		}),
-		p().child("My Dashboards"),
 		market_structure::MarketStructureView(),
 		lsr::LsrView(),
 		cme::CftcReportView(),
 		vol::VolView(),
 		fng::FngView(),
-		p().class("text-sm font-mono mt-4").child(("Location.search: ", move || use_location().search)),
-		ParamsView(),
 	))
-}
-#[component]
-fn ParamsView() -> impl IntoView {
-	section()
-		.class("p-4 text-center")
-		.child((p().child(("TODO: implement query parsing (for defining dashboards to be displayed procedurally)", move || {
-			use_location().search.get()
-		})),))
 }
