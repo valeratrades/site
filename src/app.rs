@@ -15,6 +15,7 @@ use crate::{
 #[cfg(feature = "ssr")]
 mod server_impl {
 	use leptos::server_fn::error::ServerFnError;
+	use tracing::{error, info, instrument};
 
 	use super::*;
 	use crate::{
@@ -31,43 +32,60 @@ mod server_impl {
 		Ok(Database::new(&settings.clickhouse))
 	}
 
+	#[instrument(skip(password), fields(email = %email, username = %username))]
 	pub async fn register_impl(email: String, username: String, password: String) -> Result<String, ServerFnError> {
+		info!("Registration attempt");
 		let settings = get_settings()?;
 		let db = Database::new(&settings.clickhouse);
 
-		if db.email_exists(&email).await.map_err(|e| ServerFnError::new(format!("Database error: {}", e)))? {
+		if db.email_exists(&email).await.map_err(|e| {
+			error!("Database error checking email: {}", e);
+			ServerFnError::new(format!("Database error: {}", e))
+		})? {
+			info!("Email already registered");
 			return Err(ServerFnError::new("Email already registered"));
 		}
 
 		let user_id = uuid::Uuid::new_v4().to_string();
-		db.create_user(&user_id, &email, &username, &password)
-			.await
-			.map_err(|e| ServerFnError::new(format!("Failed to create user: {}", e)))?;
+		db.create_user(&user_id, &email, &username, &password).await.map_err(|e| {
+			error!("Failed to create user: {}", e);
+			ServerFnError::new(format!("Failed to create user: {}", e))
+		})?;
 
 		// Create verification token and send email
 		let token = uuid::Uuid::new_v4().to_string();
-		db.create_email_token(&token, &user_id, 24) // 24 hours
-			.await
-			.map_err(|e| ServerFnError::new(format!("Failed to create verification token: {}", e)))?;
+		db.create_email_token(&token, &user_id, 24).await.map_err(|e| {
+			error!("Failed to create verification token: {}", e);
+			ServerFnError::new(format!("Failed to create verification token: {}", e))
+		})?;
 
 		// Send verification email
 		if !settings.smtp.username.is_empty() {
-			let email_sender = EmailSender::new(&settings.smtp).map_err(|e| ServerFnError::new(format!("Email configuration error: {}", e)))?;
+			let email_sender = EmailSender::new(&settings.smtp).map_err(|e| {
+				error!("Email configuration error: {}", e);
+				ServerFnError::new(format!("Email configuration error: {}", e))
+			})?;
 
 			let verification_link = format!("{}/verify?token={}", settings.site_url, token);
-			email_sender
-				.send_verification_email(&email, &username, &verification_link)
-				.await
-				.map_err(|e| ServerFnError::new(format!("Failed to send verification email: {}", e)))?;
+			email_sender.send_verification_email(&email, &username, &verification_link).await.map_err(|e| {
+				error!("Failed to send verification email: {}", e);
+				ServerFnError::new(format!("Failed to send verification email: {}", e))
+			})?;
 
+			info!("Registration successful, verification email sent");
 			Ok("Please check your email to verify your account".to_string())
 		} else {
 			// SMTP not configured, auto-verify for dev
-			db.mark_email_verified(&user_id).await.map_err(|e| ServerFnError::new(format!("Failed to verify email: {}", e)))?;
+			db.mark_email_verified(&user_id).await.map_err(|e| {
+				error!("Failed to mark email verified: {}", e);
+				ServerFnError::new(format!("Failed to verify email: {}", e))
+			})?;
+			info!("Registration successful (SMTP not configured, auto-verified)");
 			Ok("Account created (email verification skipped - SMTP not configured)".to_string())
 		}
 	}
 
+	#[instrument(skip(token))]
 	pub async fn verify_email_impl(token: String) -> Result<(), ServerFnError> {
 		let db = get_db()?;
 
@@ -84,29 +102,46 @@ mod server_impl {
 		Ok(())
 	}
 
+	#[instrument(skip(password), fields(email = %email))]
 	pub async fn login_impl(email: String, password: String) -> Result<User, ServerFnError> {
+		info!("Login attempt");
+		let settings = get_settings()?;
 		let db = get_db()?;
 
 		let (user, password_hash) = db
 			.get_user_by_email(&email)
 			.await
-			.map_err(|e| ServerFnError::new(format!("Database error: {}", e)))?
-			.ok_or_else(|| ServerFnError::new("No account found with this email address"))?;
+			.map_err(|e| {
+				error!("Database error during login: {}", e);
+				ServerFnError::new(format!("Database error: {}", e))
+			})?
+			.ok_or_else(|| {
+				info!("No account found for email");
+				ServerFnError::new("No account found with this email address")
+			})?;
 
 		if !bcrypt::verify(&password, &password_hash).unwrap_or(false) {
+			info!("Incorrect password");
 			return Err(ServerFnError::new("Incorrect password"));
 		}
 
-		// Check email verification
-		if !db.is_email_verified(&user.id).await.map_err(|e| ServerFnError::new(format!("Database error: {}", e)))? {
+		// Check email verification (skip if SMTP not configured)
+		let smtp_configured = !settings.smtp.username.is_empty();
+		if smtp_configured
+			&& !db.is_email_verified(&user.id).await.map_err(|e| {
+				error!("Database error checking email verification: {}", e);
+				ServerFnError::new(format!("Database error: {}", e))
+			})? {
+			info!("Email not verified");
 			return Err(ServerFnError::new("Please verify your email before logging in"));
 		}
 
 		// Create session
 		let session_id = uuid::Uuid::new_v4().to_string();
-		db.create_session(&session_id, &user.id, 24 * 7) // 1 week
-			.await
-			.map_err(|e| ServerFnError::new(format!("Failed to create session: {}", e)))?;
+		db.create_session(&session_id, &user.id, 24 * 7).await.map_err(|e| {
+			error!("Failed to create session: {}", e);
+			ServerFnError::new(format!("Failed to create session: {}", e))
+		})?;
 
 		// Set cookie via response header
 		use leptos_axum::ResponseOptions;
@@ -122,6 +157,7 @@ mod server_impl {
 			);
 		}
 
+		info!("Login successful");
 		Ok(user)
 	}
 
@@ -627,7 +663,14 @@ fn LoginForm() -> impl IntoView {
 						is_loading.set(false);
 					}
 					Err(e) => {
-						error.set(Some(e.to_string()));
+						let msg = format!("{}", e);
+						let clean_msg = if msg.contains("Email already registered") {
+							"This email is already registered. Please login instead.".to_string()
+						} else {
+							// Show actual error for debugging
+							format!("Registration failed: {}", msg)
+						};
+						error.set(Some(clean_msg));
 						is_loading.set(false);
 					}
 				}
@@ -640,7 +683,18 @@ fn LoginForm() -> impl IntoView {
 							let _ = window.location().set_href(&redirect);
 						},
 					Err(e) => {
-						error.set(Some(e.to_string()));
+						// Extract clean error message from ServerFnError
+						let msg = format!("{}", e);
+						let clean_msg = if msg.contains("No account found") {
+							"No account found with this email. Please register first.".to_string()
+						} else if msg.contains("Incorrect password") {
+							"Incorrect password".to_string()
+						} else if msg.contains("verify your email") {
+							"Please verify your email before logging in".to_string()
+						} else {
+							"Login failed. Please try again.".to_string()
+						};
+						error.set(Some(clean_msg));
 						is_loading.set(false);
 					}
 				}
