@@ -870,7 +870,23 @@ fn LoginForm() -> impl IntoView {
 							button()
 								.attr("type", "button")
 								.class("text-blue-500 hover:underline")
-								.on(ev::click, move |_| is_register_mode.update(|v| *v = !*v))
+								.on(ev::click, move |_| {
+									let switching_to_register = !is_register_mode.get();
+									if switching_to_register {
+										// If switching to register and the login field looks like an email, copy it
+										let val = email_or_username.get();
+										if val.contains('@') {
+											email.set(val);
+										}
+									} else {
+										// If switching to login and email is filled, copy it to login field
+										let val = email.get();
+										if !val.is_empty() {
+											email_or_username.set(val);
+										}
+									}
+									is_register_mode.set(switching_to_register);
+								})
 								.child(toggle_text),
 						),
 						// Google Sign-in button (only shown if configured and not in register mode)
