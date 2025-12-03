@@ -9,10 +9,7 @@ use crate::{conf::Settings, utils::Mock};
 #[island]
 pub fn CftcReportView() -> impl IntoView {
 	let trigger = RwSignal::new(());
-	let report_resource = LocalResource::new(move || {
-		trigger.get();
-		async move { try_build().await }
-	});
+	let report_resource = Resource::new(move || trigger.get(), |_| async move { try_build().await });
 
 	// Set up retry interval - retry every 1 minute on error
 	#[cfg(not(feature = "ssr"))]

@@ -16,10 +16,7 @@ pub fn MarketStructureView() -> impl IntoView {
 	//TODO: switch to convention of displaying `Loading...` above already loaded data (if any) on reload, instead of replacing it.
 
 	let trigger = RwSignal::new(());
-	let ms_resource = LocalResource::new(move || {
-		trigger.get();
-		async move { request_market_structure().await.expect("dbg") }
-	});
+	let ms_resource = Resource::new(move || trigger.get(), |_| async move { request_market_structure().await.expect("dbg") });
 
 	// Set up interval to refresh data every 30 minutes (client-side only)
 	#[cfg(feature = "hydrate")]

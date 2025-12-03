@@ -15,7 +15,7 @@ impl User {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct LoginCredentials {
-	pub email: String,
+	pub email_or_username: String,
 	pub password: String,
 }
 

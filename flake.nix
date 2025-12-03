@@ -252,6 +252,23 @@
                             fi
 
               							${sourceTailwind}
+
+                            # ClickHouse version check - clickhouse crate 0.13+ requires server 21.8+
+                            MIN_CH_VERSION="21.8"
+                            if ! command -v clickhouse-client &> /dev/null; then
+                              echo -e "\033[1;31mERROR: clickhouse-client not found!\033[0m"
+                              echo "This project requires ClickHouse >= $MIN_CH_VERSION"
+                              echo "Install with: nix-env -iA nixpkgs.clickhouse"
+                              echo "Or add to your NixOS config: services.clickhouse.enable = true;"
+                            else
+                              CH_VERSION=$(clickhouse-client --version | grep -oP '\d+\.\d+' | head -1)
+                              if [ "$(printf '%s\n' "$MIN_CH_VERSION" "$CH_VERSION" | sort -V | head -n1)" != "$MIN_CH_VERSION" ]; then
+                                echo -e "\033[1;31mERROR: ClickHouse version $CH_VERSION is too old!\033[0m"
+                                echo "This project requires ClickHouse >= $MIN_CH_VERSION (found: $CH_VERSION)"
+                                echo "The clickhouse Rust crate uses RowBinaryWithNamesAndTypes format which requires 21.8+"
+                                echo "Install newer version: nix-env -iA nixpkgs.clickhouse"
+                              fi
+                            fi
             '';
           env.RUSTFLAGS = "-Zmacro-backtrace"; # XXX: would be overriding existing RUSTFLAGS
           #env.LEPTOS_WASM_BINDGEN_VERSION = "0.2.106"; #NB: must be in sync with `leptos` crate's version. Suggestion of `-f` wasm-bindgen install in their error is wrong, - this is how you actually do it.

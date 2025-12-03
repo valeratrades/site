@@ -212,6 +212,33 @@ PRIMARY KEY version
 		}
 	}
 
+	pub async fn get_user_by_username(&self, username: &str) -> Result<Option<(User, String)>> {
+		let query = format!(
+			"SELECT id, email, username, password_hash FROM site.users WHERE username = '{}' LIMIT 1",
+			username.replace('\'', "''")
+		);
+
+		#[derive(serde::Deserialize, clickhouse::Row)]
+		struct UserRow {
+			id: String,
+			email: String,
+			username: String,
+			password_hash: String,
+		}
+
+		match self.client.query(&query).fetch_one::<UserRow>().await {
+			Ok(row) => Ok(Some((
+				User {
+					id: row.id,
+					email: row.email,
+					username: row.username,
+				},
+				row.password_hash,
+			))),
+			Err(_) => Ok(None),
+		}
+	}
+
 	pub async fn get_user_by_id(&self, id: &str) -> Result<Option<User>> {
 		let query = format!("SELECT id, email, username FROM site.users WHERE id = '{}' LIMIT 1", id.replace('\'', "''"));
 

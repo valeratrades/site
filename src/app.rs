@@ -104,23 +104,34 @@ pub mod server_impl {
 		Ok(())
 	}
 
-	#[instrument(skip(password), fields(email = %email))]
-	pub async fn login_impl(email: String, password: String) -> Result<User, ServerFnError> {
+	#[instrument(skip(password), fields(email_or_username = %email_or_username))]
+	pub async fn login_impl(email_or_username: String, password: String) -> Result<User, ServerFnError> {
 		info!("Login attempt");
 		let settings = get_settings()?;
 		let db = get_db()?;
 
-		let (user, password_hash) = db
-			.get_user_by_email(&email)
-			.await
-			.map_err(|e| {
-				error!("Database error during login: {}", e);
-				ServerFnError::new(format!("Database error: {}", e))
-			})?
-			.ok_or_else(|| {
-				info!("No account found for email");
-				ServerFnError::new("No account found with this email address")
-			})?;
+		// Try email first, then username
+		let user_result = db.get_user_by_email(&email_or_username).await.map_err(|e| {
+			error!("Database error during login: {}", e);
+			ServerFnError::new(format!("Database error: {}", e))
+		})?;
+
+		let (user, password_hash) = match user_result {
+			Some(result) => result,
+			None => {
+				// Try username if email lookup failed
+				db.get_user_by_username(&email_or_username)
+					.await
+					.map_err(|e| {
+						error!("Database error during login: {}", e);
+						ServerFnError::new(format!("Database error: {}", e))
+					})?
+					.ok_or_else(|| {
+						info!("No account found for email or username");
+						ServerFnError::new("No account found with this email or username")
+					})?
+			}
+		};
 
 		if !bcrypt::verify(&password, &password_hash).unwrap_or(false) {
 			info!("Incorrect password");
@@ -361,8 +372,8 @@ pub async fn register_user(email: String, username: String, password: String) ->
 }
 
 #[server(LoginUser)]
-pub async fn login_user(email: String, password: String) -> Result<User, ServerFnError> {
-	server_impl::login_impl(email, password).await
+pub async fn login_user(email_or_username: String, password: String) -> Result<User, ServerFnError> {
+	server_impl::login_impl(email_or_username, password).await
 }
 
 #[server(GetCurrentUser)]
@@ -634,6 +645,7 @@ fn LoginForm() -> impl IntoView {
 	let user_resource = LocalResource::new(get_current_user);
 	let google_oauth_configured = LocalResource::new(is_google_oauth_configured);
 
+	let email_or_username = RwSignal::new(String::new());
 	let email = RwSignal::new(String::new());
 	let username = RwSignal::new(String::new());
 	let password = RwSignal::new(String::new());
@@ -663,11 +675,11 @@ fn LoginForm() -> impl IntoView {
 		error.set(None);
 		success_message.set(None);
 
-		let email_val = email.get();
 		let password_val = password.get();
 		let redirect = redirect_to.get();
 
 		if is_register_mode.get() {
+			let email_val = email.get();
 			let username_val = username.get();
 			wasm_bindgen_futures::spawn_local(async move {
 				match register_user(email_val, username_val, password_val).await {
@@ -689,8 +701,9 @@ fn LoginForm() -> impl IntoView {
 				}
 			});
 		} else {
+			let login_val = email_or_username.get();
 			wasm_bindgen_futures::spawn_local(async move {
-				match login_user(email_val, password_val).await {
+				match login_user(login_val, password_val).await {
 					Ok(_) =>
 						if let Some(window) = web_sys::window() {
 							let _ = window.location().set_href(&redirect);
@@ -699,7 +712,7 @@ fn LoginForm() -> impl IntoView {
 						// Extract clean error message from ServerFnError
 						let msg = format!("{}", e);
 						let clean_msg = if msg.contains("No account found") {
-							"No account found with this email. Please register first.".to_string()
+							"No account found with this email or username. Please register first.".to_string()
 						} else if msg.contains("Incorrect password") {
 							"Incorrect password".to_string()
 						} else if msg.contains("verify your email") {
@@ -763,39 +776,65 @@ fn LoginForm() -> impl IntoView {
 						h1().class("text-2xl font-bold mb-6 text-center").child(form_title),
 						// Error message
 						move || error.get().map(|e| div().class("bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4").child(e)),
-						// Email field
-						div().class("mb-4").child((
-							label().class("block text-gray-700 text-sm font-bold mb-2").attr("for", "email").child("Email"),
-							input()
-								.attr("type", "email")
-								.attr("id", "email")
-								.attr("required", "")
-								.attr("placeholder", "you@example.com")
-								.class("w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500")
-								.prop("value", move || email.get())
-								.on(ev::input, move |e| {
-									let val = event_target_value(&e);
-									email.set(val);
-								}),
-						)),
-						// Username field (only for register)
+						// Login: Email or Username field; Register: Email and Username fields
 						move || {
-							is_register_mode.get().then(|| {
-								div().class("mb-4").child((
-									label().class("block text-gray-700 text-sm font-bold mb-2").attr("for", "username").child("Username"),
-									input()
-										.attr("type", "text")
-										.attr("id", "username")
-										.attr("required", "")
-										.attr("placeholder", "johndoe")
-										.class("w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500")
-										.prop("value", move || username.get())
-										.on(ev::input, move |e| {
-											let val = event_target_value(&e);
-											username.set(val);
-										}),
-								))
-							})
+							if is_register_mode.get() {
+								// Register mode: separate Email and Username fields
+								div()
+									.child((
+										div().class("mb-4").child((
+											label().class("block text-gray-700 text-sm font-bold mb-2").attr("for", "email").child("Email"),
+											input()
+												.attr("type", "email")
+												.attr("id", "email")
+												.attr("required", "")
+												.attr("placeholder", "you@example.com")
+												.class("w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500")
+												.prop("value", move || email.get())
+												.on(ev::input, move |e| {
+													let val = event_target_value(&e);
+													email.set(val);
+												}),
+										)),
+										div().class("mb-4").child((
+											label().class("block text-gray-700 text-sm font-bold mb-2").attr("for", "username").child("Username"),
+											input()
+												.attr("type", "text")
+												.attr("id", "username")
+												.attr("required", "")
+												.attr("placeholder", "johndoe")
+												.class("w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500")
+												.prop("value", move || username.get())
+												.on(ev::input, move |e| {
+													let val = event_target_value(&e);
+													username.set(val);
+												}),
+										)),
+									))
+									.into_any()
+							} else {
+								// Login mode: single Email or Username field
+								div()
+									.class("mb-4")
+									.child((
+										label()
+											.class("block text-gray-700 text-sm font-bold mb-2")
+											.attr("for", "email_or_username")
+											.child("Email or Username"),
+										input()
+											.attr("type", "text")
+											.attr("id", "email_or_username")
+											.attr("required", "")
+											.attr("placeholder", "you@example.com or johndoe")
+											.class("w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500")
+											.prop("value", move || email_or_username.get())
+											.on(ev::input, move |e| {
+												let val = event_target_value(&e);
+												email_or_username.set(val);
+											}),
+									))
+									.into_any()
+							}
 						},
 						// Password field
 						div().class("mb-6").child((

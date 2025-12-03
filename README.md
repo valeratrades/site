@@ -16,7 +16,7 @@ My sity site
 
 ### Prerequisites
 - Nix package manager with flakes enabled
-- Git
+- Git with LFS (`apt install git-lfs && git lfs install`)
 
 ### Local Development
 ```sh
@@ -78,6 +78,10 @@ Add A records for `@` and `www` pointing to your server IP.
 ```bash
 cd ~/s/site && git pull && nix build --rebuild && sudo systemctl restart valeratrades
 ```
+
+---
+
+> **Tip:** If styles appear broken after deployment, try a hard refresh with `Ctrl+Shift+R` to bypass browser cache.
 
 
 
