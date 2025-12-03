@@ -21,18 +21,18 @@ but here's the thing: BTC was chilling. like, suspiciously chilling. just vibing
   caption: [BTC heatmap - aggregated across 13 exchanges. note the liquidity stacked above, price consolidating near highs]
 )
 
-#grid(
-  columns: (1fr, 1fr),
-  gutter: 12pt,
-  figure(
+
+//DEPRECATE: in favor of just `#grid(columns: (1fr, 1fr), gutter: 12pt, figure(...),), when they add it for html generation
+#html.elem("div", attrs: (style: "display: flex; gap: 12px;"))[
+  #figure(
     image("./assets/eth_chart.png"),
     caption: [ETH getting rekt - from ~\$3,500 to ~\$2,700. that's the "extension"]
-  ),
-  figure(
+  )
+  #figure(
     image("./assets/xrp_chart.png"),
     caption: [XRP even worse - \$2.55 to \$1.78. brutal]
-  ),
-)
+  )
+]
 
 the tweet that kicked it off:
 
