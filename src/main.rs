@@ -24,11 +24,7 @@ async fn main() {
 	use site::{app::*, auth::Database, blog, conf::Settings};
 	use tracing::info;
 
-	async fn serve_blog_post(uri: axum::extract::OriginalUri, AxumPath((month, day, slug)): AxumPath<(String, String, String)>) -> impl IntoResponse {
-		let Some(year) = uri.path().split('/').nth(2) else {
-			return (StatusCode::BAD_REQUEST, "Invalid URL").into_response();
-		};
-
+	async fn serve_blog_post(AxumPath((year, month, day, slug)): AxumPath<(String, String, String, String)>) -> impl IntoResponse {
 		let file_path = format!("target/site/blog/{}/{}/{}/{}", year, month, day, slug);
 		match tokio::fs::read_to_string(&file_path).await {
 			Ok(content) => {
@@ -59,6 +55,18 @@ figure {
 			}
 			Err(_) => (StatusCode::NOT_FOUND, "Post not found").into_response(),
 		}
+	}
+
+	async fn serve_blog_year(AxumPath(year): AxumPath<i32>) -> impl IntoResponse {
+		Html(blog::render_blog_list_html(Some(year), None, None))
+	}
+
+	async fn serve_blog_year_month(AxumPath((year, month)): AxumPath<(i32, u32)>) -> impl IntoResponse {
+		Html(blog::render_blog_list_html(Some(year), Some(month), None))
+	}
+
+	async fn serve_blog_year_month_day(AxumPath((year, month, day)): AxumPath<(i32, u32, u32)>) -> impl IntoResponse {
+		Html(blog::render_blog_list_html(Some(year), Some(month), Some(day)))
 	}
 
 	// Initialize global executor for any_spawner
@@ -95,8 +103,15 @@ figure {
 	let leptos_options_clone = leptos_options.clone();
 	let settings_clone = settings.clone();
 
-	// Blog post routes nested under year prefixes
-	let blog_router = Router::new().route("/{month}/{day}/{slug}", axum::routing::get(serve_blog_post));
+	// Blog routes (with and without trailing slash)
+	let blog_router = Router::new()
+		.route("/{year}", axum::routing::get(serve_blog_year))
+		.route("/{year}/", axum::routing::get(serve_blog_year))
+		.route("/{year}/{month}", axum::routing::get(serve_blog_year_month))
+		.route("/{year}/{month}/", axum::routing::get(serve_blog_year_month))
+		.route("/{year}/{month}/{day}", axum::routing::get(serve_blog_year_month_day))
+		.route("/{year}/{month}/{day}/", axum::routing::get(serve_blog_year_month_day))
+		.route("/{year}/{month}/{day}/{slug}", axum::routing::get(serve_blog_post));
 
 	let app = Router::new()
 		.leptos_routes_with_context(
@@ -110,11 +125,8 @@ figure {
 				move || shell(leptos_options.clone())
 			},
 		)
-		// Nest blog routes under /blog/year prefixes (add more years as needed)
-		.nest("/blog/2024", blog_router.clone())
-		.nest("/blog/2025", blog_router.clone())
-		.nest("/blog/2026", blog_router.clone())
-		.nest("/blog/2027", blog_router)
+		// Blog routes (listings and posts)
+		.nest("/blog", blog_router)
 		.fallback(file_and_error_handler(move |_| {
 			provide_context(settings.clone());
 			shell(leptos_options_clone.clone())
