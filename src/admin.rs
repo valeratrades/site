@@ -52,16 +52,15 @@ fn AdminContent() -> impl IntoView {
 					if data.creds.is_empty() {
 						p().class("text-gray-500 italic").child("No credentials configured").into_any()
 					} else {
-						div()
-							.child((
-								h2().class("text-xl font-semibold mb-4").child("Credentials"),
-								div().class("space-y-3").child(
-									data.creds
-										.into_iter()
-										.map(|(key, value)| CopyableCredential(CopyableCredentialProps { key, value }))
-										.collect::<Vec<_>>(),
-								),
-							))
+						(
+							h2().child("Credentials"),
+							div().class("space-y-3").child(
+								data.creds
+									.into_iter()
+									.map(|(key, value)| CopyableCredential(CopyableCredentialProps { key, value }))
+									.collect::<Vec<_>>(),
+							),
+						)
 							.into_any()
 					},
 				Some(Err(e)) => pre().class("text-red-500").child(format!("Error: {e}")).into_any(),
