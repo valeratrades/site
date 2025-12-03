@@ -28,8 +28,13 @@ async fn main() {
 		let file_path = format!("target/site/blog/{}/{}/{}/{}", year, month, day, slug);
 		match tokio::fs::read_to_string(&file_path).await {
 			Ok(content) => {
-				// Inject centering CSS into the <head>
-				let styled = content.replace(
+				// Get the post title from slug (remove .html extension)
+				let slug_without_ext = slug.trim_end_matches(".html");
+				let title = blog::compile::get_post_title(slug_without_ext).unwrap_or_else(|| slug_without_ext.to_string());
+
+				// Inject title and centering CSS into the <head>
+				let with_title = content.replace("<head>", &format!("<head>\n<title>{}</title>", title));
+				let styled = with_title.replace(
 					"</head>",
 					r#"<style>
 html {

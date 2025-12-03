@@ -1,6 +1,6 @@
 ## Prerequisites
 - Nix package manager with flakes enabled
-- Git
+- Git with LFS (`apt install git-lfs && git lfs install`)
 
 ## Local Development
 ```sh

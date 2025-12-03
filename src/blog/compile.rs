@@ -233,3 +233,8 @@ pub fn init_blog_posts(blog_dir: &Path, output_dir: &Path) {
 pub fn get_blog_posts() -> &'static Vec<BlogPost> {
 	BLOG_POSTS.get_or_init(Vec::new)
 }
+
+/// Get a blog post title by slug
+pub fn get_post_title(slug: &str) -> Option<String> {
+	get_blog_posts().iter().find(|p| p.slug == slug).map(|p| p.title.clone())
+}
