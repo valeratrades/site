@@ -52,6 +52,7 @@ hydrate = [
 ]
 ssr = [
     "dep:any_spawner",
+    "dep:pulldown-cmark",
     "dep:serde_json",
     "dep:v_exchanges",
     "dep:axum",
@@ -86,7 +87,7 @@ leptos_router = { version = "^0.8.10" }
 proc-macro2 = "=1.0.103"
 serde = { version = "^1.0.228", features = ["derive"] }
 v_utils = { version = "2.11.1", features = [ "cli", "xdg" ] }
-web-sys = "^0.3"
+web-sys = { version = "^0.3", features = ["Navigator", "Clipboard"] }
 
 # optional-hydrate {{{
 console_error_panic_hook = { version = "^0.1", optional = true }
@@ -109,6 +110,7 @@ leptos_axum = { version = "^0.8", optional = true }
 lettre = { version = "0.11", features = ["tokio1-native-tls", "builder"], optional = true }
 oauth2 = { version = "5.0.0", optional = true }
 plotly = { version = "^0.13.5", features = ["image", "kaleido"], optional = true }
+pulldown-cmark = { version = "0.12", optional = true }
 reqwest = { version = "^0.12.24", optional = true }
 serde_json = { version = "^1.0.145", optional = true }
 serde_with = { version = "^3.16.1", features = ["chrono"] }
