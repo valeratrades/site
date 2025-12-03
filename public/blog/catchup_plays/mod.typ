@@ -1,11 +1,20 @@
 #block(
-  fill: rgb("#fff3cd"),
+  fill: rgb("#3d3522"),
   inset: 12pt,
   radius: 4pt,
-  stroke: rgb("#ffecb5"),
+  stroke: rgb("#5c4f33"),
 )[
-  *Note:* This post was AI-generated from a #link("https://x.com/valera_other/status/1993009688485806193")[twitter thread].
+  #text(fill: rgb("#ffd866"))[*Note:*] This post was AI-generated from a #link("https://x.com/valera_other/status/1993009688485806193")[twitter thread].
 ]
+
+// matklad-inspired styling // atm most of this is not present in generated html //TODO: once it is, move this styling out, to be shared across articles
+//#set page(fill: rgb("#1a1a1a"), margin: (x: 15%, y: 8%)) // waiting for html support of #set
+#set text(font: "EB Garamond", size: 12pt) //, fill: rgb("#d4d4d4")) // should be used with the above-mentioned page-fill to look good. For now, no fill
+#set heading(numbering: none)
+#show heading.where(level: 1): set text(font: "Lato Light", size: 18pt, fill: rgb("#e07850"), weight: 200)
+#show heading.where(level: 2): set text(font: "Lato Light", size: 14pt, fill: rgb("#e07850"), weight: 200)
+#show link: set text(fill: rgb("#6eb5ff"))
+#set par(justify: true, leading: 0.8em)
 
 = Catchup Plays
 or: how I mass-scalped my way into BTC at 87.5k and why it was "trivial"
