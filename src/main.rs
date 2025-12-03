@@ -36,10 +36,21 @@ async fn main() {
 				let styled = content.replace(
 					"</head>",
 					r#"<style>
+html {
+  display: flex;
+  justify-content: center;
+}
 body {
   max-width: 42rem;
-  margin: 0 auto;
+  width: 100%;
   padding: 1rem;
+}
+img {
+  max-width: 100%;
+  height: auto;
+}
+figure {
+  margin: 1rem 0;
 }
 </style>
 </head>"#,

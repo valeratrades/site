@@ -17,18 +17,21 @@ Nov 24, 2025. BTC sitting around \$87,500. alts just got absolutely destroyed - 
 but here's the thing: BTC was chilling. like, suspiciously chilling. just vibing near highs while its little brothers were getting their lunch money taken.
 
 #figure(
-  image("catchup_plays/assets/btc_heatmap.jpg"),
+  image("./assets/btc_heatmap.jpg"),
   caption: [BTC heatmap - aggregated across 13 exchanges. note the liquidity stacked above, price consolidating near highs]
 )
 
-#figure(
-  image("catchup_plays/assets/eth_chart.png"),
-  caption: [ETH getting rekt - from ~\$3,500 to ~\$2,700. that's the "extension"]
-)
-
-#figure(
-  image("catchup_plays/assets/xrp_chart.png"),
-  caption: [XRP even worse - \$2.55 to \$1.78. brutal]
+#grid(
+  columns: (1fr, 1fr),
+  gutter: 12pt,
+  figure(
+    image("./assets/eth_chart.png"),
+    caption: [ETH getting rekt - from ~\$3,500 to ~\$2,700. that's the "extension"]
+  ),
+  figure(
+    image("./assets/xrp_chart.png"),
+    caption: [XRP even worse - \$2.55 to \$1.78. brutal]
+  ),
 )
 
 the tweet that kicked it off:
@@ -66,7 +69,7 @@ the incredulity is half-genuine. these setups feel like cheating when they work.
 == 3. the sell wall
 
 #figure(
-  image("catchup_plays/assets/sell_wall.png"),
+  image("./assets/sell_wall.png"),
   caption: [someone really wants to sell their 1k BTC around \$88,000]
 )
 
@@ -106,7 +109,7 @@ the solution to getting caught wrong isn't better prediction - it's incremental 
 == 6. resistance incoming
 
 #figure(
-  image("catchup_plays/assets/88100_resistance.jpg"),
+  image("./assets/88100_resistance.jpg"),
   caption: [approaching \$88,100 resistance. CVD, depth ratio, liquidations, OI - the full dashboard]
 )
 
@@ -125,12 +128,12 @@ all useful context, none of it predictive by itself. you're pattern matching acr
 == 7. reading the momentum fade
 
 #figure(
-  image("catchup_plays/assets/alts_calming.jpg"),
+  image("./assets/alts_calming.jpg"),
   caption: [alts starting to calm down - the momentum engine is losing steam]
 )
 
 #figure(
-  image("catchup_plays/assets/alts_calming2.jpg"),
+  image("./assets/alts_calming2.jpg"),
   caption: [XRP +14%, ADA +6%, ETH following. but the rate of change is slowing]
 )
 
@@ -156,7 +159,7 @@ this is the correct way to handle uncertainty: assign rough probabilities, size 
 == 9. spidey senses
 
 #figure(
-  image("catchup_plays/assets/spidey_senses.png"),
+  image("./assets/spidey_senses.png"),
   caption: [the momentum stop triggered. red arrows = partial TPs throughout the move]
 )
 
