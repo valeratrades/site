@@ -1,6 +1,7 @@
 #![feature(stmt_expr_attributes)]
 #![feature(const_type_name)]
 #![feature(duration_constructors)]
+pub mod admin;
 pub mod app;
 pub mod auth;
 pub mod blog;

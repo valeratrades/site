@@ -18,19 +18,10 @@ use crate::{conf::Settings, utils::Mock};
 #[component]
 pub fn LsrView() -> impl IntoView {
 	let trigger = RwSignal::new(());
-	let lsrs_resource = Resource::new(move || trigger.get(), |_| async move { build_lsrs().await });
-
-	// Set up interval to refresh data every 5 minutes
-	#[cfg(feature = "ssr")]
-	{
-		use std::time::Duration;
-		tokio::spawn(async move {
-			loop {
-				tokio::time::sleep(Duration::from_secs(5 * 60)).await;
-				trigger.update(|_| ());
-			}
-		});
-	}
+	let lsrs_resource = LocalResource::new(move || {
+		trigger.get();
+		async move { build_lsrs().await }
+	});
 
 	// Set up retry interval - retry every 1 minute on error (client-side)
 	#[cfg(not(feature = "ssr"))]

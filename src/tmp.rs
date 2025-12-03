@@ -15,7 +15,7 @@ pub async fn slow_hello_world() -> Result<String, ServerFnError> {
 
 	// Check if user is admin
 	let settings = use_context::<Settings>().ok_or_else(|| ServerFnError::new("Settings not available"))?;
-	if !settings.admins.contains(&user.username) {
+	if !settings.admin.users.contains(&user.username) {
 		return Err(ServerFnError::new("Access denied: not an admin"));
 	};
 

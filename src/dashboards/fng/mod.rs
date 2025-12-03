@@ -9,7 +9,10 @@ use crate::{conf::Settings, utils::Mock};
 #[island]
 pub fn FngView() -> impl IntoView {
 	let trigger = RwSignal::new(());
-	let fng_resource = Resource::new(move || trigger.get(), |_| async move { try_build().await });
+	let fng_resource = LocalResource::new(move || {
+		trigger.get();
+		async move { try_build().await }
+	});
 
 	// Set up retry interval - retry every 1 minute on error
 	#[cfg(not(feature = "ssr"))]

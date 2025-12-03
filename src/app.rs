@@ -7,6 +7,7 @@ use leptos_router::{
 };
 
 use crate::{
+	admin::AdminView,
 	auth::User,
 	blog::{self, BlogView},
 	dashboards::{self, DashboardsView},
@@ -560,6 +561,8 @@ pub enum AppRoutes {
 	GoogleCallback,
 	#[route(path = "/tmp")]
 	Tmp,
+	#[route(path = "/admin")]
+	Admin,
 	#[fallback]
 	#[route(path = "/404")]
 	NotFound,

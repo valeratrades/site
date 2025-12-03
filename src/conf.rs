@@ -1,5 +1,54 @@
 extern crate clap;
 
+use std::collections::HashMap;
+
+/// A string that can be either a direct value or resolved from an environment variable.
+/// Deserializes from either `"value"` or `{ env = "VAR_NAME" }`.
+#[derive(Clone, Debug)]
+pub struct EnvString(pub String);
+
+impl<'de> serde::Deserialize<'de> for EnvString {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: serde::de::Deserializer<'de>, {
+		use serde::de::{Error, MapAccess, Visitor};
+
+		struct EnvStringVisitor;
+
+		impl<'de> Visitor<'de> for EnvStringVisitor {
+			type Value = EnvString;
+
+			fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+				formatter.write_str("a string or a map with key 'env'")
+			}
+
+			fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+			where
+				E: Error, {
+				Ok(EnvString(value.to_owned()))
+			}
+
+			fn visit_map<M>(self, mut map: M) -> Result<Self::Value, M::Error>
+			where
+				M: MapAccess<'de>, {
+				let mut env_var: Option<String> = None;
+				while let Some(key) = map.next_key::<String>()? {
+					if key == "env" {
+						env_var = Some(map.next_value()?);
+					} else {
+						let _: serde::de::IgnoredAny = map.next_value()?;
+					}
+				}
+				let env_var = env_var.ok_or_else(|| Error::custom("expected 'env' key"))?;
+				let value = std::env::var(&env_var).map_err(|_| Error::custom(format!("environment variable '{}' not found", env_var)))?;
+				Ok(EnvString(value))
+			}
+		}
+
+		deserializer.deserialize_any(EnvStringVisitor)
+	}
+}
+
 #[derive(Clone, Debug, v_utils::macros::MyConfigPrimitives)]
 #[cfg_attr(feature = "ssr", derive(v_utils::macros::Settings))]
 pub struct Settings {
@@ -14,10 +63,20 @@ pub struct Settings {
 	#[serde(default = "__default_site_url")]
 	#[primitives(skip)]
 	pub site_url: String,
-	/// Usernames that have admin access
+	/// Admin configuration
 	#[serde(default)]
 	#[primitives(skip)]
-	pub admins: Vec<String>,
+	pub admin: AdminConf,
+}
+
+#[derive(Clone, Debug, Default, serde::Deserialize)]
+pub struct AdminConf {
+	/// Usernames that have admin access
+	#[serde(default)]
+	pub users: Vec<String>,
+	/// Credentials to display on admin page (values can use { env = "VAR_NAME" })
+	#[serde(default)]
+	pub creds: Option<HashMap<String, EnvString>>,
 }
 
 fn __default_site_url() -> String {
@@ -32,7 +91,7 @@ impl Default for Settings {
 			smtp: SmtpConfig::default(),
 			google_oauth: GoogleOAuthConfig::default(),
 			site_url: __default_site_url(),
-			admins: Vec::new(),
+			admin: AdminConf::default(),
 		}
 	}
 }

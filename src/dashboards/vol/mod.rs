@@ -12,7 +12,10 @@ use crate::{conf::Settings, utils::Mock};
 pub fn VolView() -> impl IntoView {
 	let duration = std::time::Duration::from_hours(24);
 	let trigger = RwSignal::new(());
-	let vol_resource = Resource::new(move || trigger.get(), move |_| async move { try_pull(duration).await });
+	let vol_resource = LocalResource::new(move || {
+		trigger.get();
+		async move { try_pull(duration).await }
+	});
 
 	// Set up retry interval - retry every 1 minute on error
 	#[cfg(not(feature = "ssr"))]
