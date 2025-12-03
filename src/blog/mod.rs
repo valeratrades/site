@@ -40,7 +40,7 @@ pub async fn get_posts() -> Result<Vec<(String, String, String)>, ServerFnError>
 		.iter()
 		.map(|p| {
 			let date_display = p.created.format("%b %d, %Y").to_string();
-			let url = format!("/{}/{:02}/{:02}/{}.html", p.created.year(), p.created.month(), p.created.day(), p.slug);
+			let url = format!("/blog/{}/{:02}/{:02}/{}.html", p.created.year(), p.created.month(), p.created.day(), p.slug);
 			(date_display, p.title.clone(), url)
 		})
 		.collect())

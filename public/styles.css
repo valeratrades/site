@@ -1102,6 +1102,8 @@ video {
   transition-duration: 150ms;
 }
 
+/* typst_fonts - fonts used in typst blog posts */
+
 body {
   font-family: monospace;
   /*text-align: center;*/

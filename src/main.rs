@@ -25,7 +25,7 @@ async fn main() {
 	use tracing::info;
 
 	async fn serve_blog_post(uri: axum::extract::OriginalUri, AxumPath((month, day, slug)): AxumPath<(String, String, String)>) -> impl IntoResponse {
-		let Some(year) = uri.path().split('/').nth(1) else {
+		let Some(year) = uri.path().split('/').nth(2) else {
 			return (StatusCode::BAD_REQUEST, "Invalid URL").into_response();
 		};
 
@@ -110,11 +110,11 @@ figure {
 				move || shell(leptos_options.clone())
 			},
 		)
-		// Nest blog routes under year prefixes (add more years as needed)
-		.nest("/2024", blog_router.clone())
-		.nest("/2025", blog_router.clone())
-		.nest("/2026", blog_router.clone())
-		.nest("/2027", blog_router)
+		// Nest blog routes under /blog/year prefixes (add more years as needed)
+		.nest("/blog/2024", blog_router.clone())
+		.nest("/blog/2025", blog_router.clone())
+		.nest("/blog/2026", blog_router.clone())
+		.nest("/blog/2027", blog_router)
 		.fallback(file_and_error_handler(move |_| {
 			provide_context(settings.clone());
 			shell(leptos_options_clone.clone())
