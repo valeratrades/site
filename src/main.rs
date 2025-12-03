@@ -31,7 +31,21 @@ async fn main() {
 
 		let file_path = format!("target/site/blog/{}/{}/{}/{}", year, month, day, slug);
 		match tokio::fs::read_to_string(&file_path).await {
-			Ok(content) => Html(content).into_response(),
+			Ok(content) => {
+				// Inject centering CSS into the <head>
+				let styled = content.replace(
+					"</head>",
+					r#"<style>
+body {
+  max-width: 42rem;
+  margin: 0 auto;
+  padding: 1rem;
+}
+</style>
+</head>"#,
+				);
+				Html(styled).into_response()
+			}
 			Err(_) => (StatusCode::NOT_FOUND, "Post not found").into_response(),
 		}
 	}

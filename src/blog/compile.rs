@@ -72,48 +72,87 @@ fn to_slug(filename: &str) -> String {
 	filename.trim_end_matches(".typ").to_lowercase().replace(' ', "-")
 }
 
+/// Represents a discovered blog source: either a standalone .typ file or a directory with mod.typ
+struct BlogSource {
+	/// The .typ file to compile
+	typ_path: PathBuf,
+	/// The canonical name for this post (filename without .typ, or directory name)
+	name: String,
+}
+
+/// Discovers blog sources: both `article.typ` files and `article/mod.typ` directories
+fn discover_blog_sources(blog_dir: &Path) -> Vec<BlogSource> {
+	let mut sources = Vec::new();
+
+	let entries = match fs::read_dir(blog_dir) {
+		Ok(e) => e,
+		Err(e) => {
+			error!("Failed to read blog directory {:?}: {}", blog_dir, e);
+			return sources;
+		}
+	};
+
+	for entry in entries.filter_map(|e| e.ok()) {
+		let path = entry.path();
+
+		if path.is_file() && path.extension().map_or(false, |ext| ext == "typ") {
+			// Standalone .typ file (e.g., my_article.typ)
+			if let Some(name) = path.file_stem().and_then(|s| s.to_str()) {
+				sources.push(BlogSource {
+					typ_path: path.clone(),
+					name: name.to_string(),
+				});
+			}
+		} else if path.is_dir() {
+			// Check for mod.typ inside directory (e.g., my_article/mod.typ)
+			let mod_path = path.join("mod.typ");
+			if mod_path.exists() {
+				if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
+					sources.push(BlogSource {
+						typ_path: mod_path,
+						name: name.to_string(),
+					});
+				}
+			}
+		}
+	}
+
+	sources
+}
+
 /// Compiles all .typ files in the blog directory to HTML.
 /// Returns sorted list of blog posts (newest first).
 pub fn compile_blog_posts(blog_dir: &Path, output_dir: &Path) -> Vec<BlogPost> {
 	let mut posts = Vec::new();
 
-	let typ_files: Vec<_> = match fs::read_dir(blog_dir) {
-		Ok(entries) => entries.filter_map(|e| e.ok()).filter(|e| e.path().extension().map_or(false, |ext| ext == "typ")).collect(),
-		Err(e) => {
-			error!("Failed to read blog directory {:?}: {}", blog_dir, e);
-			return posts;
-		}
-	};
+	let blog_sources = discover_blog_sources(blog_dir);
 
 	// Load existing metadata
 	let meta_path = blog_dir.join("meta.json");
 	let mut meta = BlogMeta::load(&meta_path);
 	let mut meta_changed = false;
 
-	// Collect current filenames for cleanup
-	let current_files: std::collections::HashSet<String> = typ_files.iter().filter_map(|e| e.path().file_name().and_then(|n| n.to_str()).map(String::from)).collect();
+	// Collect current names for cleanup (uses canonical name, not filename)
+	let current_names: std::collections::HashSet<String> = blog_sources.iter().map(|s| s.name.clone()).collect();
 
 	// Cleanup: remove entries for files that no longer exist
-	let files_to_remove: Vec<String> = meta.files.keys().filter(|k| !current_files.contains(*k)).cloned().collect();
-	for filename in files_to_remove {
-		info!("Removing stale meta entry for deleted file: {}", filename);
-		meta.files.remove(&filename);
+	let names_to_remove: Vec<String> = meta.files.keys().filter(|k| !current_names.contains(*k)).cloned().collect();
+	for name in names_to_remove {
+		info!("Removing stale meta entry for deleted post: {}", name);
+		meta.files.remove(&name);
 		meta_changed = true;
 	}
 
-	for entry in typ_files {
-		let path = entry.path();
-		let filename = match path.file_name().and_then(|n| n.to_str()) {
-			Some(name) => name.to_string(),
-			None => continue,
-		};
+	for source in blog_sources {
+		let path = &source.typ_path;
+		let name = &source.name;
 
 		// Get creation time from meta.json, or fall back to file metadata for new files
-		let created: DateTime<Utc> = if let Some(&date) = meta.files.get(&filename) {
+		let created: DateTime<Utc> = if let Some(&date) = meta.files.get(name) {
 			date
 		} else {
 			// New file - get date from filesystem and record it
-			let metadata = match fs::metadata(&path) {
+			let metadata = match fs::metadata(path) {
 				Ok(m) => m,
 				Err(e) => {
 					warn!("Failed to get metadata for {:?}: {}", path, e);
@@ -121,14 +160,14 @@ pub fn compile_blog_posts(blog_dir: &Path, output_dir: &Path) -> Vec<BlogPost> {
 				}
 			};
 			let date: DateTime<Utc> = metadata.created().or_else(|_| metadata.modified()).map(|t| t.into()).unwrap_or_else(|_| Utc::now());
-			info!("Recording new blog file in meta.json: {} -> {}", filename, date);
-			meta.files.insert(filename.clone(), date);
+			info!("Recording new blog post in meta.json: {} -> {}", name, date);
+			meta.files.insert(name.clone(), date);
 			meta_changed = true;
 			date
 		};
 
 		// Read content to extract title
-		let content = match fs::read_to_string(&path) {
+		let content = match fs::read_to_string(path) {
 			Ok(c) => c,
 			Err(e) => {
 				warn!("Failed to read {:?}: {}", path, e);
@@ -136,8 +175,8 @@ pub fn compile_blog_posts(blog_dir: &Path, output_dir: &Path) -> Vec<BlogPost> {
 			}
 		};
 
-		let title = extract_title(&content, &filename);
-		let slug = to_slug(&filename);
+		let title = extract_title(&content, name);
+		let slug = to_slug(name);
 
 		// Create output directory structure: output_dir/YYYY/MM/DD/
 		let year = created.format("%Y").to_string();

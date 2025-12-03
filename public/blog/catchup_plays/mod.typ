@@ -224,13 +224,6 @@ the tools matter less than the framework. you need *some* way to see:
 - momentum/rate of change
 
 == 13. final thoughts
-
-"I don't understand how I keep getting away with these"
-
-you don't "get away with" anything. you identify setups with favorable RR, size appropriately, manage incrementally, and accept that you'll be wrong plenty. the wins compound because you're not giving back gains on the losers.
-
-the "trivial" framing is partly tongue-in-cheek, partly earned confidence from pattern recognition. after seeing enough alt extensions lead to BTC continuation, the setup becomes obvious.
-
-until it doesn't work. then you're glad you had that BE stop and those partial TPs.
+I don't understand how I keep getting away with these
 
 literally free money. how is this a thing.
