@@ -18,16 +18,16 @@ pub fn MarketStructureView() -> impl IntoView {
 	let trigger = RwSignal::new(());
 	let ms_resource = Resource::new(move || trigger.get(), |_| async move { request_market_structure().await.expect("dbg") });
 
-	// Set up interval to refresh data every 30 minutes
-	#[cfg(feature = "ssr")]
+	// Set up interval to refresh data every 30 minutes (client-side only)
+	#[cfg(feature = "hydrate")]
 	{
-		use std::time::Duration;
-		tokio::spawn(async move {
-			loop {
-				tokio::time::sleep(Duration::from_secs(30 * 60)).await;
-				trigger.update(|_| ());
-			}
-		});
+		use gloo_timers::callback::Interval;
+		use send_wrapper::SendWrapper;
+
+		let interval = SendWrapper::new(Interval::new(30 * 60 * 1000, move || {
+			trigger.update(|_| ());
+		}));
+		on_cleanup(move || drop(interval));
 	}
 
 	#[rustfmt::skip]
