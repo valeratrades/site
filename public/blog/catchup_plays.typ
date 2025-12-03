@@ -1,5 +1,3 @@
-= Catchup Plays
-
 #block(
   fill: rgb("#fff3cd"),
   inset: 12pt,
@@ -9,6 +7,7 @@
   *Note:* This post was AI-generated from a #link("https://x.com/valera_other/status/1993009688485806193")[twitter thread].
 ]
 
+= Catchup Plays
 or: how I mass-scalped my way into BTC at 87.5k and why it was "trivial"
 
 == 0. the setup

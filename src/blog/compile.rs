@@ -21,7 +21,7 @@ pub struct BlogPost {
 }
 
 /// Metadata for blog posts, stored in meta.json
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Default, Deserialize, Serialize)]
 struct BlogMeta {
 	/// Map from filename (e.g., "my_post.typ") to creation datetime
 	files: HashMap<String, DateTime<Utc>>,
