@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use clap::Parser;
 use site::conf::*;
 
@@ -21,7 +23,7 @@ async fn main() {
 	};
 	use leptos::prelude::*;
 	use leptos_axum::*;
-	use site::{app::*, auth::Database, blog, conf::Settings};
+	use site::{app::*, auth::Database, blog, conf::LiveSettings};
 	use tracing::info;
 
 	async fn serve_blog_post(AxumPath((year, month, day, slug)): AxumPath<(String, String, String, String)>) -> impl IntoResponse {
@@ -79,7 +81,9 @@ figure {
 
 	v_utils::clientside!();
 	let cli = Cli::parse();
-	let settings = Settings::try_build(cli.settings).unwrap();
+	// LiveSettings provides hot-reload: config file changes are picked up automatically
+	let live_settings = LiveSettings::new(cli.settings, Duration::from_secs(5)).unwrap();
+	let settings = live_settings.initial();
 
 	// Initialize database and run migrations
 	let db = Database::new(&settings.clickhouse);
@@ -106,7 +110,7 @@ figure {
 
 	// Build the router with server functions
 	let leptos_options_clone = leptos_options.clone();
-	let settings_clone = settings.clone();
+	let live_settings_clone = live_settings.clone();
 
 	// Blog routes (with and without trailing slash)
 	let blog_router = Router::new()
@@ -123,7 +127,7 @@ figure {
 			&leptos_options,
 			generate_route_list(App),
 			move || {
-				provide_context(settings_clone.clone());
+				provide_context(live_settings_clone.clone());
 			},
 			{
 				let leptos_options = leptos_options_clone.clone();
@@ -133,7 +137,7 @@ figure {
 		// Blog routes (listings and posts)
 		.nest("/blog", blog_router)
 		.fallback(file_and_error_handler(move |_| {
-			provide_context(settings.clone());
+			provide_context(live_settings.clone());
 			shell(leptos_options_clone.clone())
 		}))
 		.with_state(leptos_options);

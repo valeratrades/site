@@ -22,11 +22,11 @@ pub mod server_impl {
 	use super::*;
 	use crate::{
 		auth::{Database, EmailSender},
-		conf::Settings,
+		conf::{LiveSettings, Settings},
 	};
 
 	fn get_settings() -> Result<Settings, ServerFnError> {
-		use_context::<Settings>().ok_or_else(|| ServerFnError::new("Settings not available"))
+		use_context::<LiveSettings>().map(|ls| ls.config()).ok_or_else(|| ServerFnError::new("Settings not available"))
 	}
 
 	fn get_db() -> Result<Database, ServerFnError> {

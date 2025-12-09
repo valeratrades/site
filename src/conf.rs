@@ -1,6 +1,11 @@
 extern crate clap;
 
-use std::collections::HashMap;
+use std::{
+	collections::HashMap,
+	path::PathBuf,
+	sync::{Arc, RwLock},
+	time::{Duration, SystemTime},
+};
 
 /// A string that can be either a direct value or resolved from an environment variable.
 /// Deserializes from either `"value"` or `{ env = "VAR_NAME" }`.
@@ -173,3 +178,150 @@ impl GoogleOAuthConfig {
 		!self.client_id.is_empty() && !self.client_secret.is_empty()
 	}
 }
+
+// === Hot-reloading Settings wrapper ===
+
+#[cfg(feature = "ssr")]
+struct TimeCapsule {
+	value: Settings,
+	loaded_at: SystemTime,
+	update_freq: Duration,
+}
+
+/// Thread-safe Settings wrapper with automatic config file hot-reload.
+/// When `config()` is called, checks if the config file has been modified
+/// since last load and reloads if necessary (with configurable throttling).
+#[cfg(feature = "ssr")]
+#[derive(Clone)]
+pub struct LiveSettings {
+	/// Path to the config file (None if no file was found/used)
+	config_path: Option<PathBuf>,
+	/// Shared state with cached settings and timing info
+	inner: Arc<RwLock<TimeCapsule>>,
+	/// Original CLI flags for rebuilding config
+	flags: SettingsFlags,
+}
+
+#[cfg(feature = "ssr")]
+impl std::fmt::Debug for LiveSettings {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("LiveSettings").field("config_path", &self.config_path).finish()
+	}
+}
+
+#[cfg(feature = "ssr")]
+impl LiveSettings {
+	/// Create a new LiveSettings from CLI flags.
+	/// `update_freq` controls how often the file modification time is checked.
+	pub fn new(flags: SettingsFlags, update_freq: Duration) -> eyre::Result<Self> {
+		let config_path = Self::resolve_config_path(&flags);
+		let settings = Settings::try_build(flags.clone())?;
+
+		Ok(Self {
+			config_path,
+			inner: Arc::new(RwLock::new(TimeCapsule {
+				value: settings,
+				loaded_at: SystemTime::now(),
+				update_freq,
+			})),
+			flags,
+		})
+	}
+
+	/// Resolve the config file path using the same logic as v_utils Settings macro.
+	fn resolve_config_path(flags: &SettingsFlags) -> Option<PathBuf> {
+		// If explicit path provided via CLI, use that
+		if let Some(ref path) = flags.config {
+			return Some(path.0.clone());
+		}
+
+		let app_name = env!("CARGO_PKG_NAME");
+		let xdg_dirs = xdg::BaseDirectories::with_prefix(app_name);
+		let xdg_conf_dir = xdg_dirs
+			.get_config_home()
+			.ok()
+			.and_then(|p| p.parent().map(|p| p.to_path_buf()))
+			.unwrap_or_else(|| PathBuf::from(std::env::var("XDG_CONFIG_HOME").unwrap_or_else(|_| format!("{}/.config", std::env::var("HOME").unwrap_or_default()))));
+
+		// Check for .nix file first
+		let nix_path = xdg_conf_dir.join(format!("{app_name}.nix"));
+		if nix_path.exists() {
+			return Some(nix_path);
+		}
+
+		// Check standard locations
+		let location_bases = [xdg_conf_dir.join(app_name), xdg_conf_dir.join(app_name).join("config")];
+		let supported_exts = ["toml", "json", "yaml", "json5", "ron", "ini"];
+
+		for base in &location_bases {
+			for ext in &supported_exts {
+				let path = base.with_extension(ext);
+				if path.exists() {
+					return Some(path);
+				}
+			}
+		}
+
+		None
+	}
+
+	/// Get the current settings, reloading from file if it has changed.
+	/// This is the hot-reload entry point.
+	pub fn config(&self) -> Settings {
+		let now = SystemTime::now();
+
+		// First, check if we need to reload (fast path with read lock)
+		let should_reload = {
+			let capsule = self.inner.read().unwrap();
+			let age = now.duration_since(capsule.loaded_at).unwrap_or_default();
+
+			// Only check file if enough time has passed since last check
+			if age < capsule.update_freq {
+				return capsule.value.clone();
+			}
+
+			// Check if file was modified since we loaded
+			self.config_path
+				.as_ref()
+				.and_then(|path| std::fs::metadata(path).ok())
+				.and_then(|meta| meta.modified().ok())
+				.map(|file_mtime| {
+					let since_file_change = now.duration_since(file_mtime).unwrap_or_default();
+					since_file_change < age
+				})
+				.unwrap_or(false)
+		};
+
+		if should_reload {
+			// Attempt to reload config
+			if let Ok(new_settings) = Settings::try_build(self.flags.clone()) {
+				let mut capsule = self.inner.write().unwrap();
+				capsule.value = new_settings;
+				capsule.loaded_at = now;
+				tracing::info!("Config reloaded from {:?}", self.config_path);
+			} else {
+				// Reload failed, just update the timestamp to avoid repeated attempts
+				let mut capsule = self.inner.write().unwrap();
+				capsule.loaded_at = now;
+				tracing::warn!("Config reload failed, keeping previous settings");
+			}
+		} else {
+			// Just update the check timestamp
+			let mut capsule = self.inner.write().unwrap();
+			capsule.loaded_at = now;
+		}
+
+		self.inner.read().unwrap().value.clone()
+	}
+
+	/// Get a direct reference to the initial settings (no reload check).
+	/// Use this for one-time setup that doesn't need hot-reload.
+	pub fn initial(&self) -> Settings {
+		self.inner.read().unwrap().value.clone()
+	}
+}
+
+#[cfg(feature = "ssr")]
+use eyre;
+#[cfg(feature = "ssr")]
+use xdg;
