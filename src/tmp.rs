@@ -5,7 +5,7 @@ use crate::dashboards::{LoadingIndicator, LoadingIndicatorProps};
 
 #[server(SlowHelloWorld)]
 pub async fn slow_hello_world() -> Result<String, ServerFnError> {
-	use crate::conf::Settings;
+	use crate::config::Settings;
 
 	// Get current user
 	let user = crate::app::server_impl::get_current_user_impl().await?;
@@ -15,7 +15,7 @@ pub async fn slow_hello_world() -> Result<String, ServerFnError> {
 
 	// Check if user is admin
 	let settings = use_context::<Settings>().ok_or_else(|| ServerFnError::new("Settings not available"))?;
-	if !settings.admin.users.contains(&user.username) {
+	if !settings.admin.users.contains_key(&user.username) {
 		return Err(ServerFnError::new("Access denied: not an admin"));
 	};
 

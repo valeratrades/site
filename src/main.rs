@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use clap::Parser;
-use site::conf::*;
+use site::config::*;
 
 #[derive(Debug, Parser)]
 #[command(author, version, about, long_about = None)]
@@ -23,7 +23,7 @@ async fn main() {
 	};
 	use leptos::prelude::*;
 	use leptos_axum::*;
-	use site::{app::*, auth::Database, blog, conf::LiveSettings};
+	use site::{app::*, auth::Database, blog, config::LiveSettings};
 	use tracing::info;
 
 	async fn serve_blog_post(AxumPath((year, month, day, slug)): AxumPath<(String, String, String, String)>) -> impl IntoResponse {

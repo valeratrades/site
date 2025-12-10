@@ -1,7 +1,8 @@
 extern crate clap;
 
+use std::collections::HashMap;
+#[cfg(feature = "ssr")]
 use std::{
-	collections::HashMap,
 	path::PathBuf,
 	sync::{Arc, RwLock},
 	time::{Duration, SystemTime},
@@ -76,9 +77,9 @@ pub struct Settings {
 
 #[derive(Clone, Debug, Default, serde::Deserialize)]
 pub struct AdminConf {
-	/// Usernames that have admin access
+	/// Usernames that have admin access, mapped to their permission level (0.0 to 1.0)
 	#[serde(default)]
-	pub users: Vec<String>,
+	pub users: HashMap<String, v_utils::percent::PercentU>,
 	/// Credentials to display on admin page (values can use { env = "VAR_NAME" })
 	#[serde(default)]
 	pub creds: Option<HashMap<String, EnvString>>,
@@ -236,11 +237,10 @@ impl LiveSettings {
 		}
 
 		let app_name = env!("CARGO_PKG_NAME");
-		let xdg_dirs = xdg::BaseDirectories::with_prefix(app_name);
-		let xdg_conf_dir = xdg_dirs
-			.get_config_home()
+		let xdg_conf_dir = xdg::BaseDirectories::with_prefix(app_name)
 			.ok()
-			.and_then(|p| p.parent().map(|p| p.to_path_buf()))
+			.map(|dirs| dirs.get_config_home())
+			.and_then(|p: PathBuf| p.parent().map(|p: &std::path::Path| p.to_path_buf()))
 			.unwrap_or_else(|| PathBuf::from(std::env::var("XDG_CONFIG_HOME").unwrap_or_else(|_| format!("{}/.config", std::env::var("HOME").unwrap_or_default()))));
 
 		// Check for .nix file first
@@ -253,9 +253,9 @@ impl LiveSettings {
 		let location_bases = [xdg_conf_dir.join(app_name), xdg_conf_dir.join(app_name).join("config")];
 		let supported_exts = ["toml", "json", "yaml", "json5", "ron", "ini"];
 
-		for base in &location_bases {
-			for ext in &supported_exts {
-				let path = base.with_extension(ext);
+		for base in location_bases.iter() {
+			for ext in supported_exts.iter() {
+				let path = PathBuf::from(base).with_extension(ext);
 				if path.exists() {
 					return Some(path);
 				}
@@ -322,6 +322,6 @@ impl LiveSettings {
 }
 
 #[cfg(feature = "ssr")]
-use eyre;
+use color_eyre::eyre;
 #[cfg(feature = "ssr")]
 use xdg;

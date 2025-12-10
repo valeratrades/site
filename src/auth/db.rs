@@ -3,7 +3,7 @@ use color_eyre::eyre::{Context, Result};
 use tracing::info;
 
 use super::User;
-use crate::conf::ClickHouseConfig;
+use crate::config::ClickHouseConfig;
 
 const MIGRATIONS: &[&str] = &[
 	// Migration 0: Create users table
@@ -57,6 +57,18 @@ PRIMARY KEY state
 	// Migration 5: Add google_id column for OAuth users
 	r#"
 ALTER TABLE site.users ADD COLUMN IF NOT EXISTS google_id String DEFAULT ''
+"#,
+	// Migration 6: Create admin files table
+	r#"
+CREATE TABLE IF NOT EXISTS site.admin_files (
+    id String,
+    filename String,
+    content_type String,
+    data String,
+    uploaded_by String,
+    uploaded_at DateTime DEFAULT now()
+) ENGINE = MergeTree()
+ORDER BY (uploaded_at, id)
 "#,
 ];
 
@@ -414,4 +426,97 @@ PRIMARY KEY version
 		self.client.query(&query).execute().await?;
 		Ok(())
 	}
+
+	// Admin files management
+	pub async fn create_admin_file(&self, id: &str, filename: &str, content_type: &str, data: &str, uploaded_by: &str) -> Result<()> {
+		let query = format!(
+			"INSERT INTO site.admin_files (id, filename, content_type, data, uploaded_by) VALUES ('{}', '{}', '{}', '{}', '{}')",
+			id.replace('\'', "''"),
+			filename.replace('\'', "''"),
+			content_type.replace('\'', "''"),
+			data.replace('\'', "''"),
+			uploaded_by.replace('\'', "''")
+		);
+		self.client.query(&query).execute().await?;
+		Ok(())
+	}
+
+	pub async fn list_admin_files(&self) -> Result<Vec<AdminFile>> {
+		let query = "SELECT id, filename, content_type, uploaded_by, toString(uploaded_at) as uploaded_at FROM site.admin_files ORDER BY uploaded_at DESC";
+
+		#[derive(serde::Deserialize, clickhouse::Row)]
+		struct FileRow {
+			id: String,
+			filename: String,
+			content_type: String,
+			uploaded_by: String,
+			uploaded_at: String,
+		}
+
+		let rows: Vec<FileRow> = self.client.query(query).fetch_all().await.unwrap_or_default();
+		Ok(rows
+			.into_iter()
+			.map(|r| AdminFile {
+				id: r.id,
+				filename: r.filename,
+				content_type: r.content_type,
+				uploaded_by: r.uploaded_by,
+				uploaded_at: r.uploaded_at,
+			})
+			.collect())
+	}
+
+	pub async fn get_admin_file(&self, id: &str) -> Result<Option<AdminFileWithData>> {
+		let query = format!(
+			"SELECT id, filename, content_type, data, uploaded_by, toString(uploaded_at) as uploaded_at FROM site.admin_files WHERE id = '{}' LIMIT 1",
+			id.replace('\'', "''")
+		);
+
+		#[derive(serde::Deserialize, clickhouse::Row)]
+		struct FileRow {
+			id: String,
+			filename: String,
+			content_type: String,
+			data: String,
+			uploaded_by: String,
+			uploaded_at: String,
+		}
+
+		match self.client.query(&query).fetch_one::<FileRow>().await {
+			Ok(r) => Ok(Some(AdminFileWithData {
+				id: r.id,
+				filename: r.filename,
+				content_type: r.content_type,
+				data: r.data,
+				uploaded_by: r.uploaded_by,
+				uploaded_at: r.uploaded_at,
+			})),
+			Err(_) => Ok(None),
+		}
+	}
+
+	pub async fn delete_admin_file(&self, id: &str) -> Result<()> {
+		let query = format!("ALTER TABLE site.admin_files DELETE WHERE id = '{}'", id.replace('\'', "''"));
+		self.client.query(&query).execute().await?;
+		Ok(())
+	}
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+pub struct AdminFile {
+	pub id: String,
+	pub filename: String,
+	pub content_type: String,
+	pub uploaded_by: String,
+	pub uploaded_at: String,
+}
+
+#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
+pub struct AdminFileWithData {
+	pub id: String,
+	pub filename: String,
+	pub content_type: String,
+	pub data: String,
+	pub uploaded_by: String,
+	pub uploaded_at: String,
 }

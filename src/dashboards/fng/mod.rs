@@ -4,7 +4,7 @@ use leptos::{html::*, prelude::*};
 
 use super::{LoadingIndicator, LoadingIndicatorProps};
 #[cfg(feature = "ssr")]
-use crate::{conf::Settings, utils::Mock};
+use crate::{config::Settings, utils::Mock};
 
 #[island]
 pub fn FngView() -> impl IntoView {

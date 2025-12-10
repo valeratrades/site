@@ -12,7 +12,7 @@ use web_sys::wasm_bindgen::JsValue;
 
 use super::{LoadingIndicator, LoadingIndicatorProps};
 #[cfg(feature = "ssr")]
-use crate::{conf::Settings, utils::Mock};
+use crate::{config::Settings, utils::Mock};
 
 /// Main wrapper component that fetches LSR data and passes it to both search and display
 #[component]

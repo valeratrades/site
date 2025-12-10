@@ -5,7 +5,7 @@ use lettre::{
 	transport::smtp::authentication::Credentials,
 };
 
-use crate::conf::SmtpConfig;
+use crate::config::SmtpConfig;
 
 pub struct EmailSender {
 	mailer: AsyncSmtpTransport<Tokio1Executor>,

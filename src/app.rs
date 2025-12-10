@@ -22,7 +22,7 @@ pub mod server_impl {
 	use super::*;
 	use crate::{
 		auth::{Database, EmailSender},
-		conf::{LiveSettings, Settings},
+		config::{LiveSettings, Settings},
 	};
 
 	fn get_settings() -> Result<Settings, ServerFnError> {

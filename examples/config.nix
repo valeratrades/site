@@ -1,10 +1,11 @@
 {
 	mock = true;
 	admin = {
-		users = [
-			"admin"
-			"valeratrades"
-		];
+		users = {
+			admin = "100%";
+			valeratrades = "100%";
+			prof = "50%"; #dbg
+		};
 		creds = {
 			"claude_token" = {
 				env = "CLAUDE_TOKEN";

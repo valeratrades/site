@@ -5,7 +5,7 @@ pub mod admin;
 pub mod app;
 pub mod auth;
 pub mod blog;
-pub mod conf;
+pub mod config;
 pub mod dashboards;
 pub mod tmp;
 pub(crate) mod utils;

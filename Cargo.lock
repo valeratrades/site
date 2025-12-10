@@ -4493,6 +4493,7 @@ version = "0.1.0"
 dependencies = [
  "any_spawner",
  "axum",
+ "base64",
  "bcrypt",
  "chrono",
  "chrono-tz",
@@ -4505,6 +4506,7 @@ dependencies = [
  "futures",
  "gloo-timers",
  "jiff",
+ "js-sys",
  "leptos",
  "leptos-routable",
  "leptos_axum",
@@ -4530,6 +4532,7 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
+ "xdg 2.5.2",
 ]
 
 [[package]]
@@ -5431,7 +5434,7 @@ dependencies = [
  "tracing-log",
  "tracing-subscriber",
  "v_utils_macros",
- "xdg",
+ "xdg 3.0.0",
 ]
 
 [[package]]
@@ -5901,6 +5904,12 @@ name = "writeable"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9edde0db4769d2dc68579893f2306b26c6ecfbe0ef499b013d731b7b9247e0b9"
+
+[[package]]
+name = "xdg"
+version = "2.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "213b7324336b53d2414b2db8537e56544d981803139155afa84f76eeebb7a546"
 
 [[package]]
 name = "xdg"
