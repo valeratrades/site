@@ -6,7 +6,7 @@ use v_utils::NowThen;
 
 use super::{LoadingIndicator, LoadingIndicatorProps};
 #[cfg(feature = "ssr")]
-use crate::{config::Settings, utils::Mock};
+use crate::utils::Mock;
 
 #[island]
 pub fn VolView() -> impl IntoView {

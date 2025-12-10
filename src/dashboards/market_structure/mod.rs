@@ -7,7 +7,7 @@ use v_exchanges::{ExchangeName, Instrument};
 
 use super::{LoadingIndicator, LoadingIndicatorProps};
 #[cfg(feature = "ssr")]
-use crate::{config::Settings, utils::Mock};
+use crate::utils::Mock;
 
 #[island]
 pub fn MarketStructureView() -> impl IntoView {

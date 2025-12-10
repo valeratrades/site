@@ -25,13 +25,30 @@ pub async fn get_admin_data() -> Result<AdminData, ServerFnError> {
 		return Err(ServerFnError::new("Not logged in"));
 	};
 
-	// Check if user is admin
+	// Check if user is admin and get their permission level
 	let settings = use_context::<LiveSettings>().map(|ls| ls.config()).ok_or_else(|| ServerFnError::new("Settings not available"))?;
-	if !settings.admin.users.contains_key(&user.username) {
-		return Err(ServerFnError::new("Access denied: not an admin"));
-	};
+	let user_permission = settings.admin.users.get(&user.username).ok_or_else(|| ServerFnError::new("Access denied: not an admin"))?;
+	let user_level: f64 = **user_permission;
 
-	let creds = settings.admin.creds.map(|c| c.into_iter().map(|(k, v)| (k, v.0)).collect()).unwrap_or_default();
+	// Filter credentials by permission level
+	let creds: Vec<(String, String)> = settings
+		.admin
+		.creds
+		.map(|levels| {
+			levels
+				.into_iter()
+				.filter_map(|(level_str, creds_map)| {
+					let required_level: f64 = level_str.parse().ok()?;
+					if user_level * 100.0 >= required_level {
+						Some(creds_map.into_iter().map(|(k, v)| (k, v.0)).collect::<Vec<_>>())
+					} else {
+						None
+					}
+				})
+				.flatten()
+				.collect()
+		})
+		.unwrap_or_default();
 
 	Ok(AdminData { creds })
 }

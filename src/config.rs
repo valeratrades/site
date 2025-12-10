@@ -80,9 +80,11 @@ pub struct AdminConf {
 	/// Usernames that have admin access, mapped to their permission level (0.0 to 1.0)
 	#[serde(default)]
 	pub users: HashMap<String, v_utils::percent::PercentU>,
-	/// Credentials to display on admin page (values can use { env = "VAR_NAME" })
+	/// Credentials to display on admin page, nested by permission level (0-100).
+	/// Only admins with >= permission level see each credential.
+	/// Format: { "100" = { "secret" = "value" }, "50" = { "less_secret" = "value" } }
 	#[serde(default)]
-	pub creds: Option<HashMap<String, EnvString>>,
+	pub creds: Option<HashMap<String, HashMap<String, EnvString>>>,
 }
 
 fn __default_site_url() -> String {
@@ -238,8 +240,7 @@ impl LiveSettings {
 
 		let app_name = env!("CARGO_PKG_NAME");
 		let xdg_conf_dir = xdg::BaseDirectories::with_prefix(app_name)
-			.ok()
-			.map(|dirs| dirs.get_config_home())
+			.get_config_home()
 			.and_then(|p: PathBuf| p.parent().map(|p: &std::path::Path| p.to_path_buf()))
 			.unwrap_or_else(|| PathBuf::from(std::env::var("XDG_CONFIG_HOME").unwrap_or_else(|_| format!("{}/.config", std::env::var("HOME").unwrap_or_default()))));
 
