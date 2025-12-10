@@ -277,6 +277,7 @@
             mold-wrapped
             openssl
             pkg-config
+            perl
             sccache
             rust
           ];
