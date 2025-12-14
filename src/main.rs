@@ -15,66 +15,11 @@ struct Cli {
 async fn main() {
 	use std::path::Path;
 
-	use axum::{
-		Router,
-		extract::Path as AxumPath,
-		http::StatusCode,
-		response::{Html, IntoResponse},
-	};
+	use axum::Router;
 	use leptos::prelude::*;
 	use leptos_axum::*;
 	use site::{app::*, auth::Database, blog, config::LiveSettings};
 	use tracing::info;
-
-	async fn serve_blog_post(AxumPath((year, month, day, slug)): AxumPath<(String, String, String, String)>) -> impl IntoResponse {
-		let file_path = format!("target/site/blog/{}/{}/{}/{}", year, month, day, slug);
-		match tokio::fs::read_to_string(&file_path).await {
-			Ok(content) => {
-				// Get the post title from slug (remove .html extension)
-				let slug_without_ext = slug.trim_end_matches(".html");
-				let title = blog::compile::get_post_title(slug_without_ext).unwrap_or_else(|| slug_without_ext.to_string());
-
-				// Inject title and centering CSS into the <head>
-				let with_title = content.replace("<head>", &format!("<head>\n<title>{}</title>", title));
-				let styled = with_title.replace(
-					"</head>",
-					r#"<style>
-html {
-  display: flex;
-  justify-content: center;
-}
-body {
-  max-width: 42rem;
-  width: 100%;
-  padding: 1rem;
-}
-img {
-  max-width: 100%;
-  height: auto;
-}
-figure {
-  margin: 1rem 0;
-}
-</style>
-</head>"#,
-				);
-				Html(styled).into_response()
-			}
-			Err(_) => (StatusCode::NOT_FOUND, "Post not found").into_response(),
-		}
-	}
-
-	async fn serve_blog_year(AxumPath(year): AxumPath<i32>) -> impl IntoResponse {
-		Html(blog::render_blog_list_html(Some(year), None, None))
-	}
-
-	async fn serve_blog_year_month(AxumPath((year, month)): AxumPath<(i32, u32)>) -> impl IntoResponse {
-		Html(blog::render_blog_list_html(Some(year), Some(month), None))
-	}
-
-	async fn serve_blog_year_month_day(AxumPath((year, month, day)): AxumPath<(i32, u32, u32)>) -> impl IntoResponse {
-		Html(blog::render_blog_list_html(Some(year), Some(month), Some(day)))
-	}
 
 	// Initialize global executor for any_spawner
 	let _ = any_spawner::Executor::init_tokio();
@@ -112,21 +57,6 @@ figure {
 	let leptos_options_clone = leptos_options.clone();
 	let live_settings_clone = live_settings.clone();
 
-	async fn serve_blog_index() -> impl IntoResponse {
-		Html(blog::render_blog_list_html(None, None, None))
-	}
-
-	// Blog routes (with and without trailing slash)
-	let blog_router = Router::new()
-		.route("/", axum::routing::get(serve_blog_index))
-		.route("/{year}", axum::routing::get(serve_blog_year))
-		.route("/{year}/", axum::routing::get(serve_blog_year))
-		.route("/{year}/{month}", axum::routing::get(serve_blog_year_month))
-		.route("/{year}/{month}/", axum::routing::get(serve_blog_year_month))
-		.route("/{year}/{month}/{day}", axum::routing::get(serve_blog_year_month_day))
-		.route("/{year}/{month}/{day}/", axum::routing::get(serve_blog_year_month_day))
-		.route("/{year}/{month}/{day}/{slug}", axum::routing::get(serve_blog_post));
-
 	let app = Router::new()
 		.leptos_routes_with_context(
 			&leptos_options,
@@ -139,8 +69,6 @@ figure {
 				move || shell(leptos_options.clone())
 			},
 		)
-		// Blog routes (listings and posts)
-		.nest("/blog", blog_router)
 		.fallback(file_and_error_handler(move |_| {
 			provide_context(live_settings.clone());
 			shell(leptos_options_clone.clone())
