@@ -18,6 +18,7 @@ pub struct BlogPost {
 	pub slug: String,
 	pub created: DateTime<Utc>,
 	pub html_path: PathBuf,
+	pub text_content: String,
 }
 
 /// Metadata for blog posts, stored in meta.json
@@ -70,6 +71,61 @@ fn extract_title(content: &str, filename: &str) -> String {
 /// Converts filename to URL slug
 fn to_slug(filename: &str) -> String {
 	filename.trim_end_matches(".typ").to_lowercase().replace(' ', "-")
+}
+
+/// Extracts plain text content from an HTML file for search indexing
+fn extract_text_from_html(html_path: &Path) -> String {
+	let html = match fs::read_to_string(html_path) {
+		Ok(content) => content,
+		Err(e) => {
+			warn!("Failed to read HTML for text extraction {:?}: {}", html_path, e);
+			return String::new();
+		}
+	};
+
+	// Simple HTML tag stripping - extract text content
+	let mut text = String::new();
+	let mut in_tag = false;
+	let mut in_script = false;
+	let mut in_style = false;
+
+	let html_lower = html.to_lowercase();
+	let chars: Vec<char> = html.chars().collect();
+	let chars_lower: Vec<char> = html_lower.chars().collect();
+
+	let mut i = 0;
+	while i < chars.len() {
+		if chars[i] == '<' {
+			// Check for script/style tags
+			let remaining: String = chars_lower[i..].iter().collect();
+			if remaining.starts_with("<script") {
+				in_script = true;
+			} else if remaining.starts_with("</script") {
+				in_script = false;
+			} else if remaining.starts_with("<style") {
+				in_style = true;
+			} else if remaining.starts_with("</style") {
+				in_style = false;
+			}
+			in_tag = true;
+		} else if chars[i] == '>' {
+			in_tag = false;
+		} else if !in_tag && !in_script && !in_style {
+			text.push(chars[i]);
+		}
+		i += 1;
+	}
+
+	// Decode common HTML entities and normalize whitespace
+	text.replace("&nbsp;", " ")
+		.replace("&amp;", "&")
+		.replace("&lt;", "<")
+		.replace("&gt;", ">")
+		.replace("&quot;", "\"")
+		.replace("&#39;", "'")
+		.split_whitespace()
+		.collect::<Vec<_>>()
+		.join(" ")
 }
 
 /// Represents a discovered blog source: either a standalone .typ file or a directory with mod.typ
@@ -199,7 +255,15 @@ pub fn compile_blog_posts(blog_dir: &Path, output_dir: &Path) -> Vec<BlogPost> {
 			Ok(result) =>
 				if result.status.success() {
 					info!("Compiled {:?} -> {:?}", path, html_path);
-					posts.push(BlogPost { title, slug, created, html_path });
+					// Extract text content from HTML for search indexing
+					let text_content = extract_text_from_html(&html_path);
+					posts.push(BlogPost {
+						title,
+						slug,
+						created,
+						html_path,
+						text_content,
+					});
 				} else {
 					let stderr = String::from_utf8_lossy(&result.stderr);
 					error!("typst compile failed for {:?}: {}", path, stderr);

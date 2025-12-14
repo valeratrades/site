@@ -46,7 +46,7 @@ impl<'de> serde::Deserialize<'de> for EnvString {
 					}
 				}
 				let env_var = env_var.ok_or_else(|| Error::custom("expected 'env' key"))?;
-				let value = std::env::var(&env_var).map_err(|_| Error::custom(format!("environment variable '{}' not found", env_var)))?;
+				let value = std::env::var(&env_var).map_err(|_| Error::custom(format!("environment variable '{env_var}' not found")))?;
 				Ok(EnvString(value))
 			}
 		}

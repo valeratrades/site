@@ -112,8 +112,13 @@ figure {
 	let leptos_options_clone = leptos_options.clone();
 	let live_settings_clone = live_settings.clone();
 
+	async fn serve_blog_index() -> impl IntoResponse {
+		Html(blog::render_blog_list_html(None, None, None))
+	}
+
 	// Blog routes (with and without trailing slash)
 	let blog_router = Router::new()
+		.route("/", axum::routing::get(serve_blog_index))
 		.route("/{year}", axum::routing::get(serve_blog_year))
 		.route("/{year}/", axum::routing::get(serve_blog_year))
 		.route("/{year}/{month}", axum::routing::get(serve_blog_year_month))

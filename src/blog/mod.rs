@@ -1,5 +1,4 @@
 use leptos::{html::*, prelude::*};
-use leptos_meta::{Title, TitleProps};
 use leptos_routable::prelude::*;
 
 #[cfg(feature = "ssr")]
@@ -8,9 +7,6 @@ pub mod compile;
 #[derive(Routable)]
 #[routes(transition = false)]
 pub enum Routes {
-	#[route(path = "/")]
-	Home,
-
 	#[fallback]
 	#[route(path = "/404")]
 	NotFound,
@@ -29,61 +25,6 @@ fn NotFoundView() -> impl IntoView {
 			.class("inline-block px-4 py-2 bg-green-600 text-white rounded mt-2")
 			.child("Back to Blog"),
 	))
-}
-
-#[server(GetBlogPosts)]
-pub async fn get_posts(year: Option<i32>, month: Option<u32>, day: Option<u32>) -> Result<Vec<(String, String, String)>, ServerFnError> {
-	use chrono::Datelike;
-	// Returns Vec<(date_display, title, url)>
-	let posts = compile::get_blog_posts();
-	Ok(posts
-		.iter()
-		.filter(|p| year.map_or(true, |y| p.created.year() == y) && month.map_or(true, |m| p.created.month() == m) && day.map_or(true, |d| p.created.day() == d))
-		.map(|p| {
-			let date_display = p.created.format("%b %d, %Y").to_string();
-			let url = format!("/blog/{}/{:02}/{:02}/{}.html", p.created.year(), p.created.month(), p.created.day(), p.slug);
-			(date_display, p.title.clone(), url)
-		})
-		.collect())
-}
-
-// Matklad-style blog list
-#[component]
-fn HomeView() -> impl IntoView {
-	section().class("max-w-2xl mx-auto px-4 py-8").child((
-		Title(TitleProps {
-			formatter: None,
-			text: Some("Blog".into()),
-		}),
-		BlogPostList(),
-	))
-}
-
-#[island]
-fn BlogPostList() -> impl IntoView {
-	let posts = LocalResource::new(move || get_posts(None, None, None));
-
-	move || match posts.get() {
-		None => div().class("text-gray-500").child("Loading...").into_any(),
-		Some(Ok(posts)) if posts.is_empty() => div().class("text-gray-500").child("No posts found.").into_any(),
-		Some(Ok(posts)) => ul()
-			.class("list-none p-0 m-0")
-			.child(
-				posts
-					.into_iter()
-					.map(|(date, title, url)| {
-						li().class("py-1").child((
-							span().class("text-gray-500 tabular-nums").child(date),
-							span().child(" "),
-							a().attr("href", url).child(h2().class("inline text-base font-normal text-black hover:underline").child(title)),
-							hr().class("border-gray-300 mt-1"),
-						))
-					})
-					.collect::<Vec<_>>(),
-			)
-			.into_any(),
-		Some(Err(e)) => div().class("text-red-600").child(format!("Error loading posts: {}", e)).into_any(),
-	}
 }
 
 /// Renders a blog listing page with optional date filters - used by axum handlers
@@ -112,9 +53,15 @@ pub fn render_blog_list_html(year: Option<i32>, month: Option<u32>, day: Option<
 			.map(|p| {
 				let date_display = p.created.format("%b %d, %Y").to_string();
 				let url = format!("/blog/{}/{:02}/{:02}/{}.html", p.created.year(), p.created.month(), p.created.day(), p.slug);
+				// Escape content for safe embedding in HTML attribute
+				let escaped_content = p.text_content
+					.replace('&', "&amp;")
+					.replace('"', "&quot;")
+					.replace('<', "&lt;")
+					.replace('>', "&gt;");
 				format!(
-					r#"<li style="padding: 0.25rem 0;"><span style="color: #666; font-variant-numeric: tabular-nums;">{}</span> <a href="{}" style="color: black;">{}</a><hr style="border-color: #d1d5db; margin-top: 0.25rem;"></li>"#,
-					date_display, url, p.title
+					r#"<li style="padding: 0.25rem 0;" data-content="{}"><span style="color: #666; font-variant-numeric: tabular-nums;">{}</span> <a href="{}" style="color: black;">{}</a><hr style="border-color: #d1d5db; margin-top: 0.25rem;"></li>"#,
+					escaped_content, date_display, url, p.title
 				)
 			})
 			.collect()
@@ -133,11 +80,129 @@ body {{ max-width: 42rem; width: 100%; padding: 1rem; font-family: system-ui, sa
 a {{ text-decoration: none; }}
 a:hover {{ text-decoration: underline; }}
 ul {{ list-style: none; padding: 0; margin: 0; }}
+.search-box {{ width: 100%; padding: 0.5rem; margin-bottom: 1rem; border: 1px solid #d1d5db; border-radius: 0.25rem; font-size: 1rem; }}
+.search-box:focus {{ outline: none; border-color: #9ca3af; }}
+.no-results {{ color: #666; display: none; }}
 </style>
 </head>
 <body>
 <h1>{}</h1>
-<ul>{}</ul>
+<input type="text" class="search-box" id="search" placeholder="Search posts..." autocomplete="off">
+<p class="no-results" id="no-results">No matching posts.</p>
+<ul id="posts-list">{}</ul>
+<script>
+(function() {{
+  const search = document.getElementById('search');
+  const list = document.getElementById('posts-list');
+  const noResults = document.getElementById('no-results');
+  const items = Array.from(list.querySelectorAll('li'));
+
+  // Store original order and extract searchable text
+  const posts = items.map((li, idx) => {{
+    const link = li.querySelector('a');
+    const title = link ? link.textContent.toLowerCase() : '';
+    const content = (li.dataset.content || '').toLowerCase();
+    return {{ el: li, title, content, origIdx: idx }};
+  }});
+
+  function tokenize(str) {{
+    return str.toLowerCase().split(/\s+/).filter(t => t.length > 0);
+  }}
+
+  // Weighted scoring: title matches worth 10x content matches
+  function score(post, queryTokens) {{
+    if (queryTokens.length === 0) return 0;
+
+    const titleTokens = tokenize(post.title);
+    const contentTokens = tokenize(post.content);
+    let totalScore = 0;
+
+    for (const qt of queryTokens) {{
+      let termScore = 0;
+
+      // Title matches (10x weight)
+      for (const tt of titleTokens) {{
+        if (tt === qt) {{
+          termScore += 100;  // Exact match in title
+        }} else if (tt.startsWith(qt)) {{
+          termScore += 50;   // Prefix match in title
+        }} else if (tt.includes(qt)) {{
+          termScore += 20;   // Substring match in title
+        }}
+      }}
+
+      // Content matches (1x weight)
+      for (const ct of contentTokens) {{
+        if (ct === qt) {{
+          termScore += 10;   // Exact match in content
+        }} else if (ct.startsWith(qt)) {{
+          termScore += 5;    // Prefix match in content
+        }} else if (ct.includes(qt)) {{
+          termScore += 2;    // Substring match in content
+        }}
+      }}
+
+      // Phrase matching bonus
+      if (post.title.includes(qt)) {{
+        termScore += 10;
+      }}
+      if (post.content.includes(qt)) {{
+        termScore += 1;
+      }}
+
+      totalScore += termScore;
+    }}
+
+    // Normalize by query length to not overly favor longer queries
+    return totalScore / queryTokens.length;
+  }}
+
+  function doSearch() {{
+    const query = search.value.trim();
+    const queryTokens = tokenize(query);
+
+    if (query === '') {{
+      // Restore original order
+      posts.sort((a, b) => a.origIdx - b.origIdx);
+      posts.forEach(p => {{
+        p.el.style.display = '';
+        list.appendChild(p.el);
+      }});
+      noResults.style.display = 'none';
+      return;
+    }}
+
+    // Score and sort
+    const scored = posts.map(p => ({{ ...p, score: score(p, queryTokens) }}));
+    scored.sort((a, b) => b.score - a.score);
+
+    let visibleCount = 0;
+    scored.forEach(p => {{
+      if (p.score > 0) {{
+        p.el.style.display = '';
+        visibleCount++;
+      }} else {{
+        p.el.style.display = 'none';
+      }}
+      list.appendChild(p.el);
+    }});
+
+    noResults.style.display = visibleCount === 0 ? 'block' : 'none';
+  }}
+
+  search.addEventListener('input', doSearch);
+
+  // Press 'S' to focus search bar
+  document.addEventListener('keydown', (e) => {{
+    if (e.key === 's' || e.key === 'S') {{
+      if (document.activeElement !== search) {{
+        e.preventDefault();
+        search.focus();
+      }}
+    }}
+  }});
+}})();
+</script>
 </body>
 </html>"#,
 		title, title, posts_html
