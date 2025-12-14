@@ -127,19 +127,28 @@ fn BlogListPage(year: Option<i32>, month: Option<u32>, day: Option<u32>) -> impl
 		_ => "Blog".to_string(),
 	};
 
+	let posts = Resource::new(move || (year, month, day), |(y, m, d)| get_posts(y, m, d));
+
 	section().class("max-w-2xl mx-auto px-4 py-8").child((
 		Title(TitleProps {
 			formatter: None,
 			text: Some(title.clone().into()),
 		}),
 		h1().class("text-3xl font-bold mb-4").child(title),
-		BlogPostList(BlogPostListProps { year, month, day }),
+		move || {
+			Suspend::new(async move {
+				match posts.await {
+					Ok(posts) => BlogPostList(BlogPostListProps { posts }).into_any(),
+					Err(e) => div().class("text-red-600").child(format!("Error: {}", e)).into_any(),
+				}
+			})
+		},
 	))
 }
 
 #[island]
-fn BlogPostList(year: Option<i32>, month: Option<u32>, day: Option<u32>) -> impl IntoView {
-	let posts = LocalResource::new(move || get_posts(year, month, day));
+fn BlogPostList(posts: Vec<PostSummary>) -> impl IntoView {
+	let posts = StoredValue::new(posts);
 	let (search_query, set_search_query) = signal(String::new());
 	let (show_help, set_show_help) = signal(false);
 	let (selected_index, set_selected_index) = signal::<Option<usize>>(None);
@@ -300,64 +309,52 @@ fn BlogPostList(year: Option<i32>, month: Option<u32>, day: Option<u32>) -> impl
 			)),
 		)));
 
-	let posts_list = move || match posts.get() {
-		None => {
+	let posts_list = move || {
+		let mut filtered_posts = posts.get_value();
+		let query = search_query.get();
+
+		if !query.is_empty() {
+			// Score and sort posts
+			let mut scored: Vec<_> = filtered_posts.iter().map(|p| (p.clone(), score_post(p, &query))).filter(|(_, s)| *s > 0.0).collect();
+			scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+			filtered_posts = scored.into_iter().map(|(p, _)| p).collect();
+		}
+
+		if filtered_posts.is_empty() {
 			set_visible_urls.set(Vec::new());
-			div().class("text-gray-500").child("Loading...").into_any()
+			return p().class("text-gray-500").child("No matching posts.").into_any();
 		}
-		Some(Ok(posts)) if posts.is_empty() => {
-			set_visible_urls.set(Vec::new());
-			div().class("text-gray-500").child("No posts found.").into_any()
-		}
-		Some(Ok(mut posts)) => {
-			let query = search_query.get();
-			if !query.is_empty() {
-				// Score and sort posts
-				let mut scored: Vec<_> = posts.iter().map(|p| (p.clone(), score_post(p, &query))).filter(|(_, s)| *s > 0.0).collect();
-				scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-				posts = scored.into_iter().map(|(p, _)| p).collect();
-			}
 
-			if posts.is_empty() {
-				set_visible_urls.set(Vec::new());
-				return p().class("text-gray-500").child("No matching posts.").into_any();
-			}
+		// Update URLs for keyboard nav
+		set_visible_urls.set(filtered_posts.iter().map(|p| p.url.clone()).collect());
 
-			// Update URLs for keyboard nav
-			set_visible_urls.set(posts.iter().map(|p| p.url.clone()).collect());
+		let selected = selected_index.get();
 
-			let selected = selected_index.get();
-
-			ul().class("list-none p-0 m-0")
-				.attr("id", "posts-list")
-				.child(
-					posts
-						.into_iter()
-						.enumerate()
-						.map(|(idx, post)| {
-							let is_selected = selected == Some(idx);
-							let bg_class = if is_selected { "py-1 bg-blue-100 -mx-2 px-2 rounded" } else { "py-1" };
-							li().class(bg_class).child((
-								span().class("text-gray-500 tabular-nums").child(post.date_display),
-								span().child(" "),
-								a().attr("href", post.url)
-									.class(if is_selected {
-										"text-blue-700 font-medium hover:underline"
-									} else {
-										"text-black hover:underline"
-									})
-									.child(post.title),
-								hr().class("border-gray-300 mt-1"),
-							))
-						})
-						.collect::<Vec<_>>(),
-				)
-				.into_any()
-		}
-		Some(Err(e)) => {
-			set_visible_urls.set(Vec::new());
-			div().class("text-red-600").child(format!("Error loading posts: {}", e)).into_any()
-		}
+		ul().class("list-none p-0 m-0")
+			.attr("id", "posts-list")
+			.child(
+				filtered_posts
+					.into_iter()
+					.enumerate()
+					.map(|(idx, post)| {
+						let is_selected = selected == Some(idx);
+						let bg_class = if is_selected { "py-1 bg-blue-100 -mx-2 px-2 rounded" } else { "py-1" };
+						li().class(bg_class).child((
+							span().class("text-gray-500 tabular-nums").child(post.date_display),
+							span().child(" "),
+							a().attr("href", post.url)
+								.class(if is_selected {
+									"text-blue-700 font-medium hover:underline"
+								} else {
+									"text-black hover:underline"
+								})
+								.child(post.title),
+							hr().class("border-gray-300 mt-1"),
+						))
+					})
+					.collect::<Vec<_>>(),
+			)
+			.into_any()
 	};
 
 	div().child((search_box, posts_list, help_modal))
