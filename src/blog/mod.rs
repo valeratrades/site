@@ -73,32 +73,32 @@ pub async fn get_blog_post(slug: String) -> Result<Option<(String, String)>, Ser
 
 #[component]
 fn BlogPostView(slug: String) -> impl IntoView {
-	let post = LocalResource::new({
-		let slug = slug.clone();
-		move || get_blog_post(slug.clone())
-	});
+	let post = Resource::new(move || slug.clone(), |slug| get_blog_post(slug));
 
-	move || match post.get() {
-		None => div().class("max-w-2xl mx-auto px-4 py-8").child("Loading...").into_any(),
-		Some(Ok(None)) => div()
-			.class("max-w-2xl mx-auto px-4 py-8 text-center")
-			.child((
-				h1().class("text-2xl font-bold").child("Post Not Found"),
-				a().attr("href", "/blog")
-					.class("inline-block px-4 py-2 bg-green-600 text-white rounded mt-2")
-					.child("Back to Blog"),
-			))
-			.into_any(),
-		Some(Ok(Some((title, content)))) => div()
-			.child((
-				Title(TitleProps {
-					formatter: None,
-					text: Some(title.into()),
-				}),
-				div().class("blog-post-content max-w-2xl mx-auto px-4 py-8").inner_html(content),
-			))
-			.into_any(),
-		Some(Err(e)) => div().class("max-w-2xl mx-auto px-4 py-8 text-red-600").child(format!("Error: {}", e)).into_any(),
+	move || {
+		Suspend::new(async move {
+			match post.await {
+				Ok(None) => div()
+					.class("max-w-2xl mx-auto px-4 py-8 text-center")
+					.child((
+						h1().class("text-2xl font-bold").child("Post Not Found"),
+						a().attr("href", "/blog")
+							.class("inline-block px-4 py-2 bg-green-600 text-white rounded mt-2")
+							.child("Back to Blog"),
+					))
+					.into_any(),
+				Ok(Some((title, content))) => div()
+					.child((
+						Title(TitleProps {
+							formatter: None,
+							text: Some(title.into()),
+						}),
+						div().class("blog-post-content max-w-2xl mx-auto px-4 py-8").inner_html(content),
+					))
+					.into_any(),
+				Err(e) => div().class("max-w-2xl mx-auto px-4 py-8 text-red-600").child(format!("Error: {}", e)).into_any(),
+			}
+		})
 	}
 }
 
@@ -142,16 +142,20 @@ fn BlogPostList(year: Option<i32>, month: Option<u32>, day: Option<u32>) -> impl
 	let posts = LocalResource::new(move || get_posts(year, month, day));
 	let (search_query, set_search_query) = signal(String::new());
 	let (show_help, set_show_help) = signal(false);
+	let (selected_index, set_selected_index) = signal::<Option<usize>>(None);
+	let (visible_urls, set_visible_urls) = signal::<Vec<String>>(Vec::new());
 	let search_ref = NodeRef::<leptos::html::Input>::new();
 
 	// Keyboard shortcuts
 	Effect::new(move |_| {
 		use wasm_bindgen::{JsCast, closure::Closure};
 		let window = web_sys::window().unwrap();
+		let window_for_handler = window.clone();
 		let document = window.document().unwrap();
 		let search_input = search_ref.get();
 
 		let handler = Closure::<dyn Fn(web_sys::KeyboardEvent)>::new(move |e: web_sys::KeyboardEvent| {
+			let window = &window_for_handler;
 			let active = document.active_element();
 			let is_search_focused = active.as_ref().map_or(false, |el| el.tag_name() == "INPUT");
 
@@ -163,10 +167,59 @@ fn BlogPostList(year: Option<i32>, month: Option<u32>, day: Option<u32>) -> impl
 				return;
 			}
 
+			// Arrow navigation works both in search and globally
+			let urls = visible_urls.get_untracked();
+			let count = urls.len();
+			match e.key().as_str() {
+				"ArrowDown" => {
+					e.prevent_default();
+					if count > 0 {
+						let current = selected_index.get_untracked();
+						let next = match current {
+							None => Some(0),
+							Some(i) if i + 1 < count => Some(i + 1),
+							Some(i) => Some(i), // Stay at last
+						};
+						set_selected_index.set(next);
+					}
+					return;
+				}
+				"ArrowUp" => {
+					e.prevent_default();
+					if count > 0 {
+						let current = selected_index.get_untracked();
+						let next = match current {
+							None => Some(0),
+							Some(0) => Some(0), // Stay at first
+							Some(i) => Some(i - 1),
+						};
+						set_selected_index.set(next);
+					}
+					return;
+				}
+				"Enter" => {
+					// Navigate to selected or single match
+					let target_url = if count == 1 {
+						urls.first().cloned()
+					} else if let Some(idx) = selected_index.get_untracked() {
+						urls.get(idx).cloned()
+					} else {
+						None
+					};
+					if let Some(url) = target_url {
+						e.prevent_default();
+						let _ = window.location().set_href(&url);
+					}
+					return;
+				}
+				_ => {}
+			}
+
 			if is_search_focused {
 				if e.key() == "Escape" {
 					e.prevent_default();
 					set_search_query.set(String::new());
+					set_selected_index.set(None);
 					if let Some(input) = search_input.as_ref() {
 						let _ = input.blur();
 					}
@@ -185,6 +238,9 @@ fn BlogPostList(year: Option<i32>, month: Option<u32>, day: Option<u32>) -> impl
 					e.prevent_default();
 					set_show_help.set(true);
 				}
+				"Escape" => {
+					set_selected_index.set(None);
+				}
 				_ => {}
 			}
 		});
@@ -193,16 +249,31 @@ fn BlogPostList(year: Option<i32>, month: Option<u32>, day: Option<u32>) -> impl
 		handler.forget();
 	});
 
-	let search_box = input()
+	// Reset selection when search query changes
+	Effect::new(move |_| {
+		let _ = search_query.get();
+		set_selected_index.set(None);
+	});
+
+	let search_input = input()
 		.attr("type", "text")
-		.attr("placeholder", "Type 'S' or '/' to search, '?' for more options...")
+		.attr("placeholder", "Type 'S' or '/' to search, '?' for help...")
 		.attr("autocomplete", "off")
-		.class("w-full px-3 py-2 mb-4 border border-gray-400 rounded text-sm bg-gray-100 focus:bg-white focus:border-gray-500 focus:outline-none placeholder-gray-500")
+		.class("flex-1 px-3 py-2 border border-gray-400 rounded-l text-sm bg-gray-100 focus:bg-white focus:border-gray-500 focus:outline-none placeholder-gray-500")
 		.node_ref(search_ref)
 		.prop("value", move || search_query.get())
 		.on(ev::input, move |e| {
 			set_search_query.set(event_target_value(&e));
 		});
+
+	let help_button = button()
+		.attr("type", "button")
+		.attr("title", "Help (?)")
+		.class("px-3 py-2 border border-l-0 border-gray-400 rounded-r bg-gray-200 hover:bg-gray-300 text-gray-600 hover:text-gray-800")
+		.on(ev::click, move |_| set_show_help.set(true))
+		.child("?");
+
+	let search_box = div().class("flex mb-4").child((search_input, help_button));
 
 	let help_modal = div()
 		.class(move || {
@@ -223,13 +294,21 @@ fn BlogPostList(year: Option<i32>, month: Option<u32>, day: Option<u32>) -> impl
 			div().class("space-y-2").child((
 				help_row("?", "Show this help dialog"),
 				help_row_multi(&["S", "/"], "Focus the search field"),
+				help_row_multi(&["↑", "↓"], "Navigate through articles"),
+				help_row("Enter", "Go to selected/single article"),
 				help_row("Esc", "Clear search and close"),
 			)),
 		)));
 
 	let posts_list = move || match posts.get() {
-		None => div().class("text-gray-500").child("Loading...").into_any(),
-		Some(Ok(posts)) if posts.is_empty() => div().class("text-gray-500").child("No posts found.").into_any(),
+		None => {
+			set_visible_urls.set(Vec::new());
+			div().class("text-gray-500").child("Loading...").into_any()
+		}
+		Some(Ok(posts)) if posts.is_empty() => {
+			set_visible_urls.set(Vec::new());
+			div().class("text-gray-500").child("No posts found.").into_any()
+		}
 		Some(Ok(mut posts)) => {
 			let query = search_query.get();
 			if !query.is_empty() {
@@ -240,18 +319,34 @@ fn BlogPostList(year: Option<i32>, month: Option<u32>, day: Option<u32>) -> impl
 			}
 
 			if posts.is_empty() {
+				set_visible_urls.set(Vec::new());
 				return p().class("text-gray-500").child("No matching posts.").into_any();
 			}
 
+			// Update URLs for keyboard nav
+			set_visible_urls.set(posts.iter().map(|p| p.url.clone()).collect());
+
+			let selected = selected_index.get();
+
 			ul().class("list-none p-0 m-0")
+				.attr("id", "posts-list")
 				.child(
 					posts
 						.into_iter()
-						.map(|post| {
-							li().class("py-1").child((
+						.enumerate()
+						.map(|(idx, post)| {
+							let is_selected = selected == Some(idx);
+							let bg_class = if is_selected { "py-1 bg-blue-100 -mx-2 px-2 rounded" } else { "py-1" };
+							li().class(bg_class).child((
 								span().class("text-gray-500 tabular-nums").child(post.date_display),
 								span().child(" "),
-								a().attr("href", post.url).class("text-black hover:underline").child(post.title),
+								a().attr("href", post.url)
+									.class(if is_selected {
+										"text-blue-700 font-medium hover:underline"
+									} else {
+										"text-black hover:underline"
+									})
+									.child(post.title),
 								hr().class("border-gray-300 mt-1"),
 							))
 						})
@@ -259,7 +354,10 @@ fn BlogPostList(year: Option<i32>, month: Option<u32>, day: Option<u32>) -> impl
 				)
 				.into_any()
 		}
-		Some(Err(e)) => div().class("text-red-600").child(format!("Error loading posts: {}", e)).into_any(),
+		Some(Err(e)) => {
+			set_visible_urls.set(Vec::new());
+			div().class("text-red-600").child(format!("Error loading posts: {}", e)).into_any()
+		}
 	};
 
 	div().child((search_box, posts_list, help_modal))
