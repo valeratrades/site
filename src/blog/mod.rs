@@ -84,6 +84,13 @@ ul {{ list-style: none; padding: 0; margin: 0; }}
 .search-box:focus {{ outline: none; border-color: #888; background: #fff; }}
 .search-box::placeholder {{ color: #737373; }}
 .no-results {{ color: #666; display: none; }}
+.help-modal {{ display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; justify-content: center; align-items: flex-start; padding-top: 10vh; }}
+.help-modal.open {{ display: flex; }}
+.help-content {{ background: #353535; color: #ddd; border-radius: 0.5rem; padding: 1.5rem 2rem; max-width: 500px; width: 90%; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }}
+.help-content h2 {{ color: #fff; margin: 0 0 1rem 0; font-size: 1.25rem; }}
+.help-row {{ display: flex; align-items: center; margin: 0.5rem 0; gap: 1rem; }}
+.help-key {{ display: inline-block; background: #4a4a4a; border: 1px solid #666; border-radius: 0.25rem; padding: 0.15rem 0.5rem; font-family: monospace; font-size: 0.875rem; min-width: 1.5rem; text-align: center; }}
+.help-desc {{ color: #ccc; }}
 </style>
 </head>
 <body>
@@ -91,6 +98,14 @@ ul {{ list-style: none; padding: 0; margin: 0; }}
 <input type="text" class="search-box" id="search" placeholder="Type 'S' or '/' to search, '?' for more options..." autocomplete="off">
 <p class="no-results" id="no-results">No matching posts.</p>
 <ul id="posts-list">{}</ul>
+<div class="help-modal" id="help-modal">
+  <div class="help-content">
+    <h2>Keyboard Shortcuts</h2>
+    <div class="help-row"><span class="help-key">?</span> <span class="help-desc">Show this help dialog</span></div>
+    <div class="help-row"><span class="help-key">S</span> / <span class="help-key">/</span> <span class="help-desc">Focus the search field</span></div>
+    <div class="help-row"><span class="help-key">Esc</span> <span class="help-desc">Clear search and close</span></div>
+  </div>
+</div>
 <script>
 (function() {{
   const search = document.getElementById('search');
@@ -193,8 +208,21 @@ ul {{ list-style: none; padding: 0; margin: 0; }}
 
   search.addEventListener('input', doSearch);
 
+  const helpModal = document.getElementById('help-modal');
+
+  function showHelp() {{ helpModal.classList.add('open'); }}
+  function hideHelp() {{ helpModal.classList.remove('open'); }}
+
   // Press 'S', '/' to focus search bar, '?' for help
   document.addEventListener('keydown', (e) => {{
+    if (helpModal.classList.contains('open')) {{
+      if (e.key === 'Escape' || e.key === '?') {{
+        e.preventDefault();
+        hideHelp();
+      }}
+      return;
+    }}
+
     if (document.activeElement === search) return;
 
     if (e.key === 's' || e.key === 'S' || e.key === '/') {{
@@ -202,8 +230,13 @@ ul {{ list-style: none; padding: 0; margin: 0; }}
       search.focus();
     }} else if (e.key === '?') {{
       e.preventDefault();
-      alert('Keyboard shortcuts:\\n\\nS or / - Focus search\\nEsc - Clear search and unfocus\\n\\nSearch matches against post titles (weighted 10x) and content.');
+      showHelp();
     }}
+  }});
+
+  // Click outside modal to close
+  helpModal.addEventListener('click', (e) => {{
+    if (e.target === helpModal) hideHelp();
   }});
 
   // Escape to clear and unfocus
