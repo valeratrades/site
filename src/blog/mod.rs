@@ -80,14 +80,15 @@ body {{ max-width: 42rem; width: 100%; padding: 1rem; font-family: system-ui, sa
 a {{ text-decoration: none; }}
 a:hover {{ text-decoration: underline; }}
 ul {{ list-style: none; padding: 0; margin: 0; }}
-.search-box {{ width: 100%; padding: 0.5rem; margin-bottom: 1rem; border: 1px solid #d1d5db; border-radius: 0.25rem; font-size: 1rem; }}
-.search-box:focus {{ outline: none; border-color: #9ca3af; }}
+.search-box {{ width: 100%; padding: 0.5rem 0.75rem; margin-bottom: 1rem; border: 1px solid #c0c0c0; border-radius: 0.25rem; font-size: 0.875rem; background: #f5f5f5; color: #333; }}
+.search-box:focus {{ outline: none; border-color: #888; background: #fff; }}
+.search-box::placeholder {{ color: #737373; }}
 .no-results {{ color: #666; display: none; }}
 </style>
 </head>
 <body>
 <h1>{}</h1>
-<input type="text" class="search-box" id="search" placeholder="Search posts..." autocomplete="off">
+<input type="text" class="search-box" id="search" placeholder="Type 'S' or '/' to search, '?' for more options..." autocomplete="off">
 <p class="no-results" id="no-results">No matching posts.</p>
 <ul id="posts-list">{}</ul>
 <script>
@@ -192,13 +193,25 @@ ul {{ list-style: none; padding: 0; margin: 0; }}
 
   search.addEventListener('input', doSearch);
 
-  // Press 'S' to focus search bar
+  // Press 'S', '/' to focus search bar, '?' for help
   document.addEventListener('keydown', (e) => {{
-    if (e.key === 's' || e.key === 'S') {{
-      if (document.activeElement !== search) {{
-        e.preventDefault();
-        search.focus();
-      }}
+    if (document.activeElement === search) return;
+
+    if (e.key === 's' || e.key === 'S' || e.key === '/') {{
+      e.preventDefault();
+      search.focus();
+    }} else if (e.key === '?') {{
+      e.preventDefault();
+      alert('Keyboard shortcuts:\\n\\nS or / - Focus search\\nEsc - Clear search and unfocus\\n\\nSearch matches against post titles (weighted 10x) and content.');
+    }}
+  }});
+
+  // Escape to clear and unfocus
+  search.addEventListener('keydown', (e) => {{
+    if (e.key === 'Escape') {{
+      search.value = '';
+      doSearch();
+      search.blur();
     }}
   }});
 }})();
