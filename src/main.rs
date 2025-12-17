@@ -48,10 +48,10 @@ async fn main() {
 	let addr = conf.leptos_options.site_addr;
 	let leptos_options = conf.leptos_options;
 
-	// Compile blog posts from .typ files to HTML
+	// Compile blog posts from .typ files to HTML and watch for changes
 	let blog_source_dir = Path::new("public/blog");
 	let blog_output_dir = Path::new("target/site/blog");
-	blog::compile::init_blog_posts(blog_source_dir, blog_output_dir);
+	let _blog_watcher = blog::compile::init_blog_posts(blog_source_dir, blog_output_dir);
 
 	// Build the router with server functions
 	let leptos_options_clone = leptos_options.clone();

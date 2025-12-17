@@ -3,14 +3,15 @@ use std::{
 	fs,
 	path::{Path, PathBuf},
 	process::Command,
-	sync::OnceLock,
+	sync::RwLock,
 };
 
 use chrono::{DateTime, Utc};
+use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher, event::ModifyKind};
 use serde::{Deserialize, Serialize};
 use tracing::{error, info, warn};
 
-static BLOG_POSTS: OnceLock<Vec<BlogPost>> = OnceLock::new();
+static BLOG_POSTS: RwLock<Vec<BlogPost>> = RwLock::new(Vec::new());
 
 #[derive(Clone, Debug)]
 pub struct BlogPost {
@@ -286,16 +287,57 @@ pub fn compile_blog_posts(blog_dir: &Path, output_dir: &Path) -> Vec<BlogPost> {
 	posts
 }
 
-/// Initialize blog posts at startup. Call this from main.rs
-pub fn init_blog_posts(blog_dir: &Path, output_dir: &Path) {
+/// Initialize blog posts at startup and start file watcher. Call this from main.rs.
+/// Returns the watcher handle which must be kept alive to continue watching.
+pub fn init_blog_posts(blog_dir: &Path, output_dir: &Path) -> RecommendedWatcher {
+	// Initial compilation
 	let posts = compile_blog_posts(blog_dir, output_dir);
 	info!("Compiled {} blog posts", posts.len());
-	let _ = BLOG_POSTS.set(posts);
+	*BLOG_POSTS.write().unwrap() = posts;
+
+	// Set up file watcher
+	let blog_dir_owned = blog_dir.to_path_buf();
+	let output_dir_owned = output_dir.to_path_buf();
+
+	let mut watcher = RecommendedWatcher::new(
+		move |res: Result<notify::Event, notify::Error>| match res {
+			Ok(event) => {
+				// Only recompile on relevant events
+				let dominated_by_typ = event.paths.iter().any(|p| p.extension().map_or(false, |ext| ext == "typ"));
+				let dominated_by_json = event.paths.iter().any(|p| p.file_name().map_or(false, |n| n == "meta.json"));
+				let dominated_by_html = event.paths.iter().all(|p| p.extension().map_or(false, |ext| ext == "html"));
+
+				// Skip if all paths are HTML files (our own output)
+				if dominated_by_html {
+					return;
+				}
+
+				// Only recompile for typ file changes, or meta.json changes, or file creation/deletion
+				let is_modification = matches!(event.kind, notify::EventKind::Modify(ModifyKind::Data(_)));
+				let is_structural = matches!(event.kind, notify::EventKind::Create(_) | notify::EventKind::Remove(_));
+
+				if (is_modification && (dominated_by_typ || dominated_by_json)) || is_structural {
+					info!("Blog directory changed ({:?}), recompiling...", event.kind);
+					let posts = compile_blog_posts(&blog_dir_owned, &output_dir_owned);
+					info!("Recompiled {} blog posts", posts.len());
+					*BLOG_POSTS.write().unwrap() = posts;
+				}
+			}
+			Err(e) => error!("File watch error: {:?}", e),
+		},
+		Config::default(),
+	)
+	.expect("Failed to create file watcher");
+
+	watcher.watch(blog_dir, RecursiveMode::Recursive).expect("Failed to watch blog directory");
+	info!("Watching {:?} for changes", blog_dir);
+
+	watcher
 }
 
 /// Get the compiled blog posts
-pub fn get_blog_posts() -> &'static Vec<BlogPost> {
-	BLOG_POSTS.get_or_init(Vec::new)
+pub fn get_blog_posts() -> Vec<BlogPost> {
+	BLOG_POSTS.read().unwrap().clone()
 }
 
 /// Get a blog post title by slug
