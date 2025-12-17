@@ -64,10 +64,29 @@ pub async fn get_blog_post(slug: String) -> Result<Option<(String, String)>, Ser
 
 	match post {
 		Some(p) => {
-			let content = std::fs::read_to_string(&p.html_path).map_err(|e| ServerFnError::new(e.to_string()))?;
-			Ok(Some((p.title.clone(), content)))
+			let full_html = std::fs::read_to_string(&p.html_path).map_err(|e| ServerFnError::new(e.to_string()))?;
+			// Extract just the body content - typst outputs full HTML documents
+			let body_content = extract_body_content(&full_html);
+			Ok(Some((p.title.clone(), body_content)))
 		}
 		None => Ok(None),
+	}
+}
+
+/// Extracts content between <body> and </body> tags from a full HTML document
+#[cfg(feature = "ssr")]
+fn extract_body_content(html: &str) -> String {
+	let lower = html.to_lowercase();
+	let start = lower.find("<body");
+	let end = lower.rfind("</body>");
+
+	match (start, end) {
+		(Some(s), Some(e)) => {
+			// Find the closing > of the opening body tag
+			let body_start = html[s..].find('>').map(|i| s + i + 1).unwrap_or(s);
+			html[body_start..e].to_string()
+		}
+		_ => html.to_string(), // Fallback to full content if no body tags
 	}
 }
 
