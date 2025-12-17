@@ -7,6 +7,18 @@ body {
 }
 
 /* Restore browser defaults for semantic HTML inside blog posts */
-.blog-post-content :where(h1, h2, h3, h4, h5, h6, p, ul, ol, li, a, blockquote, pre, code, figure, figcaption, table, th, td, hr, img, strong, em) {
+.blog-post-content :where(h1, h2, h3, h4, h5, h6, p, ul, ol, li, a, blockquote, pre, code, figure, figcaption, table, th, td, hr, strong, em) {
   all: revert;
+}
+
+.blog-post-content figure {
+  margin: 1em auto;
+  text-align: center;
+}
+
+.blog-post-content img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0 auto;
 }
