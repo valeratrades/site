@@ -76,19 +76,26 @@ pub fn LsrSearchAndDisplayIsland(rendered_lsrs: Vec<RenderedLsr>) -> impl IntoVi
 
 	// Read URL params on mount and update selected_pairs
 	#[cfg(not(feature = "ssr"))]
-	{
+	Effect::new(move |_| {
 		if let Some(window) = web_sys::window() {
 			if let Ok(search) = window.location().search() {
-				if let Some(lsrs_start) = search.find("lsrs=") {
-					let after_lsrs = &search[lsrs_start + 5..];
-					let end = after_lsrs.find('&').unwrap_or(after_lsrs.len());
-					let lsrs_str = &after_lsrs[..end];
-					let pairs: Vec<Pair> = lsrs_str.split(',').filter_map(|s| s.trim().parse::<Pair>().ok()).collect();
+				if let Some(lsr_start) = search.find("lsr=") {
+					let after_lsr = &search[lsr_start + 4..];
+					let end = after_lsr.find('&').unwrap_or(after_lsr.len());
+					let lsr_str = &after_lsr[..end];
+					let pairs: Vec<Pair> = lsr_str
+						.split(',')
+						.filter_map(|s| {
+							let s = s.trim().to_uppercase();
+							let with_suffix = if s.ends_with("-USDT") || s.ends_with("USDT") { s } else { format!("{s}-USDT") };
+							with_suffix.parse::<Pair>().ok()
+						})
+						.collect();
 					selected_pairs.set(pairs);
 				}
 			}
 		}
-	}
+	});
 
 	(
 		LsrSearch(LsrSearchProps {
@@ -144,12 +151,12 @@ fn LsrSearch(rendered_lsrs: Memo<Vec<RenderedLsr>>, selected_pairs: RwSignal<Vec
 			}
 		});
 
-		// Update URL to reflect selection
+		// Update URL to reflect selection (omit -USDT suffix for cleaner URLs)
 		if let Some(window) = web_sys::window() {
 			let pairs = selected_pairs.get();
-			let lsrs_param = pairs.iter().map(|p| p.to_string()).collect::<Vec<_>>().join(",");
+			let lsr_param = pairs.iter().map(|p| p.base().to_string()).collect::<Vec<_>>().join(",");
 			if let Ok(history) = window.history() {
-				let new_url = format!("/dashboards?lsrs={}", lsrs_param);
+				let new_url = format!("/dashboards?lsr={}", lsr_param);
 				let _ = history.push_state_with_url(&JsValue::NULL, "", Some(&new_url));
 			}
 		}
