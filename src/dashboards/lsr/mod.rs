@@ -1,7 +1,7 @@
 #[cfg(feature = "ssr")]
 mod data;
 use leptos::{
-	control_flow::{For, ForEnumerate, ForEnumerateProps},
+	control_flow::{ForEnumerate, ForEnumerateProps},
 	ev,
 	html::*,
 	prelude::*,
@@ -118,11 +118,90 @@ fn LsrDisplay(rendered_lsrs: Memo<Vec<RenderedLsr>>, selected_pairs: RwSignal<Ve
 		pairs.into_iter().filter_map(|pair| all_lsrs.iter().find(|lsr| lsr.pair == pair).cloned()).collect::<Vec<_>>()
 	});
 
-	div().class("mt-4 space-y-2").child(For(ForProps {
-		each: move || selected_lsrs.get(),
-		key: |item| item.clone(),
-		children: move |item: RenderedLsr| div().class("flex items-center justify-between p-2 bg-gray-50 rounded").child(span().child(item.rend.clone())),
-	}))
+	// Track which item is selected for deletion (None = no selection)
+	let selected_index: RwSignal<Option<usize>> = RwSignal::new(None);
+
+	// Helper to update URL after removing a pair
+	let update_url = move || {
+		if let Some(window) = web_sys::window() {
+			let pairs = selected_pairs.get();
+			if let Ok(history) = window.history() {
+				let new_url = if pairs.is_empty() {
+					"/dashboards".to_string()
+				} else {
+					let lsr_param = pairs.iter().map(|p| p.base().to_string()).collect::<Vec<_>>().join(",");
+					format!("/dashboards?lsr={}", lsr_param)
+				};
+				let _ = history.push_state_with_url(&JsValue::NULL, "", Some(&new_url));
+			}
+		}
+	};
+
+	// Handle deletion of selected item
+	let handle_delete = move || {
+		if let Some(idx) = selected_index.get() {
+			let lsrs = selected_lsrs.get();
+			if idx < lsrs.len() {
+				let pair_to_remove = lsrs[idx].pair;
+				selected_pairs.update(|pairs| {
+					pairs.retain(|p| *p != pair_to_remove);
+				});
+				update_url();
+				// Reset selection (or move to previous if possible)
+				let new_len = selected_pairs.get().len();
+				if new_len == 0 {
+					selected_index.set(None);
+				} else {
+					selected_index.set(Some(idx.min(new_len - 1)));
+				}
+			}
+		}
+	};
+
+	// Keyboard handler for the display container
+	let handle_keydown = move |ev: web_sys::KeyboardEvent| match ev.key().as_str() {
+		"Backspace" | "Delete" =>
+			if selected_index.get().is_some() {
+				ev.prevent_default();
+				handle_delete();
+			},
+		"Escape" => {
+			ev.prevent_default();
+			selected_index.set(None);
+		}
+		_ => {}
+	};
+
+	// Click handler to select an item
+	let handle_click = move |idx: usize| {
+		selected_index.set(Some(idx));
+	};
+
+	div()
+		.class("mt-4 space-y-2")
+		.attr("tabindex", "0") // Make focusable for keyboard events
+		.on(ev::keydown, handle_keydown)
+		.child(ForEnumerate(ForEnumerateProps {
+			each: move || selected_lsrs.get(),
+			key: |item| item.clone(),
+			children: move |i: ReadSignal<usize>, item: RenderedLsr| {
+				let is_selected = move || selected_index.get() == Some(*i.read());
+				div()
+					.class(move || {
+						let base = "flex items-center justify-between p-2 rounded cursor-pointer";
+						if is_selected() {
+							format!("{base} bg-blue-100")
+						} else {
+							format!("{base} bg-gray-50 hover:bg-gray-100")
+						}
+					})
+					.on(ev::click, {
+						let idx = *i.read_untracked();
+						move |_| handle_click(idx)
+					})
+					.child(span().child(item.rend.clone()))
+			},
+		}))
 }
 
 #[component]
