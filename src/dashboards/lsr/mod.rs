@@ -158,50 +158,44 @@ fn LsrDisplay(rendered_lsrs: Memo<Vec<RenderedLsr>>, selected_pairs: RwSignal<Ve
 		}
 	};
 
-	// Keyboard handler for the display container
-	let handle_keydown = move |ev: web_sys::KeyboardEvent| match ev.key().as_str() {
-		"Backspace" | "Delete" =>
-			if selected_index.get().is_some() {
-				ev.prevent_default();
-				handle_delete();
-			},
-		"Escape" => {
-			ev.prevent_default();
-			selected_index.set(None);
+	// Global escape handler to deselect
+	crate::keyboard::use_escape(move || {
+		selected_index.set(None);
+	});
+
+	// Global backspace/delete handler (only when something is selected and not in input)
+	crate::keyboard::use_key(move |key| {
+		if (key == "Backspace" || key == "Delete") && selected_index.get().is_some() {
+			handle_delete();
 		}
-		_ => {}
-	};
+	});
 
 	// Click handler to select an item
 	let handle_click = move |idx: usize| {
 		selected_index.set(Some(idx));
 	};
 
-	div()
-		.class("mt-4 space-y-2")
-		.attr("tabindex", "0") // Make focusable for keyboard events
-		.on(ev::keydown, handle_keydown)
-		.child(ForEnumerate(ForEnumerateProps {
-			each: move || selected_lsrs.get(),
-			key: |item| item.clone(),
-			children: move |i: ReadSignal<usize>, item: RenderedLsr| {
-				let is_selected = move || selected_index.get() == Some(*i.read());
-				div()
-					.class(move || {
-						let base = "flex items-center justify-between p-2 rounded cursor-pointer";
-						if is_selected() {
-							format!("{base} bg-blue-100")
-						} else {
-							format!("{base} bg-gray-50 hover:bg-gray-100")
-						}
-					})
-					.on(ev::click, {
-						let idx = *i.read_untracked();
-						move |_| handle_click(idx)
-					})
-					.child(span().child(item.rend.clone()))
-			},
-		}))
+	div().class("mt-4 space-y-2").child(ForEnumerate(ForEnumerateProps {
+		each: move || selected_lsrs.get(),
+		key: |item| item.clone(),
+		children: move |i: ReadSignal<usize>, item: RenderedLsr| {
+			let is_selected = move || selected_index.get() == Some(*i.read());
+			div()
+				.class(move || {
+					let base = "flex items-center justify-between p-2 rounded cursor-pointer";
+					if is_selected() {
+						format!("{base} bg-blue-100")
+					} else {
+						format!("{base} bg-gray-50 hover:bg-gray-100")
+					}
+				})
+				.on(ev::click, {
+					let idx = *i.read_untracked();
+					move |_| handle_click(idx)
+				})
+				.child(span().child(item.rend.clone()))
+		},
+	}))
 }
 
 #[component]

@@ -7,6 +7,7 @@ pub mod auth;
 pub mod blog;
 pub mod config;
 pub mod dashboards;
+pub mod keyboard;
 pub mod tmp;
 pub(crate) mod utils;
 
