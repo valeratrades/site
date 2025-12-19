@@ -115,7 +115,9 @@ fn LsrDisplay(rendered_lsrs: Memo<Vec<RenderedLsr>>, selected_pairs: RwSignal<Ve
 		let pairs = selected_pairs.get();
 		let all_lsrs = rendered_lsrs.get();
 
-		pairs.into_iter().filter_map(|pair| all_lsrs.iter().find(|lsr| lsr.pair == pair).cloned()).collect::<Vec<_>>()
+		let mut lsrs: Vec<_> = pairs.into_iter().filter_map(|pair| all_lsrs.iter().find(|lsr| lsr.pair == pair).cloned()).collect();
+		lsrs.sort_by(|a, b| a.value.partial_cmp(&b.value).unwrap_or(std::cmp::Ordering::Equal));
+		lsrs
 	});
 
 	// Track which item is selected for deletion (None = no selection)
@@ -177,7 +179,7 @@ fn LsrDisplay(rendered_lsrs: Memo<Vec<RenderedLsr>>, selected_pairs: RwSignal<Ve
 
 	div().class("mt-4 space-y-2").child(ForEnumerate(ForEnumerateProps {
 		each: move || selected_lsrs.get(),
-		key: |item| item.clone(),
+		key: |item| item.pair,
 		children: move |i: ReadSignal<usize>, item: RenderedLsr| {
 			let is_selected = move || selected_index.get() == Some(*i.read());
 			div()
@@ -294,7 +296,7 @@ fn LsrSearch(rendered_lsrs: Memo<Vec<RenderedLsr>>, selected_pairs: RwSignal<Vec
 			.style(move || if filtered_items.get().is_empty() { "display: none;" } else { "display: block;" })
 			.child(ForEnumerate(ForEnumerateProps {
 				each: move || filtered_items.get(),
-				key: |item| item.clone(),
+				key: |item| item.pair,
 				children: move |i: ReadSignal<usize>, item: RenderedLsr| {
 					let is_focused = move || focused_index.get() == *i.read() as i32;
 					static HOVER_BG: &str = "bg-gray-100";
@@ -332,12 +334,14 @@ async fn build_lsrs() -> Result<RenderedLsrs, ServerFnError> {
 	lsrs.persist()?;
 	Ok(lsrs.into())
 }
-#[derive(Clone, Debug, Default, Deserialize, Eq, Hash, PartialEq, Serialize, derive_new::new)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize, derive_new::new)]
 pub struct RenderedLsr {
 	pub pair: Pair,
 	pub rend: String,
+	/// The LSR value (% longs) for sorting
+	pub value: f64,
 }
-#[derive(Clone, Debug, Default, derive_more::Deref, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, derive_more::Deref, Deserialize, PartialEq, Serialize)]
 pub struct RenderedLsrs {
 	#[deref]
 	pub v: Vec<RenderedLsr>,
@@ -347,7 +351,7 @@ pub struct RenderedLsrs {
 impl From<data::SortedLsrs> for RenderedLsrs {
 	fn from(s: data::SortedLsrs) -> Self {
 		Self {
-			v: s.iter().map(|lsr| RenderedLsr::new(lsr.pair, lsr.display_short().unwrap())).collect(),
+			v: s.iter().map(|lsr| RenderedLsr::new(lsr.pair, lsr.display_short().unwrap(), lsr.last().unwrap().long())).collect(),
 			outliers: s.display_outliers(10),
 		}
 	}

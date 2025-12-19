@@ -174,6 +174,22 @@ fn BlogPostList(posts: Vec<PostSummary>) -> impl IntoView {
 	let (visible_urls, set_visible_urls) = signal::<Vec<String>>(Vec::new());
 	let search_ref = NodeRef::<leptos::html::Input>::new();
 
+	// Read ?s= URL param on mount
+	Effect::new(move |_| {
+		if let Some(window) = web_sys::window() {
+			if let Ok(search) = window.location().search() {
+				if let Some(s_start) = search.find("s=") {
+					let after_s = &search[s_start + 2..];
+					let end = after_s.find('&').unwrap_or(after_s.len());
+					let s_str = &after_s[..end];
+					if let Ok(decoded) = js_sys::decode_uri_component(s_str) {
+						set_search_query.set(decoded.as_string().unwrap_or_default());
+					}
+				}
+			}
+		}
+	});
+
 	// Keyboard shortcuts
 	Effect::new(move |_| {
 		use wasm_bindgen::{JsCast, closure::Closure};
@@ -226,6 +242,18 @@ fn BlogPostList(posts: Vec<PostSummary>) -> impl IntoView {
 					return;
 				}
 				"Enter" => {
+					e.prevent_default();
+					// Update URL with search query
+					let query = search_query.get_untracked();
+					if let Ok(history) = window.history() {
+						let new_url = if query.is_empty() {
+							"/blog".to_string()
+						} else {
+							format!("/blog?s={}", js_sys::encode_uri_component(&query))
+						};
+						let _ = history.push_state_with_url(&web_sys::wasm_bindgen::JsValue::NULL, "", Some(&new_url));
+					}
+
 					// Navigate to selected or single match
 					let target_url = if count == 1 {
 						urls.first().cloned()
@@ -235,7 +263,6 @@ fn BlogPostList(posts: Vec<PostSummary>) -> impl IntoView {
 						None
 					};
 					if let Some(url) = target_url {
-						e.prevent_default();
 						let _ = window.location().set_href(&url);
 					}
 					return;
