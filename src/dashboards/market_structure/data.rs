@@ -15,6 +15,9 @@ use v_utils::{
 	xdg_state_file,
 };
 
+/// Collected market data: normalized closes per pair and the time index
+pub type MarketData = (HashMap<Pair, Vec<f64>>, Vec<Timestamp>);
+
 /// Persisted market structure data with metadata for cache invalidation
 #[derive(Clone, Debug, Deserialize, Serialize)]
 struct PersistedMarketData {
@@ -118,7 +121,7 @@ pub async fn try_build(limit: RequestRange, tf: Timeframe, exchange_name: Exchan
 }
 
 #[instrument(skip_all)]
-pub async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, instrument: Instrument, exchange: Arc<Box<dyn Exchange>>) -> Result<(HashMap<Pair, Vec<f64>>, Vec<Timestamp>)> {
+pub async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, instrument: Instrument, exchange: Arc<Box<dyn Exchange>>) -> Result<MarketData> {
 	tracing::info!("Starting data collection for {} pairs with tf={:?}, range={:?}", pairs.len(), tf, range);
 
 	let params = CollectionParams::new(tf, range, instrument);

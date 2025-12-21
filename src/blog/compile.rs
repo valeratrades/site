@@ -152,7 +152,7 @@ fn discover_blog_sources(blog_dir: &Path) -> Vec<BlogSource> {
 	for entry in entries.filter_map(|e| e.ok()) {
 		let path = entry.path();
 
-		if path.is_file() && path.extension().map_or(false, |ext| ext == "typ") {
+		if path.is_file() && path.extension().is_some_and(|ext| ext == "typ") {
 			// Standalone .typ file (e.g., my_article.typ)
 			if let Some(name) = path.file_stem().and_then(|s| s.to_str()) {
 				sources.push(BlogSource {
@@ -250,7 +250,7 @@ pub fn compile_blog_posts(blog_dir: &Path, output_dir: &Path) -> Vec<BlogPost> {
 		let html_path = post_output_dir.join(&html_filename);
 
 		// Compile typst to HTML
-		let output = Command::new("typst").args(["compile", "--features", "html"]).arg(&path).arg(&html_path).output();
+		let output = Command::new("typst").args(["compile", "--features", "html"]).arg(path).arg(&html_path).output();
 
 		match output {
 			Ok(result) =>
@@ -303,9 +303,9 @@ pub fn init_blog_posts(blog_dir: &Path, output_dir: &Path) -> RecommendedWatcher
 		move |res: Result<notify::Event, notify::Error>| match res {
 			Ok(event) => {
 				// Only recompile on relevant events
-				let dominated_by_typ = event.paths.iter().any(|p| p.extension().map_or(false, |ext| ext == "typ"));
-				let dominated_by_json = event.paths.iter().any(|p| p.file_name().map_or(false, |n| n == "meta.json"));
-				let dominated_by_html = event.paths.iter().all(|p| p.extension().map_or(false, |ext| ext == "html"));
+				let dominated_by_typ = event.paths.iter().any(|p| p.extension().is_some_and(|ext| ext == "typ"));
+				let dominated_by_json = event.paths.iter().any(|p| p.file_name().is_some_and(|n| n == "meta.json"));
+				let dominated_by_html = event.paths.iter().all(|p| p.extension().is_some_and(|ext| ext == "html"));
 
 				// Skip if all paths are HTML files (our own output)
 				if dominated_by_html {

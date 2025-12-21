@@ -165,10 +165,7 @@ PRIMARY KEY version
 
 	async fn get_migration_version(&self) -> Result<i32> {
 		let count_query = "SELECT count() FROM site.migrations";
-		let count: u64 = match self.client.query(count_query).fetch_one::<u64>().await {
-			Ok(c) => c,
-			Err(_) => 0,
-		};
+		let count: u64 = self.client.query(count_query).fetch_one::<u64>().await.unwrap_or_default();
 
 		if count == 0 {
 			return Ok(-1);

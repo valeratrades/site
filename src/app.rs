@@ -592,7 +592,6 @@ fn HomeView() -> impl IntoView {
 		}
 	}
 	// Return minimal content (won't be seen due to redirect)
-	()
 }
 
 #[component]

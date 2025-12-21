@@ -92,7 +92,7 @@ fn extract_body_content(html: &str) -> String {
 
 #[component]
 fn BlogPostView(slug: String) -> impl IntoView {
-	let post = Resource::new(move || slug.clone(), |slug| get_blog_post(slug));
+	let post = Resource::new(move || slug.clone(), get_blog_post);
 
 	move || {
 		Suspend::new(async move {
@@ -127,7 +127,7 @@ pub async fn get_posts(year: Option<i32>, month: Option<u32>, day: Option<u32>) 
 	let posts = compile::get_blog_posts();
 	Ok(posts
 		.iter()
-		.filter(|p| year.map_or(true, |y| p.created.year() == y) && month.map_or(true, |m| p.created.month() == m) && day.map_or(true, |d| p.created.day() == d))
+		.filter(|p| year.is_none_or(|y| p.created.year() == y) && month.is_none_or(|m| p.created.month() == m) && day.is_none_or(|d| p.created.day() == d))
 		.map(|p| PostSummary {
 			date_display: p.created.format("%b %d, %Y").to_string(),
 			url: format!("/blog/{}/{:02}/{:02}/{}.html", p.created.year(), p.created.month(), p.created.day(), p.slug),
@@ -201,7 +201,7 @@ fn BlogPostList(posts: Vec<PostSummary>) -> impl IntoView {
 		let handler = Closure::<dyn Fn(web_sys::KeyboardEvent)>::new(move |e: web_sys::KeyboardEvent| {
 			let window = &window_for_handler;
 			let active = document.active_element();
-			let is_search_focused = active.as_ref().map_or(false, |el| el.tag_name() == "INPUT");
+			let is_search_focused = active.as_ref().is_some_and(|el| el.tag_name() == "INPUT");
 
 			if show_help.get_untracked() {
 				if e.key() == "Escape" || e.key() == "?" {
