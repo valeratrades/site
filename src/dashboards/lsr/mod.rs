@@ -20,21 +20,18 @@ pub fn LsrView() -> impl IntoView {
 	let trigger = RwSignal::new(());
 	let lsrs_resource = Resource::new(move || trigger.get(), |_| async move { build_lsrs().await });
 
-	// Set up interval to refresh data every 5 minutes
-	#[cfg(feature = "ssr")]
+	// Set up interval to refresh data every 5 minutes (client-side only)
+	#[cfg(feature = "hydrate")]
 	{
-		use std::time::Duration;
-		tokio::spawn(async move {
-			loop {
-				tokio::time::sleep(Duration::from_secs(5 * 60)).await;
-				trigger.update(|_| ());
-			}
-		});
-	}
+		use gloo_timers::callback::Interval;
+		use send_wrapper::SendWrapper;
 
-	// Set up retry interval - retry every 1 minute on error (client-side)
-	#[cfg(not(feature = "ssr"))]
-	{
+		let interval = SendWrapper::new(Interval::new(5 * 60 * 1000, move || {
+			trigger.update(|_| ());
+		}));
+		on_cleanup(move || drop(interval));
+
+		// Retry every 1 minute on error
 		Effect::new(move || {
 			if let Some(Err(_)) = lsrs_resource.get() {
 				set_timeout(

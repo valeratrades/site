@@ -5,7 +5,7 @@
     flake-utils.url = "github:numtide/flake-utils";
     rust-overlay.url = "github:oxalica/rust-overlay";
     pre-commit-hooks.url = "github:cachix/git-hooks.nix/ca5b894d3e3e151ffc1db040b6ce4dcc75d31c37";
-    v-utils.url = "github:valeratrades/.github";
+    v-utils.url = "github:valeratrades/.github/v1.2.1";
   };
 
   outputs =
@@ -66,8 +66,9 @@
         pname = manifest.name;
         stdenv = pkgs.stdenvAdapters.useMoldLinker pkgs.stdenv;
 
-        workflowContents = v-utils.ci {
-          inherit pkgs;
+        github = v-utils.github {
+          inherit pkgs pname;
+          langs = [ "rs" ];
           lastSupportedVersion = "nightly-2025-01-16";
           jobsErrors = [ "rust-tests" ];
           jobsWarnings = [
@@ -223,32 +224,28 @@
 
           shellHook =
             pre-commit-check.shellHook +
-            workflowContents.shellHook +
+            github.shellHook +
             ''
               							cp -f ${v-utils.files.licenses.blue_oak} ./LICENSE
 
-              							cargo -Zscript -q ${v-utils.hooks.appendCustom} ./.git/hooks/pre-commit
-              							cp -f ${(v-utils.hooks.treefmt) { inherit pkgs; }} ./.treefmt.toml
-              							cp -f ${(v-utils.hooks.preCommit) { inherit pkgs pname; }} ./.git/hooks/custom.sh
+              							cp -f ${(v-utils.files.treefmt) { inherit pkgs; }} ./.treefmt.toml
 
               							#mkdir -p ./.cargo
               							#cp -f ${(v-utils.files.rust.config { inherit pkgs; })} ./.cargo/config.toml
               							cp -f ${(v-utils.files.rust.rustfmt { inherit pkgs; })} ./rustfmt.toml
-              							cp -f ${
-                       (v-utils.files.gitignore {
-                         inherit pkgs;
-                         langs = [ "rs" ];
-                       })
-                     } ./.gitignore
 
               							cp -f ${readme} ./README.md
 
                             # cargo-leptos must match leptos crate's version; thus can't install through nixpkgs
-                            # Use binstall on Ubuntu (faster), cargo install elsewhere
-                            if grep -qi ubuntu /etc/os-release 2>/dev/null; then
-                              cargo binstall -y cargo-leptos
-                            else
-                              cargo install cargo-leptos
+                            # Use a lock file to ensure only one terminal installs it
+                            LOCK_FILE="/tmp/cargo-leptos-install-$(echo "$PWD" | md5sum | cut -d' ' -f1).lock"
+                            if mkdir "$LOCK_FILE" 2>/dev/null; then
+                              trap "rmdir '$LOCK_FILE' 2>/dev/null" EXIT
+                              if grep -qi ubuntu /etc/os-release 2>/dev/null; then
+                                cargo binstall -y cargo-leptos
+                              else
+                                cargo install cargo-leptos
+                              fi
                             fi
 
               							${sourceTailwind}
@@ -280,7 +277,7 @@
             perl
             sccache
             rust
-          ];
+          ] ++ github.enabledPackages;
         };
       }
     );

@@ -286,7 +286,7 @@ pub mod server_impl {
 			.set_token_uri(TokenUrl::new("https://oauth2.googleapis.com/token".to_string()).unwrap())
 			.set_redirect_uri(RedirectUrl::new(format!("{}/auth/google/callback", settings.site_url)).unwrap());
 
-		// Create HTTP client for token exchange
+		// Create HTTP client for token exchange (with redirect protection)
 		let http_client = reqwest::ClientBuilder::new()
 			.redirect(reqwest::redirect::Policy::none())
 			.build()
