@@ -1,10 +1,4 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-body {
-  font-family: monospace;
-}
+body { font-family: monospace; }
 
 /* Restore browser defaults for semantic HTML inside blog posts */
 .blog-post-content :where(h1, h2, h3, h4, h5, h6, p, ul, ol, li, a, blockquote, pre, code, figure, figcaption, table, th, td, hr, strong, em) {

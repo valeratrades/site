@@ -55,11 +55,8 @@
           sccache
           openssl
           pkg-config
-          tailwindcss
           #flyctl # might end up using it for deployment
         ];
-
-        sourceTailwind = ''tailwindcss -i ./style/tailwind_in.css -o ./public/styles.css '';
 
         pre-commit-check = pre-commit-hooks.lib.${system}.run (v-utils.files.preCommit { inherit pkgs; });
         manifest = (pkgs.lib.importTOML ./Cargo.toml).package;
@@ -117,12 +114,8 @@
 
               nativeBuildInputs = with pkgs; [
                 pkg-config
-                tailwindcss
                 wasm-bindgen-cli
               ] ++ frontendTools;
-
-              # Build tailwind CSS before cargo build
-              preBuild = sourceTailwind;
 
               # Custom build phase: build server binary and WASM client separately
               buildPhase = ''
@@ -235,8 +228,6 @@
                                 cargo install cargo-leptos
                               fi
                             fi
-
-              							${sourceTailwind}
 
                             # ClickHouse version check - clickhouse crate 0.13+ requires server 21.8+
                             MIN_CH_VERSION="21.8"

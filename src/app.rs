@@ -538,7 +538,12 @@ pub fn App() -> impl IntoView {
 			id: Some("leptos".to_owned()),
 			href: format!("/pkg/{}.css", env!("CARGO_PKG_NAME")),
 		}),
+		Stylesheet(StylesheetProps {
+			id: None,
+			href: "/custom.css".to_owned(),
+		}),
 		Script(ScriptProps::builder().src("https://cdn.tailwindcss.com").build()),
+		Script(ScriptProps::builder().src("/tailwind.config.js").build()),
 		Title(TitleProps {
 			formatter: None,
 			text: Some("My Site".into()),
