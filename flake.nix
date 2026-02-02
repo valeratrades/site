@@ -71,13 +71,7 @@
           langs = [ "rs" ];
           lastSupportedVersion = "nightly-2025-01-16";
           jobsErrors = [ "rust-tests" ];
-          jobsWarnings = [
-            "rust-doc"
-            "rust-clippy"
-            "rust-machete"
-            "rust-sorted"
-            "tokei"
-          ];
+          jobsWarnings = [ "rust-doc" "rust-clippy" "rust-machete" "rust-sorted" "tokei" ];
           jobsOther = [ "loc-badge" ];
         };
         readme = v-utils.readme-fw {
@@ -90,13 +84,7 @@
               outPath = "LICENSE";
             }
           ];
-          badges = [
-            "msrv"
-            "crates_io"
-            "docs_rs"
-            "loc"
-            "ci"
-          ];
+          badges = [ "msrv" "crates_io" "docs_rs" "loc" "ci" ];
         };
       in
       {

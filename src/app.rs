@@ -1,5 +1,5 @@
 use leptos::{ev, html::*, prelude::*, svg::svg};
-use leptos_meta::{MetaTags, Stylesheet, StylesheetProps, Title, TitleProps, provide_meta_context};
+use leptos_meta::{MetaTags, Script, ScriptProps, Stylesheet, StylesheetProps, Title, TitleProps, provide_meta_context};
 use leptos_routable::prelude::*;
 use leptos_router::{
 	components::{A, AProps, Router},
@@ -538,6 +538,7 @@ pub fn App() -> impl IntoView {
 			id: Some("leptos".to_owned()),
 			href: format!("/pkg/{}.css", env!("CARGO_PKG_NAME")),
 		}),
+		Script(ScriptProps::builder().src("https://cdn.tailwindcss.com").build()),
 		Title(TitleProps {
 			formatter: None,
 			text: Some("My Site".into()),
