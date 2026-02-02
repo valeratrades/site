@@ -211,8 +211,6 @@
 
               							cp -f ${(v-utils.files.treefmt) { inherit pkgs; }} ./.treefmt.toml
 
-              							#mkdir -p ./.cargo
-              							#cp -f ${(v-utils.files.rust.config { inherit pkgs; })} ./.cargo/config.toml
               							cp -f ${(v-utils.files.rust.rustfmt { inherit pkgs; })} ./rustfmt.toml
 
               							cp -f ${readme} ./README.md
