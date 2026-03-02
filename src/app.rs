@@ -313,26 +313,41 @@ pub mod server_impl {
 			.await
 			.map_err(|e| ServerFnError::new(format!("Failed to parse user info: {}", e)))?;
 
+		let display_name = user_info.name.unwrap_or_default();
+		let avatar_url = user_info.picture.unwrap_or_default();
+
 		// Check if user exists by Google ID
 		let user = if let Some(user) = db.get_user_by_google_id(&user_info.id).await.map_err(|e| ServerFnError::new(format!("Database error: {}", e)))? {
-			user
+			// Update avatar/display_name from Google on each login
+			let _ = db.update_google_user_info(&user.id, &avatar_url, &display_name).await;
+			User {
+				display_name: if display_name.is_empty() { None } else { Some(display_name) },
+				avatar_url: if avatar_url.is_empty() { None } else { Some(avatar_url) },
+				..user
+			}
 		} else if let Some((existing_user, _)) = db.get_user_by_email(&user_info.email).await.map_err(|e| ServerFnError::new(format!("Database error: {}", e)))? {
 			// Link Google account to existing user
-			db.link_google_to_user(&existing_user.id, &user_info.id)
+			db.link_google_to_user(&existing_user.id, &user_info.id, &avatar_url, &display_name)
 				.await
 				.map_err(|e| ServerFnError::new(format!("Failed to link Google account: {}", e)))?;
-			existing_user
+			User {
+				display_name: if display_name.is_empty() { None } else { Some(display_name) },
+				avatar_url: if avatar_url.is_empty() { None } else { Some(avatar_url) },
+				..existing_user
+			}
 		} else {
-			// Create new user
+			// Create new user — username defaults to full email
 			let user_id = uuid::Uuid::new_v4().to_string();
-			let username = user_info.name.unwrap_or_else(|| user_info.email.split('@').next().unwrap_or("user").to_string());
-			db.create_google_user(&user_id, &user_info.email, &username, &user_info.id)
+			let username = user_info.email.clone();
+			db.create_google_user(&user_id, &user_info.email, &username, &user_info.id, &display_name, &avatar_url)
 				.await
 				.map_err(|e| ServerFnError::new(format!("Failed to create user: {}", e)))?;
 			User {
 				id: user_id,
 				email: user_info.email,
 				username,
+				display_name: if display_name.is_empty() { None } else { Some(display_name) },
+				avatar_url: if avatar_url.is_empty() { None } else { Some(avatar_url) },
 			}
 		};
 
@@ -359,10 +374,39 @@ pub mod server_impl {
 		pub id: String,
 		pub email: String,
 		pub name: Option<String>,
+		pub picture: Option<String>,
 	}
 
 	pub fn is_google_oauth_configured_impl() -> bool {
 		get_settings().map(|s| s.google_oauth.is_configured()).unwrap_or(false)
+	}
+
+	pub async fn update_username_impl(new_username: String) -> Result<(), ServerFnError> {
+		let new_username = new_username.trim().to_string();
+		if new_username.is_empty() {
+			return Err(ServerFnError::new("Username cannot be empty"));
+		}
+		if new_username.len() > 64 {
+			return Err(ServerFnError::new("Username too long (max 64 characters)"));
+		}
+
+		let user = get_current_user_impl().await?.ok_or_else(|| ServerFnError::new("Not logged in"))?;
+
+		if user.username == new_username {
+			return Ok(());
+		}
+
+		let db = get_db()?;
+
+		if db.username_exists(&new_username).await.map_err(|e| ServerFnError::new(format!("Database error: {}", e)))? {
+			return Err(ServerFnError::new("Username already taken"));
+		}
+
+		db.update_username(&user.id, &new_username)
+			.await
+			.map_err(|e| ServerFnError::new(format!("Failed to update username: {}", e)))?;
+
+		Ok(())
 	}
 }
 
@@ -404,6 +448,11 @@ pub async fn google_auth_callback(code: String, state: String) -> Result<User, S
 #[server(IsGoogleOAuthConfigured)]
 pub async fn is_google_oauth_configured() -> Result<bool, ServerFnError> {
 	Ok(server_impl::is_google_oauth_configured_impl())
+}
+
+#[server(UpdateUsername)]
+pub async fn update_username(new_username: String) -> Result<(), ServerFnError> {
+	server_impl::update_username_impl(new_username).await
 }
 
 /// Navigation link that highlights when the current route matches (or is a child of) the href.
@@ -471,21 +520,28 @@ fn UserButton() -> impl IntoView {
 				div().class("w-8 h-8 rounded-full bg-gray-700 animate-pulse").into_any()
 			}
 			Some(Ok(Some(user))) => {
-				// Logged in - show initial, link to profile
-				let initial = user.initial().to_string();
-				let colors = ["bg-blue-500", "bg-green-500", "bg-purple-500", "bg-pink-500", "bg-orange-500", "bg-teal-500"];
-				let color_idx = user.username.bytes().map(|b| b as usize).sum::<usize>() % colors.len();
-				let bg_color = colors[color_idx];
-
+				// Logged in - show avatar or initial, link to profile
 				a().attr("href", "/profile")
-					.child(
+					.child(if let Some(ref url) = user.avatar_url {
+						img()
+							.attr("src", url.clone())
+							.attr("alt", "Avatar")
+							.attr("referrerpolicy", "no-referrer")
+							.class("w-8 h-8 rounded-full object-cover hover:opacity-80 transition-opacity")
+							.into_any()
+					} else {
+						let initial = user.initial().to_string();
+						let colors = ["bg-blue-500", "bg-green-500", "bg-purple-500", "bg-pink-500", "bg-orange-500", "bg-teal-500"];
+						let color_idx = user.username.bytes().map(|b| b as usize).sum::<usize>() % colors.len();
+						let bg_color = colors[color_idx];
 						div()
 							.class(format!(
 								"w-8 h-8 rounded-full {} flex items-center justify-center font-bold text-white hover:opacity-80 transition-opacity",
 								bg_color
 							))
-							.child(initial),
-					)
+							.child(initial)
+							.into_any()
+					})
 					.into_any()
 			}
 			Some(Ok(None)) | Some(Err(_)) => {
@@ -990,6 +1046,10 @@ fn ProfileView() -> impl IntoView {
 #[island]
 fn ProfileContent() -> impl IntoView {
 	let user_resource = LocalResource::new(get_current_user);
+	let editing_username = RwSignal::new(false);
+	let new_username = RwSignal::new(String::new());
+	let username_error = RwSignal::new(Option::<String>::None);
+	let username_saving = RwSignal::new(false);
 
 	let on_logout = move |_| {
 		wasm_bindgen_futures::spawn_local(async move {
@@ -1002,18 +1062,110 @@ fn ProfileContent() -> impl IntoView {
 
 	move || {
 		match user_resource.get() {
-			None => {
-				// Loading
-				div().class("text-center").child("Loading...").into_any()
-			}
+			None => div().class("text-center").child("Loading...").into_any(),
 			Some(Ok(Some(user))) => {
-				// Logged in - show profile
+				let current_username = user.username.clone();
 				div()
 					.class("text-center")
 					.child((
 						h1().class("text-2xl font-bold mb-4").child("Profile"),
+						// Avatar
+						user.avatar_url.as_ref().map(|url| {
+							img()
+								.attr("src", url.clone())
+								.attr("alt", "Avatar")
+								.attr("referrerpolicy", "no-referrer")
+								.class("w-20 h-20 rounded-full mx-auto mb-4 object-cover")
+						}),
 						div().class("bg-gray-100 rounded-lg p-6 mb-4").child((
-							p().class("text-lg mb-2").child(format!("Username: {}", user.username)),
+							// Display name (if set)
+							user.display_name.as_ref().map(|name| p().class("text-xl font-semibold mb-2").child(name.clone())),
+							// Username (editable)
+							div().class("mb-2").child(move || {
+								if editing_username.get() {
+									let on_save = {
+										let current_username = current_username.clone();
+										move || {
+											let val = new_username.get().trim().to_string();
+											if val.is_empty() {
+												username_error.set(Some("Username cannot be empty".into()));
+												return;
+											}
+											if val == current_username {
+												editing_username.set(false);
+												return;
+											}
+											username_saving.set(true);
+											username_error.set(None);
+											wasm_bindgen_futures::spawn_local(async move {
+												match update_username(val).await {
+													Ok(()) =>
+														if let Some(window) = web_sys::window() {
+															let _ = window.location().reload();
+														},
+													Err(e) => {
+														let msg = format!("{}", e);
+														let clean = if msg.contains("already taken") { "Username already taken".to_string() } else { msg };
+														username_error.set(Some(clean));
+														username_saving.set(false);
+													}
+												}
+											});
+										}
+									};
+									let on_save_click = on_save.clone();
+									let on_save_key = on_save;
+									div()
+										.class("flex flex-col items-center gap-2")
+										.child((
+											div().class("flex items-center gap-2 w-full").child((
+												input()
+													.attr("type", "text")
+													.attr("placeholder", "New username")
+													.class("flex-1 px-3 py-1 border border-gray-300 rounded focus:outline-none focus:border-blue-500 text-center")
+													.prop("value", move || new_username.get())
+													.on(ev::input, move |e| {
+														new_username.set(event_target_value(&e));
+														username_error.set(None);
+													})
+													.on(ev::keydown, move |e| {
+														if e.key() == "Enter" {
+															e.prevent_default();
+															on_save_key();
+														}
+													}),
+												button()
+													.attr("type", "button")
+													.attr("disabled", move || username_saving.get())
+													.class("px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm disabled:opacity-50")
+													.on(ev::click, move |_| on_save_click())
+													.child(move || if username_saving.get() { "Saving..." } else { "Save" }),
+												button()
+													.attr("type", "button")
+													.class("px-3 py-1 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 text-sm")
+													.on(ev::click, move |_| {
+														editing_username.set(false);
+														username_error.set(None);
+													})
+													.child("Cancel"),
+											)),
+											move || username_error.get().map(|e| p().class("text-red-500 text-sm").child(e)),
+										))
+										.into_any()
+								} else {
+									p().class("text-lg cursor-pointer hover:text-blue-500 transition-colors")
+										.attr("title", "Click to edit username")
+										.on(ev::click, {
+											let current_username = current_username.clone();
+											move |_| {
+												new_username.set(current_username.clone());
+												editing_username.set(true);
+											}
+										})
+										.child(format!("Username: {}", user.username))
+										.into_any()
+								}
+							}),
 							p().class("text-gray-600").child(format!("Email: {}", user.email)),
 						)),
 						button()
@@ -1024,7 +1176,6 @@ fn ProfileContent() -> impl IntoView {
 					.into_any()
 			}
 			Some(Ok(None)) | Some(Err(_)) => {
-				// Not logged in - redirect to login with return URL
 				Effect::new(move |_| {
 					if let Some(window) = web_sys::window() {
 						let _ = window.location().set_href("/login?redirect_to=/profile");

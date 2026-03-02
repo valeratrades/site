@@ -5,6 +5,10 @@ use tracing::info;
 use super::User;
 use crate::config::ClickHouseConfig;
 
+fn none_if_empty(s: String) -> Option<String> {
+	if s.is_empty() { None } else { Some(s) }
+}
+
 const MIGRATIONS: &[&str] = &[
 	// Migration 0: Create users table
 	r#"
@@ -69,6 +73,14 @@ CREATE TABLE IF NOT EXISTS site.admin_files (
     uploaded_at DateTime DEFAULT now()
 ) ENGINE = MergeTree()
 ORDER BY (uploaded_at, id)
+"#,
+	// Migration 7: Add display_name column for optional display name
+	r#"
+ALTER TABLE site.users ADD COLUMN IF NOT EXISTS display_name String DEFAULT ''
+"#,
+	// Migration 8: Add avatar_url column for profile pictures (e.g. Google avatar)
+	r#"
+ALTER TABLE site.users ADD COLUMN IF NOT EXISTS avatar_url String DEFAULT ''
 "#,
 ];
 
@@ -198,7 +210,10 @@ PRIMARY KEY version
 	}
 
 	pub async fn get_user_by_email(&self, email: &str) -> Result<Option<(User, String)>> {
-		let query = format!("SELECT id, email, username, password_hash FROM site.users WHERE email = '{}' LIMIT 1", email.replace('\'', "''"));
+		let query = format!(
+			"SELECT id, email, username, password_hash, display_name, avatar_url FROM site.users WHERE email = '{}' LIMIT 1",
+			email.replace('\'', "''")
+		);
 
 		#[derive(serde::Deserialize, clickhouse::Row)]
 		struct UserRow {
@@ -206,6 +221,8 @@ PRIMARY KEY version
 			email: String,
 			username: String,
 			password_hash: String,
+			display_name: String,
+			avatar_url: String,
 		}
 
 		match self.client.query(&query).fetch_one::<UserRow>().await {
@@ -214,6 +231,8 @@ PRIMARY KEY version
 					id: row.id,
 					email: row.email,
 					username: row.username,
+					display_name: none_if_empty(row.display_name),
+					avatar_url: none_if_empty(row.avatar_url),
 				},
 				row.password_hash,
 			))),
@@ -223,7 +242,7 @@ PRIMARY KEY version
 
 	pub async fn get_user_by_username(&self, username: &str) -> Result<Option<(User, String)>> {
 		let query = format!(
-			"SELECT id, email, username, password_hash FROM site.users WHERE username = '{}' LIMIT 1",
+			"SELECT id, email, username, password_hash, display_name, avatar_url FROM site.users WHERE username = '{}' LIMIT 1",
 			username.replace('\'', "''")
 		);
 
@@ -233,6 +252,8 @@ PRIMARY KEY version
 			email: String,
 			username: String,
 			password_hash: String,
+			display_name: String,
+			avatar_url: String,
 		}
 
 		match self.client.query(&query).fetch_one::<UserRow>().await {
@@ -241,6 +262,8 @@ PRIMARY KEY version
 					id: row.id,
 					email: row.email,
 					username: row.username,
+					display_name: none_if_empty(row.display_name),
+					avatar_url: none_if_empty(row.avatar_url),
 				},
 				row.password_hash,
 			))),
@@ -249,13 +272,18 @@ PRIMARY KEY version
 	}
 
 	pub async fn get_user_by_id(&self, id: &str) -> Result<Option<User>> {
-		let query = format!("SELECT id, email, username FROM site.users WHERE id = '{}' LIMIT 1", id.replace('\'', "''"));
+		let query = format!(
+			"SELECT id, email, username, display_name, avatar_url FROM site.users WHERE id = '{}' LIMIT 1",
+			id.replace('\'', "''")
+		);
 
 		#[derive(serde::Deserialize, clickhouse::Row)]
 		struct UserRow {
 			id: String,
 			email: String,
 			username: String,
+			display_name: String,
+			avatar_url: String,
 		}
 
 		match self.client.query(&query).fetch_one::<UserRow>().await {
@@ -263,6 +291,8 @@ PRIMARY KEY version
 				id: row.id,
 				email: row.email,
 				username: row.username,
+				display_name: none_if_empty(row.display_name),
+				avatar_url: none_if_empty(row.avatar_url),
 			})),
 			Err(_) => Ok(None),
 		}
@@ -287,7 +317,7 @@ PRIMARY KEY version
 
 	pub async fn get_session_user(&self, session_id: &str) -> Result<Option<User>> {
 		let query = format!(
-			"SELECT u.id, u.email, u.username FROM site.sessions s \
+			"SELECT u.id, u.email, u.username, u.display_name, u.avatar_url FROM site.sessions s \
 			 JOIN site.users u ON s.user_id = u.id \
 			 WHERE s.session_id = '{}' AND s.expires_at > now() \
 			 LIMIT 1",
@@ -299,6 +329,8 @@ PRIMARY KEY version
 			id: String,
 			email: String,
 			username: String,
+			display_name: String,
+			avatar_url: String,
 		}
 
 		match self.client.query(&query).fetch_one::<UserRow>().await {
@@ -306,6 +338,8 @@ PRIMARY KEY version
 				id: row.id,
 				email: row.email,
 				username: row.username,
+				display_name: none_if_empty(row.display_name),
+				avatar_url: none_if_empty(row.avatar_url),
 			})),
 			Err(_) => Ok(None),
 		}
@@ -383,13 +417,18 @@ PRIMARY KEY version
 
 	// Google OAuth user management
 	pub async fn get_user_by_google_id(&self, google_id: &str) -> Result<Option<User>> {
-		let query = format!("SELECT id, email, username FROM site.users WHERE google_id = '{}' LIMIT 1", google_id.replace('\'', "''"));
+		let query = format!(
+			"SELECT id, email, username, display_name, avatar_url FROM site.users WHERE google_id = '{}' LIMIT 1",
+			google_id.replace('\'', "''")
+		);
 
 		#[derive(serde::Deserialize, clickhouse::Row)]
 		struct UserRow {
 			id: String,
 			email: String,
 			username: String,
+			display_name: String,
+			avatar_url: String,
 		}
 
 		match self.client.query(&query).fetch_one::<UserRow>().await {
@@ -397,31 +436,64 @@ PRIMARY KEY version
 				id: row.id,
 				email: row.email,
 				username: row.username,
+				display_name: none_if_empty(row.display_name),
+				avatar_url: none_if_empty(row.avatar_url),
 			})),
 			Err(_) => Ok(None),
 		}
 	}
 
-	pub async fn create_google_user(&self, id: &str, email: &str, username: &str, google_id: &str) -> Result<()> {
+	pub async fn create_google_user(&self, id: &str, email: &str, username: &str, google_id: &str, display_name: &str, avatar_url: &str) -> Result<()> {
 		let query = format!(
-			"INSERT INTO site.users (id, email, username, password_hash, email_verified, google_id) VALUES ('{}', '{}', '{}', '', 1, '{}')",
+			"INSERT INTO site.users (id, email, username, password_hash, email_verified, google_id, display_name, avatar_url) VALUES ('{}', '{}', '{}', '', 1, '{}', '{}', '{}')",
 			id.replace('\'', "''"),
 			email.replace('\'', "''"),
 			username.replace('\'', "''"),
-			google_id.replace('\'', "''")
+			google_id.replace('\'', "''"),
+			display_name.replace('\'', "''"),
+			avatar_url.replace('\'', "''"),
 		);
 		self.client.query(&query).execute().await?;
 		Ok(())
 	}
 
-	pub async fn link_google_to_user(&self, user_id: &str, google_id: &str) -> Result<()> {
+	pub async fn link_google_to_user(&self, user_id: &str, google_id: &str, avatar_url: &str, display_name: &str) -> Result<()> {
 		let query = format!(
-			"ALTER TABLE site.users UPDATE google_id = '{}', email_verified = 1 WHERE id = '{}'",
+			"ALTER TABLE site.users UPDATE google_id = '{}', email_verified = 1, avatar_url = '{}', display_name = '{}' WHERE id = '{}'",
 			google_id.replace('\'', "''"),
-			user_id.replace('\'', "''")
+			avatar_url.replace('\'', "''"),
+			display_name.replace('\'', "''"),
+			user_id.replace('\'', "''"),
 		);
 		self.client.query(&query).execute().await?;
 		Ok(())
+	}
+
+	pub async fn update_google_user_info(&self, user_id: &str, avatar_url: &str, display_name: &str) -> Result<()> {
+		let query = format!(
+			"ALTER TABLE site.users UPDATE avatar_url = '{}', display_name = '{}' WHERE id = '{}'",
+			avatar_url.replace('\'', "''"),
+			display_name.replace('\'', "''"),
+			user_id.replace('\'', "''"),
+		);
+		self.client.query(&query).execute().await?;
+		Ok(())
+	}
+
+	pub async fn update_username(&self, user_id: &str, new_username: &str) -> Result<()> {
+		let query = format!(
+			"ALTER TABLE site.users UPDATE username = '{}' WHERE id = '{}'",
+			new_username.replace('\'', "''"),
+			user_id.replace('\'', "''"),
+		);
+		self.client.query(&query).execute().await?;
+		Ok(())
+	}
+
+	pub async fn username_exists(&self, username: &str) -> Result<bool> {
+		let query = format!("SELECT count() FROM site.users WHERE username = '{}'", username.replace('\'', "''"));
+		let count: u64 = self.client.query(&query).fetch_one::<u64>().await?;
+		Ok(count > 0)
 	}
 
 	// Admin files management

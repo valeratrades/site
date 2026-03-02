@@ -5,11 +5,18 @@ pub struct User {
 	pub id: String,
 	pub email: String,
 	pub username: String,
+	pub display_name: Option<String>,
+	pub avatar_url: Option<String>,
 }
 
 impl User {
 	pub fn initial(&self) -> char {
-		self.username.chars().next().unwrap_or('?').to_ascii_uppercase()
+		self.display_name
+			.as_deref()
+			.or(Some(&self.username))
+			.and_then(|s| s.chars().next())
+			.unwrap_or('?')
+			.to_ascii_uppercase()
 	}
 }
 
