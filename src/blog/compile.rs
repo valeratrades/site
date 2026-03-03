@@ -269,6 +269,10 @@ pub fn compile_blog_posts(blog_dir: &Path, output_dir: &Path) -> Vec<BlogPost> {
 					let stderr = String::from_utf8_lossy(&result.stderr);
 					error!("typst compile failed for {:?}: {}", path, stderr);
 				},
+			Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+				error!("`typst` binary not found. Install typst or run inside `nix develop`.");
+				return posts;
+			}
 			Err(e) => {
 				error!("Failed to run typst for {:?}: {}", path, e);
 			}
