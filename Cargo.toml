@@ -76,54 +76,54 @@ ssr = [
 ]
 
 [dependencies]
-color-eyre = "0.6.5"
-derive-new = "0.7.0"
-derive_more = { version = "2.1.1", features = ["from", "display", "deref", "deref_mut", "debug"] }
-futures = "0.3.31"
-js-sys = "^0.3"
-leptos = { version = "^0.8.15", features = ["islands"] }
+color-eyre = "=0.6.5"
+derive-new = "=0.7.0"
+derive_more = { version = "=2.1.1", features = ["from", "display", "deref", "deref_mut", "debug"] }
+futures = "=0.3.31"
+js-sys = "=0.3.83"
+leptos = { version = "=0.8.15", features = ["islands"] }
 leptos-routable = { git = "https://github.com/stefanboere/leptos-routable" }
-leptos_meta = { version = "^0.8.5" }
-leptos_router = { version = "^0.8.11" }
+leptos_meta = { version = "=0.8.5" }
+leptos_router = { version = "=0.8.11" }
 proc-macro2 = "=1.0.105"
-serde = { version = "^1.0.228", features = ["derive"] }
-v_utils = { version = "2.15.19", features = [ "cli", "xdg" ] }
-web-sys = { version = "^0.3", features = ["Navigator", "Clipboard", "HtmlInputElement", "FileList", "File", "Blob", "BlobPropertyBag", "Url", "HtmlAnchorElement"] }
+serde = { version = "=1.0.228", features = ["derive"] }
+v_utils = { version = "=2.15.19", features = ["cli", "xdg"] }
+web-sys = { version = "=0.3.83", features = ["Navigator", "Clipboard", "HtmlInputElement", "FileList", "File", "Blob", "BlobPropertyBag", "Url", "HtmlAnchorElement"] }
 
 # optional-hydrate {{{
-console_error_panic_hook = { version = "^0.1", optional = true }
-gloo-timers = { version = "^0.3", features = ["futures"], optional = true }
-send_wrapper = { version = "^0.6", optional = true }
-wasm-bindgen = "0.2.106" #NB: version must match that of wasm-bindgen-cli I'm compiling the project with
-wasm-bindgen-futures = "0.4"
+console_error_panic_hook = { version = "=0.1.7", optional = true }
+gloo-timers = { version = "=0.3.0", features = ["futures"], optional = true }
+send_wrapper = { version = "=0.6.0", optional = true }
+wasm-bindgen = "=0.2.106" #NB: version must match that of wasm-bindgen-cli I'm compiling the project with
+wasm-bindgen-futures = "=0.4.56"
 #,}}}
 
 # optional-ssr {{{
-any_spawner = { version = "^0.3", optional = true }
-axum = { version = "^0.8", optional = true }
-base64 = "0.22"
-bcrypt = { version = "^0.18", optional = true }
-chrono = { version = "^0.4.42", optional = true, features = ["serde"] }
-chrono-tz = { version = "^0.10.4", optional = true }
-clap = { version = "^4.5.54", features = ["derive"] }
-clickhouse = { version = "^0.14", features = ["time"], optional = true }
-jiff = { version = "0.2.18", features = ["serde"] }
-leptos_axum = { version = "^0.8", optional = true }
-lettre = { version = "0.11", features = ["tokio1-native-tls", "builder"], optional = true }
-notify = { version = "8", optional = true }
-oauth2 = { version = "5.0.0", optional = true }
-plotly = { version = "^0.14.0", features = ["image", "kaleido"], optional = true }
-pulldown-cmark = { version = "0.13", optional = true }
-reqwest = { version = "^0.12.28", features = ["json"], optional = true }
-serde_json = { version = "^1.0.149", optional = true }
-serde_with = { version = "^3.16.1", features = ["chrono"] }
-tokio = { version = "^1", features = ["rt-multi-thread"], optional = true }
-tower-cookies = { version = "^0.11", optional = true }
-tower-http = { version = "^0.6", features = ["fs"], optional = true }
-tracing = { version = "^0.1.44", optional = true }
-uuid = { version = "^1.19", features = ["v4"], optional = true }
-v_exchanges = { version = "0.16.7", features = ["binance", "bybit", "data"], optional = true }
-xdg = { version = "^3.0.0", optional = true }
+any_spawner = { version = "=0.3.0", optional = true }
+axum = { version = "=0.8.8", optional = true }
+base64 = "=0.22.1"
+bcrypt = { version = "=0.18.0", optional = true }
+chrono = { version = "=0.4.42", optional = true, features = ["serde"] }
+chrono-tz = { version = "=0.10.4", optional = true }
+clap = { version = "=4.5.54", features = ["derive"] }
+clickhouse = { version = "=0.14.1", features = ["time"], optional = true }
+jiff = { version = "=0.2.18", features = ["serde"] }
+leptos_axum = { version = "=0.8.7", optional = true }
+lettre = { version = "=0.11.19", features = ["tokio1-native-tls", "builder"], optional = true }
+notify = { version = "=8.2.0", optional = true }
+oauth2 = { version = "=5.0.0", optional = true }
+plotly = { version = "=0.14.0", features = ["image", "kaleido"], optional = true }
+pulldown-cmark = { version = "=0.13.0", optional = true }
+reqwest = { version = "=0.12.28", features = ["json"], optional = true }
+serde_json = { version = "=1.0.149", optional = true }
+serde_with = { version = "=3.16.1", features = ["chrono"] }
+tokio = { version = "=1.49.0", features = ["rt-multi-thread"], optional = true }
+tower-cookies = { version = "=0.11.0", optional = true }
+tower-http = { version = "=0.6.8", features = ["fs"], optional = true }
+tracing = { version = "=0.1.44", optional = true }
+uuid = { version = "=1.19.0", features = ["v4"], optional = true }
+v_exchanges = { version = "=0.16.7", features = ["binance", "bybit", "data"], optional = true }
+xdg = { version = "=3.0.0", optional = true }
 
 [profile.wasm-release]
 inherits = "release"

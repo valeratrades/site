@@ -205,14 +205,14 @@
         "lastModified": 1766844378,
         "narHash": "sha256-HJnjGQDcBQd2DeYAgrdectSzMEVZmIhkp4YqR7IHR+4=",
         "owner": "valeratrades",
-        "repo": ".github",
+        "repo": "v_flakes",
         "rev": "352b2a3c31294ad788e95ef5a8713747c221284b",
         "type": "github"
       },
       "original": {
         "owner": "valeratrades",
         "ref": "v1.2.1",
-        "repo": ".github",
+        "repo": "v_flakes",
         "type": "github"
       }
     }
