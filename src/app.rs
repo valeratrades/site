@@ -964,10 +964,10 @@ fn LoginForm() -> impl IntoView {
 								})
 								.child(toggle_text),
 						),
-						// Google Sign-in button (only shown if configured and not in register mode)
+						// Google Sign-in button (only shown if configured)
 						move || {
 							let show_google = google_oauth_configured.get().map(|r| r.unwrap_or(false)).unwrap_or(false);
-							if show_google && !is_register_mode.get() {
+							if show_google {
 								Some(
 									div().class("mt-6").child((
 										div().class("relative flex items-center justify-center mb-4").child((
@@ -1017,7 +1017,7 @@ fn LoginForm() -> impl IntoView {
 														"M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z",
 													),
 												)),
-												span().child(move || if google_loading.get() { "Redirecting..." } else { "Sign in with Google" }),
+												span().child(move || if google_loading.get() { "Redirecting..." } else { "Continue with Google" }),
 											)),
 									)),
 								)
