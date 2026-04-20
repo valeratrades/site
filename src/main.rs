@@ -28,7 +28,7 @@ async fn main() {
 	let cli = Cli::parse();
 	// LiveSettings provides hot-reload: config file changes are picked up automatically
 	let live_settings = LiveSettings::new(cli.settings, Duration::from_secs(5)).unwrap();
-	let settings = live_settings.initial();
+	let settings = live_settings.config().expect("failed to load initial config");
 
 	// Initialize database and run migrations
 	let db = Database::new(&settings.clickhouse);

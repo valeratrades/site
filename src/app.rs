@@ -26,7 +26,7 @@ pub mod server_impl {
 	};
 
 	fn get_settings() -> Result<Settings, ServerFnError> {
-		use_context::<LiveSettings>().map(|ls| ls.config()).ok_or_else(|| ServerFnError::new("Settings not available"))
+		use_context::<LiveSettings>().ok_or_else(|| ServerFnError::new("Settings not available"))?.config().map_err(|e| ServerFnError::new(e.to_string()))
 	}
 
 	fn get_db() -> Result<Database, ServerFnError> {

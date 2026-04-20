@@ -1,5 +1,17 @@
 {
 	mock = false;
+	google_oauth = {
+		client_id = "350565753492-iltccminubv2bi8b6m1355mdsdmo6238.apps.googleusercontent.com";
+		client_secret = { env = "GOOGLE_CLOUD_CLIENT_site_SECRET"; };
+	};
+	smtp = {
+		host = "smtp.gmail.com";
+		port = 587;
+		username = "valeratrades@gmail.com";
+		password = { env = "IMAP_PASS"; };
+		from_email = "valeratrades@gmail.com";
+		from_name = "valeratrades";
+	};
 	admin = {
 		users = {
 			admin = "100%";
