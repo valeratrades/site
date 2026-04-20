@@ -30,11 +30,7 @@ async fn main() {
 	let live_settings = LiveSettings::new(cli.settings, Duration::from_secs(5)).unwrap();
 	let settings = live_settings.config().expect("failed to load initial config");
 
-	// Initialize database and run migrations
-	let db = Database::new(&settings.clickhouse);
-	if let Err(e) = db.migrate().await {
-		tracing::warn!("Database migration failed (ClickHouse may not be running): {}", e);
-	}
+	let db = Database::try_new().await.expect("failed to initialize database");
 
 	// Warn about missing configurations
 	if !settings.google_oauth.is_configured() {
@@ -56,6 +52,7 @@ async fn main() {
 	// Build the router with server functions
 	let leptos_options_clone = leptos_options.clone();
 	let live_settings_clone = live_settings.clone();
+	let db_clone = db.clone();
 
 	let app = Router::new()
 		.leptos_routes_with_context(
@@ -63,6 +60,7 @@ async fn main() {
 			generate_route_list(App),
 			move || {
 				provide_context(live_settings_clone.clone());
+				provide_context(db_clone.clone());
 			},
 			{
 				let leptos_options = leptos_options_clone.clone();
@@ -71,6 +69,7 @@ async fn main() {
 		)
 		.fallback(file_and_error_handler(move |_| {
 			provide_context(live_settings.clone());
+			provide_context(db.clone());
 			shell(leptos_options_clone.clone())
 		}))
 		.with_state(leptos_options);

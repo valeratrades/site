@@ -1,572 +1,444 @@
-use clickhouse::Client;
-use color_eyre::eyre::{Context, Result};
+use chrono::Utc;
+use color_eyre::eyre::{Result, WrapErr};
+use sqlx::{Row, SqlitePool};
 use tracing::info;
 
 use super::User;
-use crate::config::ClickHouseConfig;
 
 fn none_if_empty(s: String) -> Option<String> {
 	if s.is_empty() { None } else { Some(s) }
 }
 
-const MIGRATIONS: &[&str] = &[
-	// Migration 0: Create users table
-	r#"
-CREATE TABLE IF NOT EXISTS site.users (
-    id String,
-    email String,
-    username String,
-    password_hash String,
-    created_at DateTime DEFAULT now()
-) ENGINE = MergeTree()
-ORDER BY id
-PRIMARY KEY id
-"#,
-	// Migration 1: Create sessions table
-	r#"
-CREATE TABLE IF NOT EXISTS site.sessions (
-    session_id String,
-    user_id String,
-    created_at DateTime DEFAULT now(),
-    expires_at DateTime
-) ENGINE = MergeTree()
-ORDER BY session_id
-PRIMARY KEY session_id
-"#,
-	// Migration 2: Add email_verified column to users
-	r#"
-ALTER TABLE site.users ADD COLUMN IF NOT EXISTS email_verified UInt8 DEFAULT 0
-"#,
-	// Migration 3: Create email verification tokens table
-	r#"
-CREATE TABLE IF NOT EXISTS site.email_tokens (
-    token String,
-    user_id String,
-    created_at DateTime DEFAULT now(),
-    expires_at DateTime
-) ENGINE = MergeTree()
-ORDER BY token
-PRIMARY KEY token
-"#,
-	// Migration 4: Create OAuth state table for CSRF protection
-	r#"
-CREATE TABLE IF NOT EXISTS site.oauth_states (
-    state String,
-    created_at DateTime DEFAULT now(),
-    expires_at DateTime
-) ENGINE = MergeTree()
-ORDER BY state
-PRIMARY KEY state
-"#,
-	// Migration 5: Add google_id column for OAuth users
-	r#"
-ALTER TABLE site.users ADD COLUMN IF NOT EXISTS google_id String DEFAULT ''
-"#,
-	// Migration 6: Create admin files table
-	r#"
-CREATE TABLE IF NOT EXISTS site.admin_files (
-    id String,
-    filename String,
-    content_type String,
-    data String,
-    uploaded_by String,
-    uploaded_at DateTime DEFAULT now()
-) ENGINE = MergeTree()
-ORDER BY (uploaded_at, id)
-"#,
-	// Migration 7: Add display_name column for optional display name
-	r#"
-ALTER TABLE site.users ADD COLUMN IF NOT EXISTS display_name String DEFAULT ''
-"#,
-	// Migration 8: Add avatar_url column for profile pictures (e.g. Google avatar)
-	r#"
-ALTER TABLE site.users ADD COLUMN IF NOT EXISTS avatar_url String DEFAULT ''
-"#,
-];
+fn expires_at_hours(hours: u32) -> String {
+	(Utc::now() + chrono::Duration::hours(hours as i64)).format("%Y-%m-%dT%H:%M:%SZ").to_string()
+}
+
+fn expires_at_minutes(minutes: u32) -> String {
+	(Utc::now() + chrono::Duration::minutes(minutes as i64)).format("%Y-%m-%dT%H:%M:%SZ").to_string()
+}
 
 #[derive(Clone)]
 pub struct Database {
-	client: Client,
-	url: String,
+	pool: SqlitePool,
 }
 
 impl std::fmt::Debug for Database {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct("Database").field("url", &self.url).finish()
+		f.debug_struct("Database").finish()
 	}
 }
 
 impl Database {
-	pub fn new(config: &ClickHouseConfig) -> Self {
-		let client = Client::default()
-			.with_url(&config.url)
-			.with_database(&config.database)
-			.with_user(&config.user)
-			.with_password(&config.password);
+	pub async fn try_new() -> Result<Self> {
+		let app_name = env!("CARGO_PKG_NAME");
+		let xdg_dirs = xdg::BaseDirectories::with_prefix(app_name);
+		let db_path = xdg_dirs.place_state_file("db.sqlite3")?;
+		info!("Opening SQLite database at {}", db_path.display());
 
-		Self { client, url: config.url.clone() }
-	}
+		let url = format!("sqlite://{}?mode=rwc", db_path.display());
+		let pool = SqlitePool::connect(&url).await.wrap_err("failed to open SQLite database")?;
 
-	pub async fn migrate(&self) -> Result<()> {
-		info!("Running database migrations...");
+		// Enable WAL mode for Litestream compatibility
+		sqlx::query("PRAGMA journal_mode=WAL").execute(&pool).await.wrap_err("failed to set WAL mode")?;
 
-		self.ensure_database_exists().await?;
-		self.ensure_migrations_table_exists().await?;
+		sqlx::query(
+			"CREATE TABLE IF NOT EXISTS users (
+                id TEXT PRIMARY KEY,
+                email TEXT NOT NULL,
+                username TEXT NOT NULL,
+                password_hash TEXT NOT NULL DEFAULT '',
+                email_verified INTEGER NOT NULL DEFAULT 0,
+                google_id TEXT NOT NULL DEFAULT '',
+                display_name TEXT NOT NULL DEFAULT '',
+                avatar_url TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+            )",
+		)
+		.execute(&pool)
+		.await
+		.wrap_err("failed to create users table")?;
 
-		let current_version = self.get_migration_version().await?;
-		info!("Current migration version: {}", current_version);
-		info!("Total migrations available: {}", MIGRATIONS.len());
+		sqlx::query(
+			"CREATE TABLE IF NOT EXISTS sessions (
+                session_id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+                expires_at TEXT NOT NULL
+            )",
+		)
+		.execute(&pool)
+		.await
+		.wrap_err("failed to create sessions table")?;
 
-		let mut applied = 0;
-		for (idx, migration) in MIGRATIONS.iter().enumerate() {
-			let version = idx as i32;
-			if version > current_version {
-				info!("Applying migration {}", version);
-				self.client.query(migration).execute().await?;
-				self.record_migration(version as u32).await?;
-				applied += 1;
-			}
-		}
+		sqlx::query(
+			"CREATE TABLE IF NOT EXISTS email_tokens (
+                token TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+                expires_at TEXT NOT NULL
+            )",
+		)
+		.execute(&pool)
+		.await
+		.wrap_err("failed to create email_tokens table")?;
 
-		if applied > 0 {
-			info!("Applied {} migration(s)", applied);
-		} else {
-			info!("No new migrations to apply");
-		}
-		info!("Migrations complete");
-		Ok(())
-	}
+		sqlx::query(
+			"CREATE TABLE IF NOT EXISTS oauth_states (
+                state TEXT PRIMARY KEY,
+                created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+                expires_at TEXT NOT NULL
+            )",
+		)
+		.execute(&pool)
+		.await
+		.wrap_err("failed to create oauth_states table")?;
 
-	async fn ensure_database_exists(&self) -> Result<()> {
-		let client = self.client.clone().with_database("");
-		let query = "CREATE DATABASE IF NOT EXISTS site";
+		sqlx::query(
+			"CREATE TABLE IF NOT EXISTS admin_files (
+                id TEXT PRIMARY KEY,
+                filename TEXT NOT NULL,
+                content_type TEXT NOT NULL,
+                data TEXT NOT NULL,
+                uploaded_by TEXT NOT NULL,
+                uploaded_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+            )",
+		)
+		.execute(&pool)
+		.await
+		.wrap_err("failed to create admin_files table")?;
 
-		client.query(query).execute().await.map_err(|e| {
-			color_eyre::eyre::eyre!(
-				"Failed to connect to ClickHouse server.\n\
-				\n\
-				Possible issues:\n\
-				  1. ClickHouse server is not running\n\
-				  2. Wrong URL configured (currently: {})\n\
-				  3. Network/firewall blocking connection\n\
-				\n\
-				To fix:\n\
-				  - Start ClickHouse: sudo systemctl start clickhouse-server\n\
-				  - Check status: sudo systemctl status clickhouse-server\n\
-				\n\
-				Original error: {:#}",
-				self.url,
-				e
-			)
-		})?;
-		Ok(())
-	}
-
-	async fn ensure_migrations_table_exists(&self) -> Result<()> {
-		let query = r#"
-CREATE TABLE IF NOT EXISTS site.migrations (
-    version UInt32,
-    applied_at DateTime DEFAULT now()
-) ENGINE = MergeTree()
-ORDER BY version
-PRIMARY KEY version
-"#;
-		self.client.query(query).execute().await?;
-		Ok(())
-	}
-
-	async fn get_migration_version(&self) -> Result<i32> {
-		let count_query = "SELECT count() FROM site.migrations";
-		let count: u64 = self.client.query(count_query).fetch_one::<u64>().await.unwrap_or_default();
-
-		if count == 0 {
-			return Ok(-1);
-		}
-
-		let version_query = "SELECT max(version) FROM site.migrations";
-		let version: u32 = self.client.query(version_query).fetch_one::<u32>().await?;
-
-		Ok(version as i32)
-	}
-
-	async fn record_migration(&self, version: u32) -> Result<()> {
-		let query = format!("INSERT INTO site.migrations (version) VALUES ({})", version);
-		self.client.query(&query).execute().await?;
-		Ok(())
+		Ok(Self { pool })
 	}
 
 	pub async fn create_user(&self, id: &str, email: &str, username: &str, password: &str) -> Result<()> {
-		let password_hash = bcrypt::hash(password, bcrypt::DEFAULT_COST).context("Failed to hash password")?;
-
-		let query = format!(
-			"INSERT INTO site.users (id, email, username, password_hash) VALUES ('{}', '{}', '{}', '{}')",
-			id.replace('\'', "''"),
-			email.replace('\'', "''"),
-			username.replace('\'', "''"),
-			password_hash.replace('\'', "''")
-		);
-		self.client.query(&query).execute().await?;
+		let password_hash = bcrypt::hash(password, bcrypt::DEFAULT_COST).wrap_err("failed to hash password")?;
+		sqlx::query("INSERT INTO users (id, email, username, password_hash) VALUES (?, ?, ?, ?)")
+			.bind(id)
+			.bind(email)
+			.bind(username)
+			.bind(&password_hash)
+			.execute(&self.pool)
+			.await
+			.wrap_err("failed to create user")?;
 		Ok(())
 	}
 
 	pub async fn get_user_by_email(&self, email: &str) -> Result<Option<(User, String)>> {
-		let query = format!(
-			"SELECT id, email, username, password_hash, display_name, avatar_url FROM site.users WHERE email = '{}' LIMIT 1",
-			email.replace('\'', "''")
-		);
+		let row = sqlx::query("SELECT id, email, username, password_hash, display_name, avatar_url FROM users WHERE email = ? LIMIT 1")
+			.bind(email)
+			.fetch_optional(&self.pool)
+			.await
+			.wrap_err("failed to query user by email")?;
 
-		#[derive(serde::Deserialize, clickhouse::Row)]
-		struct UserRow {
-			id: String,
-			email: String,
-			username: String,
-			password_hash: String,
-			display_name: String,
-			avatar_url: String,
-		}
-
-		match self.client.query(&query).fetch_one::<UserRow>().await {
-			Ok(row) => Ok(Some((
+		Ok(row.map(|r| {
+			(
 				User {
-					id: row.id,
-					email: row.email,
-					username: row.username,
-					display_name: none_if_empty(row.display_name),
-					avatar_url: none_if_empty(row.avatar_url),
+					id: r.get("id"),
+					email: r.get("email"),
+					username: r.get("username"),
+					display_name: none_if_empty(r.get("display_name")),
+					avatar_url: none_if_empty(r.get("avatar_url")),
 				},
-				row.password_hash,
-			))),
-			Err(_) => Ok(None),
-		}
+				r.get("password_hash"),
+			)
+		}))
 	}
 
 	pub async fn get_user_by_username(&self, username: &str) -> Result<Option<(User, String)>> {
-		let query = format!(
-			"SELECT id, email, username, password_hash, display_name, avatar_url FROM site.users WHERE username = '{}' LIMIT 1",
-			username.replace('\'', "''")
-		);
+		let row = sqlx::query("SELECT id, email, username, password_hash, display_name, avatar_url FROM users WHERE username = ? LIMIT 1")
+			.bind(username)
+			.fetch_optional(&self.pool)
+			.await
+			.wrap_err("failed to query user by username")?;
 
-		#[derive(serde::Deserialize, clickhouse::Row)]
-		struct UserRow {
-			id: String,
-			email: String,
-			username: String,
-			password_hash: String,
-			display_name: String,
-			avatar_url: String,
-		}
-
-		match self.client.query(&query).fetch_one::<UserRow>().await {
-			Ok(row) => Ok(Some((
+		Ok(row.map(|r| {
+			(
 				User {
-					id: row.id,
-					email: row.email,
-					username: row.username,
-					display_name: none_if_empty(row.display_name),
-					avatar_url: none_if_empty(row.avatar_url),
+					id: r.get("id"),
+					email: r.get("email"),
+					username: r.get("username"),
+					display_name: none_if_empty(r.get("display_name")),
+					avatar_url: none_if_empty(r.get("avatar_url")),
 				},
-				row.password_hash,
-			))),
-			Err(_) => Ok(None),
-		}
+				r.get("password_hash"),
+			)
+		}))
 	}
 
 	pub async fn get_user_by_id(&self, id: &str) -> Result<Option<User>> {
-		let query = format!(
-			"SELECT id, email, username, display_name, avatar_url FROM site.users WHERE id = '{}' LIMIT 1",
-			id.replace('\'', "''")
-		);
+		let row = sqlx::query("SELECT id, email, username, display_name, avatar_url FROM users WHERE id = ? LIMIT 1")
+			.bind(id)
+			.fetch_optional(&self.pool)
+			.await
+			.wrap_err("failed to query user by id")?;
 
-		#[derive(serde::Deserialize, clickhouse::Row)]
-		struct UserRow {
-			id: String,
-			email: String,
-			username: String,
-			display_name: String,
-			avatar_url: String,
-		}
-
-		match self.client.query(&query).fetch_one::<UserRow>().await {
-			Ok(row) => Ok(Some(User {
-				id: row.id,
-				email: row.email,
-				username: row.username,
-				display_name: none_if_empty(row.display_name),
-				avatar_url: none_if_empty(row.avatar_url),
-			})),
-			Err(_) => Ok(None),
-		}
+		Ok(row.map(|r| User {
+			id: r.get("id"),
+			email: r.get("email"),
+			username: r.get("username"),
+			display_name: none_if_empty(r.get("display_name")),
+			avatar_url: none_if_empty(r.get("avatar_url")),
+		}))
 	}
 
 	pub async fn email_exists(&self, email: &str) -> Result<bool> {
-		let query = format!("SELECT count() FROM site.users WHERE email = '{}'", email.replace('\'', "''"));
-		let count: u64 = self.client.query(&query).fetch_one::<u64>().await?;
+		let row = sqlx::query("SELECT COUNT(*) as cnt FROM users WHERE email = ?")
+			.bind(email)
+			.fetch_one(&self.pool)
+			.await
+			.wrap_err("failed to check email existence")?;
+		let count: i64 = row.get("cnt");
 		Ok(count > 0)
 	}
 
 	pub async fn create_session(&self, session_id: &str, user_id: &str, expires_hours: u32) -> Result<()> {
-		let query = format!(
-			"INSERT INTO site.sessions (session_id, user_id, expires_at) VALUES ('{}', '{}', now() + INTERVAL {} HOUR)",
-			session_id.replace('\'', "''"),
-			user_id.replace('\'', "''"),
-			expires_hours
-		);
-		self.client.query(&query).execute().await?;
+		sqlx::query("INSERT INTO sessions (session_id, user_id, expires_at) VALUES (?, ?, ?)")
+			.bind(session_id)
+			.bind(user_id)
+			.bind(expires_at_hours(expires_hours))
+			.execute(&self.pool)
+			.await
+			.wrap_err("failed to create session")?;
 		Ok(())
 	}
 
 	pub async fn get_session_user(&self, session_id: &str) -> Result<Option<User>> {
-		let query = format!(
-			"SELECT u.id, u.email, u.username, u.display_name, u.avatar_url FROM site.sessions s \
-			 JOIN site.users u ON s.user_id = u.id \
-			 WHERE s.session_id = '{}' AND s.expires_at > now() \
-			 LIMIT 1",
-			session_id.replace('\'', "''")
-		);
+		let row = sqlx::query(
+			"SELECT u.id, u.email, u.username, u.display_name, u.avatar_url \
+             FROM sessions s JOIN users u ON s.user_id = u.id \
+             WHERE s.session_id = ? AND s.expires_at > strftime('%Y-%m-%dT%H:%M:%SZ', 'now') \
+             LIMIT 1",
+		)
+		.bind(session_id)
+		.fetch_optional(&self.pool)
+		.await
+		.wrap_err("failed to get session user")?;
 
-		#[derive(serde::Deserialize, clickhouse::Row)]
-		struct UserRow {
-			id: String,
-			email: String,
-			username: String,
-			display_name: String,
-			avatar_url: String,
-		}
-
-		match self.client.query(&query).fetch_one::<UserRow>().await {
-			Ok(row) => Ok(Some(User {
-				id: row.id,
-				email: row.email,
-				username: row.username,
-				display_name: none_if_empty(row.display_name),
-				avatar_url: none_if_empty(row.avatar_url),
-			})),
-			Err(_) => Ok(None),
-		}
+		Ok(row.map(|r| User {
+			id: r.get("id"),
+			email: r.get("email"),
+			username: r.get("username"),
+			display_name: none_if_empty(r.get("display_name")),
+			avatar_url: none_if_empty(r.get("avatar_url")),
+		}))
 	}
 
 	pub async fn delete_session(&self, session_id: &str) -> Result<()> {
-		let query = format!("ALTER TABLE site.sessions DELETE WHERE session_id = '{}'", session_id.replace('\'', "''"));
-		self.client.query(&query).execute().await?;
+		sqlx::query("DELETE FROM sessions WHERE session_id = ?")
+			.bind(session_id)
+			.execute(&self.pool)
+			.await
+			.wrap_err("failed to delete session")?;
 		Ok(())
 	}
 
 	pub async fn create_email_token(&self, token: &str, user_id: &str, expires_hours: u32) -> Result<()> {
-		let query = format!(
-			"INSERT INTO site.email_tokens (token, user_id, expires_at) VALUES ('{}', '{}', now() + INTERVAL {} HOUR)",
-			token.replace('\'', "''"),
-			user_id.replace('\'', "''"),
-			expires_hours
-		);
-		self.client.query(&query).execute().await?;
+		sqlx::query("INSERT INTO email_tokens (token, user_id, expires_at) VALUES (?, ?, ?)")
+			.bind(token)
+			.bind(user_id)
+			.bind(expires_at_hours(expires_hours))
+			.execute(&self.pool)
+			.await
+			.wrap_err("failed to create email token")?;
 		Ok(())
 	}
 
 	pub async fn verify_email_token(&self, token: &str) -> Result<Option<String>> {
-		let query = format!(
-			"SELECT user_id FROM site.email_tokens WHERE token = '{}' AND expires_at > now() LIMIT 1",
-			token.replace('\'', "''")
-		);
+		let row = sqlx::query("SELECT user_id FROM email_tokens WHERE token = ? AND expires_at > strftime('%Y-%m-%dT%H:%M:%SZ', 'now') LIMIT 1")
+			.bind(token)
+			.fetch_optional(&self.pool)
+			.await
+			.wrap_err("failed to verify email token")?;
 
-		match self.client.query(&query).fetch_one::<String>().await {
-			Ok(user_id) => Ok(Some(user_id)),
-			Err(_) => Ok(None),
-		}
+		Ok(row.map(|r| r.get("user_id")))
 	}
 
 	pub async fn mark_email_verified(&self, user_id: &str) -> Result<()> {
-		let query = format!("ALTER TABLE site.users UPDATE email_verified = 1 WHERE id = '{}'", user_id.replace('\'', "''"));
-		self.client.query(&query).execute().await?;
+		sqlx::query("UPDATE users SET email_verified = 1 WHERE id = ?")
+			.bind(user_id)
+			.execute(&self.pool)
+			.await
+			.wrap_err("failed to mark email verified")?;
 		Ok(())
 	}
 
 	pub async fn delete_email_token(&self, token: &str) -> Result<()> {
-		let query = format!("ALTER TABLE site.email_tokens DELETE WHERE token = '{}'", token.replace('\'', "''"));
-		self.client.query(&query).execute().await?;
+		sqlx::query("DELETE FROM email_tokens WHERE token = ?")
+			.bind(token)
+			.execute(&self.pool)
+			.await
+			.wrap_err("failed to delete email token")?;
 		Ok(())
 	}
 
 	pub async fn is_email_verified(&self, user_id: &str) -> Result<bool> {
-		let query = format!("SELECT email_verified FROM site.users WHERE id = '{}' LIMIT 1", user_id.replace('\'', "''"));
-		let verified: u8 = self.client.query(&query).fetch_one::<u8>().await.unwrap_or(0);
-		Ok(verified == 1)
+		let row = sqlx::query("SELECT email_verified FROM users WHERE id = ? LIMIT 1")
+			.bind(user_id)
+			.fetch_optional(&self.pool)
+			.await
+			.wrap_err("failed to check email verification")?;
+		Ok(row.map(|r| r.get::<i64, _>("email_verified") != 0).unwrap_or(false))
 	}
 
-	// OAuth state management
 	pub async fn create_oauth_state(&self, state: &str, expires_minutes: u32) -> Result<()> {
-		let query = format!(
-			"INSERT INTO site.oauth_states (state, expires_at) VALUES ('{}', now() + INTERVAL {} MINUTE)",
-			state.replace('\'', "''"),
-			expires_minutes
-		);
-		self.client.query(&query).execute().await?;
+		sqlx::query("INSERT INTO oauth_states (state, expires_at) VALUES (?, ?)")
+			.bind(state)
+			.bind(expires_at_minutes(expires_minutes))
+			.execute(&self.pool)
+			.await
+			.wrap_err("failed to create oauth state")?;
 		Ok(())
 	}
 
 	pub async fn verify_oauth_state(&self, state: &str) -> Result<bool> {
-		let query = format!("SELECT count() FROM site.oauth_states WHERE state = '{}' AND expires_at > now()", state.replace('\'', "''"));
-		let count: u64 = self.client.query(&query).fetch_one::<u64>().await.unwrap_or(0);
+		let row = sqlx::query("SELECT COUNT(*) as cnt FROM oauth_states WHERE state = ? AND expires_at > strftime('%Y-%m-%dT%H:%M:%SZ', 'now')")
+			.bind(state)
+			.fetch_one(&self.pool)
+			.await
+			.wrap_err("failed to verify oauth state")?;
+		let count: i64 = row.get("cnt");
 		Ok(count > 0)
 	}
 
 	pub async fn delete_oauth_state(&self, state: &str) -> Result<()> {
-		let query = format!("ALTER TABLE site.oauth_states DELETE WHERE state = '{}'", state.replace('\'', "''"));
-		self.client.query(&query).execute().await?;
+		sqlx::query("DELETE FROM oauth_states WHERE state = ?")
+			.bind(state)
+			.execute(&self.pool)
+			.await
+			.wrap_err("failed to delete oauth state")?;
 		Ok(())
 	}
 
-	// Google OAuth user management
 	pub async fn get_user_by_google_id(&self, google_id: &str) -> Result<Option<User>> {
-		let query = format!(
-			"SELECT id, email, username, display_name, avatar_url FROM site.users WHERE google_id = '{}' LIMIT 1",
-			google_id.replace('\'', "''")
-		);
+		let row = sqlx::query("SELECT id, email, username, display_name, avatar_url FROM users WHERE google_id = ? LIMIT 1")
+			.bind(google_id)
+			.fetch_optional(&self.pool)
+			.await
+			.wrap_err("failed to query user by google id")?;
 
-		#[derive(serde::Deserialize, clickhouse::Row)]
-		struct UserRow {
-			id: String,
-			email: String,
-			username: String,
-			display_name: String,
-			avatar_url: String,
-		}
-
-		match self.client.query(&query).fetch_one::<UserRow>().await {
-			Ok(row) => Ok(Some(User {
-				id: row.id,
-				email: row.email,
-				username: row.username,
-				display_name: none_if_empty(row.display_name),
-				avatar_url: none_if_empty(row.avatar_url),
-			})),
-			Err(_) => Ok(None),
-		}
+		Ok(row.map(|r| User {
+			id: r.get("id"),
+			email: r.get("email"),
+			username: r.get("username"),
+			display_name: none_if_empty(r.get("display_name")),
+			avatar_url: none_if_empty(r.get("avatar_url")),
+		}))
 	}
 
 	pub async fn create_google_user(&self, id: &str, email: &str, username: &str, google_id: &str, display_name: &str, avatar_url: &str) -> Result<()> {
-		let query = format!(
-			"INSERT INTO site.users (id, email, username, password_hash, email_verified, google_id, display_name, avatar_url) VALUES ('{}', '{}', '{}', '', 1, '{}', '{}', '{}')",
-			id.replace('\'', "''"),
-			email.replace('\'', "''"),
-			username.replace('\'', "''"),
-			google_id.replace('\'', "''"),
-			display_name.replace('\'', "''"),
-			avatar_url.replace('\'', "''"),
-		);
-		self.client.query(&query).execute().await?;
+		sqlx::query(
+			"INSERT INTO users (id, email, username, password_hash, email_verified, google_id, display_name, avatar_url) \
+             VALUES (?, ?, ?, '', 1, ?, ?, ?)",
+		)
+		.bind(id)
+		.bind(email)
+		.bind(username)
+		.bind(google_id)
+		.bind(display_name)
+		.bind(avatar_url)
+		.execute(&self.pool)
+		.await
+		.wrap_err("failed to create google user")?;
 		Ok(())
 	}
 
 	pub async fn link_google_to_user(&self, user_id: &str, google_id: &str, avatar_url: &str, display_name: &str) -> Result<()> {
-		let query = format!(
-			"ALTER TABLE site.users UPDATE google_id = '{}', email_verified = 1, avatar_url = '{}', display_name = '{}' WHERE id = '{}'",
-			google_id.replace('\'', "''"),
-			avatar_url.replace('\'', "''"),
-			display_name.replace('\'', "''"),
-			user_id.replace('\'', "''"),
-		);
-		self.client.query(&query).execute().await?;
+		sqlx::query("UPDATE users SET google_id = ?, email_verified = 1, avatar_url = ?, display_name = ? WHERE id = ?")
+			.bind(google_id)
+			.bind(avatar_url)
+			.bind(display_name)
+			.bind(user_id)
+			.execute(&self.pool)
+			.await
+			.wrap_err("failed to link google to user")?;
 		Ok(())
 	}
 
 	pub async fn update_google_user_info(&self, user_id: &str, avatar_url: &str, display_name: &str) -> Result<()> {
-		let query = format!(
-			"ALTER TABLE site.users UPDATE avatar_url = '{}', display_name = '{}' WHERE id = '{}'",
-			avatar_url.replace('\'', "''"),
-			display_name.replace('\'', "''"),
-			user_id.replace('\'', "''"),
-		);
-		self.client.query(&query).execute().await?;
+		sqlx::query("UPDATE users SET avatar_url = ?, display_name = ? WHERE id = ?")
+			.bind(avatar_url)
+			.bind(display_name)
+			.bind(user_id)
+			.execute(&self.pool)
+			.await
+			.wrap_err("failed to update google user info")?;
 		Ok(())
 	}
 
 	pub async fn update_username(&self, user_id: &str, new_username: &str) -> Result<()> {
-		let query = format!(
-			"ALTER TABLE site.users UPDATE username = '{}' WHERE id = '{}'",
-			new_username.replace('\'', "''"),
-			user_id.replace('\'', "''"),
-		);
-		self.client.query(&query).execute().await?;
+		sqlx::query("UPDATE users SET username = ? WHERE id = ?")
+			.bind(new_username)
+			.bind(user_id)
+			.execute(&self.pool)
+			.await
+			.wrap_err("failed to update username")?;
 		Ok(())
 	}
 
 	pub async fn username_exists(&self, username: &str) -> Result<bool> {
-		let query = format!("SELECT count() FROM site.users WHERE username = '{}'", username.replace('\'', "''"));
-		let count: u64 = self.client.query(&query).fetch_one::<u64>().await?;
+		let row = sqlx::query("SELECT COUNT(*) as cnt FROM users WHERE username = ?")
+			.bind(username)
+			.fetch_one(&self.pool)
+			.await
+			.wrap_err("failed to check username existence")?;
+		let count: i64 = row.get("cnt");
 		Ok(count > 0)
 	}
 
-	// Admin files management
 	pub async fn create_admin_file(&self, id: &str, filename: &str, content_type: &str, data: &str, uploaded_by: &str) -> Result<()> {
-		let query = format!(
-			"INSERT INTO site.admin_files (id, filename, content_type, data, uploaded_by) VALUES ('{}', '{}', '{}', '{}', '{}')",
-			id.replace('\'', "''"),
-			filename.replace('\'', "''"),
-			content_type.replace('\'', "''"),
-			data.replace('\'', "''"),
-			uploaded_by.replace('\'', "''")
-		);
-		self.client.query(&query).execute().await?;
+		sqlx::query("INSERT INTO admin_files (id, filename, content_type, data, uploaded_by) VALUES (?, ?, ?, ?, ?)")
+			.bind(id)
+			.bind(filename)
+			.bind(content_type)
+			.bind(data)
+			.bind(uploaded_by)
+			.execute(&self.pool)
+			.await
+			.wrap_err("failed to create admin file")?;
 		Ok(())
 	}
 
 	pub async fn list_admin_files(&self) -> Result<Vec<AdminFile>> {
-		let query = "SELECT id, filename, content_type, uploaded_by, toString(uploaded_at) as uploaded_at FROM site.admin_files ORDER BY uploaded_at DESC";
+		let rows = sqlx::query("SELECT id, filename, content_type, uploaded_by, uploaded_at FROM admin_files ORDER BY uploaded_at DESC")
+			.fetch_all(&self.pool)
+			.await
+			.wrap_err("failed to list admin files")?;
 
-		#[derive(serde::Deserialize, clickhouse::Row)]
-		struct FileRow {
-			id: String,
-			filename: String,
-			content_type: String,
-			uploaded_by: String,
-			uploaded_at: String,
-		}
-
-		let rows: Vec<FileRow> = self.client.query(query).fetch_all().await.unwrap_or_default();
 		Ok(rows
 			.into_iter()
 			.map(|r| AdminFile {
-				id: r.id,
-				filename: r.filename,
-				content_type: r.content_type,
-				uploaded_by: r.uploaded_by,
-				uploaded_at: r.uploaded_at,
+				id: r.get("id"),
+				filename: r.get("filename"),
+				content_type: r.get("content_type"),
+				uploaded_by: r.get("uploaded_by"),
+				uploaded_at: r.get("uploaded_at"),
 			})
 			.collect())
 	}
 
 	pub async fn get_admin_file(&self, id: &str) -> Result<Option<AdminFileWithData>> {
-		let query = format!(
-			"SELECT id, filename, content_type, data, uploaded_by, toString(uploaded_at) as uploaded_at FROM site.admin_files WHERE id = '{}' LIMIT 1",
-			id.replace('\'', "''")
-		);
+		let row = sqlx::query("SELECT id, filename, content_type, data, uploaded_by, uploaded_at FROM admin_files WHERE id = ? LIMIT 1")
+			.bind(id)
+			.fetch_optional(&self.pool)
+			.await
+			.wrap_err("failed to get admin file")?;
 
-		#[derive(serde::Deserialize, clickhouse::Row)]
-		struct FileRow {
-			id: String,
-			filename: String,
-			content_type: String,
-			data: String,
-			uploaded_by: String,
-			uploaded_at: String,
-		}
-
-		match self.client.query(&query).fetch_one::<FileRow>().await {
-			Ok(r) => Ok(Some(AdminFileWithData {
-				id: r.id,
-				filename: r.filename,
-				content_type: r.content_type,
-				data: r.data,
-				uploaded_by: r.uploaded_by,
-				uploaded_at: r.uploaded_at,
-			})),
-			Err(_) => Ok(None),
-		}
+		Ok(row.map(|r| AdminFileWithData {
+			id: r.get("id"),
+			filename: r.get("filename"),
+			content_type: r.get("content_type"),
+			data: r.get("data"),
+			uploaded_by: r.get("uploaded_by"),
+			uploaded_at: r.get("uploaded_at"),
+		}))
 	}
 
 	pub async fn delete_admin_file(&self, id: &str) -> Result<()> {
-		let query = format!("ALTER TABLE site.admin_files DELETE WHERE id = '{}'", id.replace('\'', "''"));
-		self.client.query(&query).execute().await?;
+		sqlx::query("DELETE FROM admin_files WHERE id = ?")
+			.bind(id)
+			.execute(&self.pool)
+			.await
+			.wrap_err("failed to delete admin file")?;
 		Ok(())
 	}
 }

@@ -7,8 +7,6 @@ use std::collections::HashMap;
 pub struct Settings {
 	pub mock: Option<bool>,
 	#[serde(default)]
-	pub clickhouse: ClickHouseConfig,
-	#[serde(default)]
 	pub smtp: SmtpConfig,
 	#[serde(default)]
 	pub google_oauth: GoogleOAuthConfig,
@@ -26,7 +24,6 @@ impl Default for Settings {
 	fn default() -> Self {
 		Self {
 			mock: Some(false),
-			clickhouse: ClickHouseConfig::default(),
 			smtp: SmtpConfig::default(),
 			google_oauth: GoogleOAuthConfig::default(),
 			site_url: __default_site_url(),
@@ -55,42 +52,6 @@ pub struct AdminConf {
 	/// Format: { "100" = { "secret" = "value" }, "50" = { "less_secret" = "value" } }
 	#[serde(default)]
 	pub creds: Option<HashMap<String, HashMap<String, String>>>,
-}
-
-// No secrets here, plain serde is fine
-#[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
-pub struct ClickHouseConfig {
-	#[serde(default = "__default_clickhouse_url")]
-	pub url: String,
-	#[serde(default = "__default_clickhouse_database")]
-	pub database: String,
-	#[serde(default = "__default_clickhouse_user")]
-	pub user: String,
-	#[serde(default)]
-	pub password: String,
-}
-
-impl Default for ClickHouseConfig {
-	fn default() -> Self {
-		Self {
-			url: __default_clickhouse_url(),
-			database: __default_clickhouse_database(),
-			user: __default_clickhouse_user(),
-			password: String::new(),
-		}
-	}
-}
-
-fn __default_clickhouse_url() -> String {
-	"http://localhost:8123".to_string()
-}
-
-fn __default_clickhouse_database() -> String {
-	"site".to_string()
-}
-
-fn __default_clickhouse_user() -> String {
-	"default".to_string()
 }
 
 // MyConfigPrimitives enables `{ env = "VAR" }` for plain String fields

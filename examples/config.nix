@@ -7,6 +7,7 @@
 	smtp = {
 		host = "smtp.gmail.com";
 		port = 587;
+		#HACK: is using my own actual email lol. But whatever
 		username = "valeratrades@gmail.com";
 		password = { env = "IMAP_PASS"; };
 		from_email = "valeratrades@gmail.com";

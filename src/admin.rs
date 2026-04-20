@@ -26,7 +26,10 @@ pub async fn get_admin_data() -> Result<AdminData, ServerFnError> {
 	};
 
 	// Check if user is admin and get their permission level
-	let settings = use_context::<LiveSettings>().ok_or_else(|| ServerFnError::new("Settings not available"))?.config().map_err(|e| ServerFnError::new(e.to_string()))?;
+	let settings = use_context::<LiveSettings>()
+		.ok_or_else(|| ServerFnError::new("Settings not available"))?
+		.config()
+		.map_err(|e| ServerFnError::new(e.to_string()))?;
 	let user_permission = settings.admin.users.get(&user.username).ok_or_else(|| ServerFnError::new("Access denied: not an admin"))?;
 	let user_level: f64 = **user_permission;
 
@@ -64,12 +67,15 @@ pub async fn list_admin_files() -> Result<Vec<AdminFileInfo>, ServerFnError> {
 	};
 
 	// Check if user is admin
-	let settings = use_context::<LiveSettings>().ok_or_else(|| ServerFnError::new("Settings not available"))?.config().map_err(|e| ServerFnError::new(e.to_string()))?;
+	let settings = use_context::<LiveSettings>()
+		.ok_or_else(|| ServerFnError::new("Settings not available"))?
+		.config()
+		.map_err(|e| ServerFnError::new(e.to_string()))?;
 	if !settings.admin.users.contains_key(&user.username) {
 		return Err(ServerFnError::new("Access denied: not an admin"));
 	};
 
-	let db = Database::new(&settings.clickhouse);
+	let db = use_context::<Database>().ok_or_else(|| ServerFnError::new("Database not available"))?;
 	let files = db.list_admin_files().await.map_err(|e| ServerFnError::new(format!("DB error: {e}")))?;
 
 	Ok(files.into_iter().map(|f| AdminFileInfo { id: f.id, filename: f.filename }).collect())
@@ -86,13 +92,16 @@ pub async fn upload_admin_file(filename: String, content_type: String, data_base
 	};
 
 	// Check if user is admin
-	let settings = use_context::<LiveSettings>().ok_or_else(|| ServerFnError::new("Settings not available"))?.config().map_err(|e| ServerFnError::new(e.to_string()))?;
+	let settings = use_context::<LiveSettings>()
+		.ok_or_else(|| ServerFnError::new("Settings not available"))?
+		.config()
+		.map_err(|e| ServerFnError::new(e.to_string()))?;
 	if !settings.admin.users.contains_key(&user.username) {
 		return Err(ServerFnError::new("Access denied: not an admin"));
 	};
 
 	let id = uuid::Uuid::new_v4().to_string();
-	let db = Database::new(&settings.clickhouse);
+	let db = use_context::<Database>().ok_or_else(|| ServerFnError::new("Database not available"))?;
 	db.create_admin_file(&id, &filename, &content_type, &data_base64, &user.username)
 		.await
 		.map_err(|e| ServerFnError::new(format!("DB error: {e}")))?;
@@ -111,12 +120,15 @@ pub async fn download_admin_file(id: String) -> Result<(String, String, String),
 	};
 
 	// Check if user is admin
-	let settings = use_context::<LiveSettings>().ok_or_else(|| ServerFnError::new("Settings not available"))?.config().map_err(|e| ServerFnError::new(e.to_string()))?;
+	let settings = use_context::<LiveSettings>()
+		.ok_or_else(|| ServerFnError::new("Settings not available"))?
+		.config()
+		.map_err(|e| ServerFnError::new(e.to_string()))?;
 	if !settings.admin.users.contains_key(&user.username) {
 		return Err(ServerFnError::new("Access denied: not an admin"));
 	};
 
-	let db = Database::new(&settings.clickhouse);
+	let db = use_context::<Database>().ok_or_else(|| ServerFnError::new("Database not available"))?;
 	let file = db.get_admin_file(&id).await.map_err(|e| ServerFnError::new(format!("DB error: {e}")))?;
 
 	match file {
@@ -136,12 +148,15 @@ pub async fn delete_admin_file(id: String) -> Result<(), ServerFnError> {
 	};
 
 	// Check if user is admin
-	let settings = use_context::<LiveSettings>().ok_or_else(|| ServerFnError::new("Settings not available"))?.config().map_err(|e| ServerFnError::new(e.to_string()))?;
+	let settings = use_context::<LiveSettings>()
+		.ok_or_else(|| ServerFnError::new("Settings not available"))?
+		.config()
+		.map_err(|e| ServerFnError::new(e.to_string()))?;
 	if !settings.admin.users.contains_key(&user.username) {
 		return Err(ServerFnError::new("Access denied: not an admin"));
 	};
 
-	let db = Database::new(&settings.clickhouse);
+	let db = use_context::<Database>().ok_or_else(|| ServerFnError::new("Database not available"))?;
 	db.delete_admin_file(&id).await.map_err(|e| ServerFnError::new(format!("DB error: {e}")))?;
 
 	Ok(())

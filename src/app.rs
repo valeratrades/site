@@ -26,19 +26,21 @@ pub mod server_impl {
 	};
 
 	fn get_settings() -> Result<Settings, ServerFnError> {
-		use_context::<LiveSettings>().ok_or_else(|| ServerFnError::new("Settings not available"))?.config().map_err(|e| ServerFnError::new(e.to_string()))
+		use_context::<LiveSettings>()
+			.ok_or_else(|| ServerFnError::new("Settings not available"))?
+			.config()
+			.map_err(|e| ServerFnError::new(e.to_string()))
 	}
 
 	fn get_db() -> Result<Database, ServerFnError> {
-		let settings = get_settings()?;
-		Ok(Database::new(&settings.clickhouse))
+		use_context::<Database>().ok_or_else(|| ServerFnError::new("Database not available"))
 	}
 
 	#[instrument(skip(password), fields(email = %email, username = %username))]
 	pub async fn register_impl(email: String, username: String, password: String) -> Result<String, ServerFnError> {
 		info!("Registration attempt");
 		let settings = get_settings()?;
-		let db = Database::new(&settings.clickhouse);
+		let db = get_db()?;
 
 		if db.email_exists(&email).await.map_err(|e| {
 			error!("Database error checking email: {}", e);
