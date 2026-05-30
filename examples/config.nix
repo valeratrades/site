@@ -1,5 +1,6 @@
 {
 	mock = false;
+	site_url = "https://valeratrades.com";
 	google_oauth = {
 		client_id = "350565753492-iltccminubv2bi8b6m1355mdsdmo6238.apps.googleusercontent.com";
 		client_secret = { env = "GOOGLE_CLOUD_CLIENT_site_SECRET"; };
