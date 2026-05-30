@@ -1,6 +1,9 @@
 use chrono::{DateTime, TimeZone, Utc};
 use chrono_tz::{America::New_York, Tz};
-use v_utils::prelude::*;
+use color_eyre::eyre::{Report, Result, bail, eyre};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use v_utils::{NowThen, PrettyPrint};
 
 static CFTC_CODE_BTC: u32 = 133741;
 

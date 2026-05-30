@@ -97,7 +97,10 @@ pub async fn try_build(limit: RequestRange, tf: Timeframe, exchange_name: Exchan
 	tracing::info!("Building market structure for {} {} with limit={:?}, tf={:?}", exchange_name, instrument, limit, tf);
 
 	let mut exchange = exchange_name.init_client();
-	exchange.set_max_tries(3);
+	exchange.set_retry_config(RetryConfig {
+		max_retries: 3,
+		..Default::default()
+	});
 	exchange.set_timeout(Duration::from_secs(60));
 
 	tracing::debug!("Fetching exchange info for {instrument}");

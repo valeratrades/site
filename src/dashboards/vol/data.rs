@@ -115,7 +115,10 @@ pub async fn bvol(duration: Duration) -> Result<NowThen> {
 		}
 	};
 
-	Ok(NowThen::new(now, then).add_duration(duration))
+	Ok(NowThen {
+		duration: Some(duration),
+		..NowThen::new(now, then)
+	})
 }
 
 pub async fn vix(duration: Duration) -> Result<NowThen> {

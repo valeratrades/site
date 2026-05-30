@@ -2,7 +2,8 @@ extern crate clap;
 
 use std::collections::HashMap;
 
-#[derive(Clone, Debug, v_utils::macros::MyConfigPrimitives, serde::Serialize)]
+// MyConfigPrimitives now supplies its own Serialize impl, so deriving serde::Serialize too would conflict
+#[derive(Clone, Debug, v_utils::macros::MyConfigPrimitives)]
 #[cfg_attr(feature = "ssr", derive(v_utils::macros::Settings, v_utils::macros::LiveSettings))]
 pub struct Settings {
 	pub mock: Option<bool>,
@@ -55,7 +56,7 @@ pub struct AdminConf {
 }
 
 // MyConfigPrimitives enables `{ env = "VAR" }` for plain String fields
-#[derive(Clone, Debug, v_utils::macros::MyConfigPrimitives, serde::Serialize, v_utils::macros::SettingsNested)]
+#[derive(Clone, Debug, v_utils::macros::MyConfigPrimitives, v_utils::macros::SettingsNested)]
 pub struct SmtpConfig {
 	pub host: String,
 	pub port: u16,
@@ -78,7 +79,7 @@ impl Default for SmtpConfig {
 	}
 }
 
-#[derive(Clone, Debug, Default, v_utils::macros::MyConfigPrimitives, serde::Serialize, v_utils::macros::SettingsNested)]
+#[derive(Clone, Debug, Default, v_utils::macros::MyConfigPrimitives, v_utils::macros::SettingsNested)]
 pub struct GoogleOAuthConfig {
 	/// Google OAuth2 Client ID (from Google Cloud Console)
 	pub client_id: String,

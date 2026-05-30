@@ -17,7 +17,10 @@ static INSTRUMENT: Instrument = Instrument::Perp;
 #[instrument]
 pub async fn get(tf: Timeframe, range: RequestRange) -> Result<SortedLsrs> {
 	let mut bn = Binance::default();
-	bn.set_max_tries(3);
+	bn.set_retry_config(RetryConfig {
+		max_retries: 3,
+		..Default::default()
+	});
 	bn.set_timeout(std::time::Duration::from_secs(60));
 
 	let pairs = bn.exchange_info(INSTRUMENT).await?.usdt_pairs().collect::<Vec<_>>();
