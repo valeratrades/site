@@ -138,7 +138,7 @@
             cp -r public/* $out/share/${pname}/
 
             cat > $out/bin/${pname} <<EOF
-            #!/bin/sh
+            #!${pkgs.runtimeShell}
             export LEPTOS_SITE_ROOT="\''${LEPTOS_SITE_ROOT:-$out/share/${pname}}"
             exec "$out/bin/${pname}-unwrapped" "\$@"
             EOF
