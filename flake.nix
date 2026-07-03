@@ -160,7 +160,7 @@
         # paths) on the same mount.
         prodRun = pkgs.writeShellApplication {
           name = "${pname}-prod";
-          runtimeInputs = with pkgs; [ typst ];
+          runtimeInputs = with pkgs; [ coreutils typst ];
           text = ''
             mkdir -p /data/public /data/target/site
             cd /data
