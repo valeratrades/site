@@ -1,3 +1,4 @@
+#![recursion_limit = "256"] // deeply nested tachys view types blow the default 128 on layout queries
 #![feature(stmt_expr_attributes)]
 #![feature(const_type_name)]
 #![feature(duration_constructors)]

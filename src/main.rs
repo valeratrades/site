@@ -1,3 +1,4 @@
+#![recursion_limit = "256"] // deeply nested tachys view types blow the default 128 on layout queries
 use std::time::Duration;
 
 use clap::Parser;

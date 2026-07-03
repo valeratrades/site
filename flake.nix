@@ -1,243 +1,231 @@
 {
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/23e89b7da85c3640bbc2173fe04f4bd114342367";
-    nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
-    rust-overlay.url = "github:oxalica/rust-overlay";
-    pre-commit-hooks.url = "github:cachix/git-hooks.nix/ca5b894d3e3e151ffc1db040b6ce4dcc75d31c37";
-    v-utils.url = "github:valeratrades/v_flakes/v1.2.1";
+    pre-commit-hooks.url = "github:cachix/git-hooks.nix";
+    pre-commit-hooks.inputs.nixpkgs.follows = "nixpkgs";
+    v_flakes.url = "github:valeratrades/v_flakes?ref=v1.6";
+    v_flakes.inputs.nixpkgs.follows = "nixpkgs";
   };
 
-  outputs =
-    { self
-    , nixpkgs
-    , nixpkgs-unstable
-    , flake-utils
-    , rust-overlay
-    , pre-commit-hooks
-    , v-utils
-    ,
-    }:
+  outputs = { self, nixpkgs, flake-utils, pre-commit-hooks, v_flakes }:
     flake-utils.lib.eachDefaultSystem (
       system:
       let
-        overlays = [ (import rust-overlay) ];
         pkgs = import nixpkgs {
-          inherit system overlays;
+          inherit system;
           config.allowUnfree = true;
         };
-        pkgs-unstable = import nixpkgs-unstable {
-          inherit system;
-        };
-
-        frontendTools = with pkgs; [
-          sassc # Native Sass compiler
-          #wasm-bindgen-cli #NB: substituted by manually installing v100 via cargo
-          binaryen # For wasm-opt
-          pkgs-unstable.typst # For blog .typ -> .html compilation (needs 0.14+ for HTML export)
-        ];
-
-        rust = pkgs.rust-bin.selectLatestNightlyWith (
-          toolchain:
-          toolchain.default.override {
-            extensions = [
-              "rust-src"
-              "rust-analyzer"
-              "rust-docs"
-              "rustc-codegen-cranelift-preview"
-            ];
-            targets = [ "wasm32-unknown-unknown" ];
-          }
-        );
-
-        buildTools = with pkgs; [
-          mold-wrapped
-          sccache
-          openssl
-          pkg-config
-          #flyctl # might end up using it for deployment
-        ];
-
-        pre-commit-check = pre-commit-hooks.lib.${system}.run (v-utils.files.preCommit { inherit pkgs; });
+        # Canonical toolchain pinned in v_flakes — byte-identical across repos, so
+        # the nix store dedups it and sccache cross-references compilations.
+        rust = v_flakes.rs.default_nightly system;
+        pre-commit-check = pre-commit-hooks.lib.${system}.run (v_flakes.files.preCommit { inherit pkgs; });
         manifest = (pkgs.lib.importTOML ./Cargo.toml).package;
         pname = manifest.name;
         stdenv = pkgs.stdenvAdapters.useMoldLinker pkgs.stdenv;
 
-        github = v-utils.github {
-          inherit pkgs pname;
-          langs = [ "rs" ];
-          lastSupportedVersion = "nightly-2025-01-16";
-          jobsErrors = [ "rust-tests" ];
-          jobsWarnings = [ "rust-doc" "rust-clippy" "rust-machete" "rust-sorted" "tokei" ];
-          jobsOther = [ "loc-badge" ];
-        };
-        readme = v-utils.readme-fw {
-          inherit pkgs pname;
-          lastSupportedVersion = "nightly-1.86";
-          rootDir = ./.;
-          licenses = [
-            {
-              name = "Blue Oak 1.0.0";
-              outPath = "LICENSE";
-            }
-          ];
-          badges = [ "msrv" "crates_io" "docs_rs" "loc" "ci" ];
-        };
-      in
-      {
-        packages =
+        # Pinned to match the workspace's `wasm-bindgen` (`=0.2.126`) — nixpkgs
+        # ships a different minor, and a CLI/crate schema skew is a hard error at
+        # `wasm-bindgen` time. Shadows `pkgs.wasm-bindgen-cli` (a `let` binding
+        # wins over `with pkgs;`) wherever it's referenced below.
+        wasm-bindgen-cli =
           let
-            rustc = rust;
-            cargo = rust;
-            rustPlatform = pkgs.makeRustPlatform {
-              inherit rustc cargo stdenv;
+            src = pkgs.fetchCrate {
+              pname = "wasm-bindgen-cli";
+              version = "0.2.126";
+              hash = "sha256-H6Is3fiZVxZCfOMWK5dWMSrtn50VGv0sfdnsT+cTtyk=";
             };
           in
-          {
-            default = rustPlatform.buildRustPackage rec {
-              inherit pname;
-              version = manifest.version;
-
-              # Copy the current directory and manually link dependencies
-              src = pkgs.lib.cleanSource ./.;
-
-              cargoLock = {
-                lockFile = ./Cargo.lock;
-                outputHashes = {
-                  "leptos-routable-0.2.0" = "sha256-w17sr9fLbUaCHP6x/fVSmR5dYduTGBlXBDna7Ksq+ZM=";
-                };
-              };
-
-              buildInputs = with pkgs; [
-                openssl.dev
-              ];
-
-              nativeBuildInputs = with pkgs; [
-                pkg-config
-                wasm-bindgen-cli
-              ] ++ frontendTools;
-
-              # Custom build phase: build server binary and WASM client separately
-              buildPhase = ''
-                runHook preBuild
-
-                # Build the server binary with SSR feature
-                echo "Building server binary..."
-                cargo build --release --bin ${pname} --features ssr --no-default-features
-
-                # Build the WASM client with hydrate feature
-                echo "Building WASM client..."
-                cargo build --release --lib --target wasm32-unknown-unknown --features hydrate --no-default-features
-
-                # Run wasm-bindgen to generate JS glue code
-                echo "Running wasm-bindgen..."
-                mkdir -p target/site/pkg
-                wasm-bindgen --target web \
-                  --out-dir target/site/pkg \
-                  --out-name ${pname} \
-                  target/wasm32-unknown-unknown/release/${pname}.wasm
-
-                # Optimize WASM with wasm-opt
-                echo "Optimizing WASM..."
-                wasm-opt -Oz target/site/pkg/${pname}_bg.wasm -o target/site/pkg/${pname}_bg.wasm
-
-                runHook postBuild
-              '';
-
-              # Install the binary and site assets
-              installPhase = ''
-                                runHook preInstall
-
-                                mkdir -p $out/bin
-                                mkdir -p $out/share/${pname}/pkg
-
-                                # Copy the server binary
-                                cp target/release/${pname} $out/bin/${pname}
-
-                                # Copy the WASM and JS assets
-                                cp -r target/site/pkg/* $out/share/${pname}/pkg/
-
-                                # CSS is already in public/, which gets copied above
-
-                                # Copy public assets if they exist
-                                if [ -d public ]; then
-                                  cp -r public/* $out/share/${pname}/
-                                fi
-
-                                # Create a wrapper script that sets LEPTOS_SITE_ROOT
-                                cat > $out/bin/${pname}-wrapped <<EOF
-                #!/bin/sh
-                export LEPTOS_SITE_ROOT="$out/share/${pname}"
-                exec "$out/bin/${pname}" "\$@"
-                EOF
-                                chmod +x $out/bin/${pname}-wrapped
-
-                                # Make the wrapped version the default
-                                rm $out/bin/${pname}
-                                mv $out/bin/${pname}-wrapped $out/bin/${pname}
-
-                                runHook postInstall
-              '';
-
-              doCheck = false; # Skip tests in build
-              auditable = false; # Disable cargo-auditable (doesn't support edition 2024)
+          pkgs.buildWasmBindgenCli {
+            inherit src;
+            cargoDeps = pkgs.rustPlatform.fetchCargoVendor {
+              inherit src;
+              inherit (src) pname version;
+              hash = "sha256-VucqkXbCi4qtQzY/HrXiDnbSURsagPsdNVMn1Tw3UiY=";
             };
           };
 
+        rs = v_flakes.rs {
+          inherit pkgs rust;
+          build.enable = false;
+          # getrandom 0.3 (transitive via v_utils -> ustr -> ahash) needs the wasm_js
+          # backend on wasm. Paired with the `wasm_js` feature in
+          # [target.wasm32-unknown-unknown.dependencies] in Cargo.toml.
+          targets."wasm32-unknown-unknown".rustflags = [ "--cfg" ''getrandom_backend="wasm_js"'' ];
+        };
+        github = v_flakes.github {
+          inherit pkgs pname rs;
+          enable = true;
+          lastSupportedVersion = "nightly-2025-01-16";
+          containerRelease = { registry = "ghcr.io/valeratrades"; };
+          jobs.default = true;
+          lfs = true;
+        };
+        readme = v_flakes.readme-fw {
+          inherit pkgs pname;
+          defaults = true;
+          lastSupportedVersion = "nightly-1.86";
+          rootDir = ./.;
+          badges = [ "msrv" "loc" "ci" ];
+        };
+        combined = v_flakes.utils.combine { inherit rust; modules = [ rs github readme ]; };
+      in
+      let
+        rustc = rust;
+        cargo = rust;
+        rustPlatform = pkgs.makeRustPlatform {
+          inherit rustc cargo stdenv;
+        };
+        # `.cargo` holds dev-only accelerators (sccache rustc-wrapper, cranelift,
+        # mold) the hermetic sandbox lacks — drop it so the pure build uses nix's
+        # own toolchain. The one thing it carried that the build DOES need (the
+        # getrandom wasm_js cfg) is re-exported in the wasm build step below.
+        pureSrc = pkgs.lib.cleanSourceWith {
+          src = ./.;
+          filter = path: _type: baseNameOf path != ".cargo";
+        };
+        siteBin = rustPlatform.buildRustPackage {
+          inherit pname;
+          version = manifest.version;
+
+          src = pureSrc;
+          cargoLock = {
+            lockFile = ./Cargo.lock;
+            outputHashes = {
+              "leptos-routable-0.2.0" = "sha256-w17sr9fLbUaCHP6x/fVSmR5dYduTGBlXBDna7Ksq+ZM=";
+            };
+          };
+
+          buildInputs = with pkgs; [ openssl.dev ];
+          nativeBuildInputs = with pkgs; [
+            pkg-config
+            wasm-bindgen-cli
+            binaryen
+          ];
+
+          # Server binary and WASM client are separate compilations (ssr vs hydrate
+          # features), so cargo-leptos is bypassed: plain cargo + wasm-bindgen + wasm-opt.
+          buildPhase = ''
+            runHook preBuild
+
+            cargo build --release --bin ${pname} --features ssr --no-default-features
+
+            RUSTFLAGS='--cfg getrandom_backend="wasm_js"' \
+              cargo build --release --lib --target wasm32-unknown-unknown --features hydrate --no-default-features
+
+            mkdir -p target/site/pkg
+            wasm-bindgen --target web \
+              --out-dir target/site/pkg \
+              --out-name ${pname} \
+              target/wasm32-unknown-unknown/release/${pname}.wasm
+
+            wasm-opt -Oz target/site/pkg/${pname}_bg.wasm -o target/site/pkg/${pname}_bg.wasm
+
+            runHook postBuild
+          '';
+
+          installPhase = ''
+            runHook preInstall
+
+            mkdir -p $out/bin $out/share/${pname}
+            cp target/release/${pname} $out/bin/${pname}-unwrapped
+            cp -r target/site/pkg $out/share/${pname}/pkg
+            cp -r public/* $out/share/${pname}/
+
+            cat > $out/bin/${pname} <<EOF
+            #!/bin/sh
+            export LEPTOS_SITE_ROOT="\''${LEPTOS_SITE_ROOT:-$out/share/${pname}}"
+            exec "$out/bin/${pname}-unwrapped" "\$@"
+            EOF
+            chmod +x $out/bin/${pname}
+
+            runHook postInstall
+          '';
+
+          doCheck = false;
+          auditable = false; # cargo-auditable doesn't support edition 2024
+        };
+
+        # Container entrypoint. The binary resolves everything relative to cwd:
+        # `Cargo.toml` (leptos config), `public/blog` (typ sources, compiled at
+        # runtime — hence typst in runtimeInputs) and `target/site/blog` (compiled
+        # html output, read back server-side — needs write). So stage a writable
+        # cwd in /data (the persistent mount) with the read-only pieces symlinked
+        # from the store. HOME=/data puts the sqlite db + dashboard caches (XDG
+        # paths) on the same mount.
+        prodRun = pkgs.writeShellApplication {
+          name = "${pname}-prod";
+          runtimeInputs = with pkgs; [ typst ];
+          text = ''
+            mkdir -p /data/public /data/target/site
+            cd /data
+            ln -sfn ${siteBin}/share/${pname}/blog public/blog
+            ln -sfn ${./Cargo.toml} Cargo.toml
+            export LEPTOS_SITE_ADDR="''${LEPTOS_SITE_ADDR:-0.0.0.0:61156}"
+            export LEPTOS_ENV=PROD
+            exec ${siteBin}/bin/${pname}
+          '';
+        };
+        containerStd = v_flakes.container.implement {
+          inherit pkgs pname;
+          containers."" = {
+            port = 61156;
+            healthPath = "/";
+            criticality = "normal";
+            entrypoint = [ "${prodRun}/bin/${pname}-prod" ];
+            mounts = [ "/data" ];
+            workingDir = "/data";
+            imageEnv = [ "HOME=/data" ];
+          };
+        };
+      in
+      {
+        packages = {
+          default = siteBin;
+        } // containerStd.packages;
+
+        containers = containerStd.containers;
+
         apps.default = {
           type = "app";
-          program = "${self.packages.${system}.default}/bin/${pname}";
+          program = "${siteBin}/bin/${pname}";
         };
 
         devShells.default = pkgs.mkShell {
           inherit stdenv;
-          nativeBuildInputs = [
-            #rustToolchain
-            pkgs.openssl.dev
-            pkgs.pkg-config
-          ]
-          ++ frontendTools
-          ++ buildTools;
-
-          #env = {
-          #  LEPTOS_SASS_VERSION = "1.71.0";
-          #};
-
           shellHook =
-            pre-commit-check.shellHook +
-            github.shellHook +
-            ''
-              							cp -f ${v-utils.files.licenses.blue_oak} ./LICENSE
+            pre-commit-check.shellHook
+            + combined.shellHook
+            + ''
+              cp -f ${(v_flakes.files.treefmt) { inherit pkgs; }} ./.treefmt.toml
 
-              							cp -f ${(v-utils.files.treefmt) { inherit pkgs; }} ./.treefmt.toml
-
-              							cp -f ${(v-utils.files.rust.rustfmt { inherit pkgs; })} ./rustfmt.toml
-
-              							cp -f ${readme} ./README.md
-
-                            # cargo-leptos must match leptos crate's version; thus can't install through nixpkgs
-                            # Use a lock file to ensure only one terminal installs it
-                            LOCK_FILE="/tmp/cargo-leptos-install-$(echo "$PWD" | md5sum | cut -d' ' -f1).lock"
-                            if mkdir "$LOCK_FILE" 2>/dev/null; then
-                              trap "rmdir '$LOCK_FILE' 2>/dev/null" EXIT
-                              if grep -qi ubuntu /etc/os-release 2>/dev/null; then
-                                cargo binstall -y cargo-leptos
-                              else
-                                cargo install cargo-leptos
-                              fi
-                            fi
+              # cargo-leptos must match leptos crate's version; thus can't install through nixpkgs
+              # Use a lock file to ensure only one terminal installs it
+              LOCK_FILE="/tmp/cargo-leptos-install-$(echo "$PWD" | md5sum | cut -d' ' -f1).lock"
+              if mkdir "$LOCK_FILE" 2>/dev/null; then
+                trap "rmdir '$LOCK_FILE' 2>/dev/null" EXIT
+                if grep -qi ubuntu /etc/os-release 2>/dev/null; then
+                  cargo binstall -y cargo-leptos
+                else
+                  cargo install cargo-leptos
+                fi
+              fi
             '';
-          env.RUSTFLAGS = "-Zmacro-backtrace"; # XXX: would be overriding existing RUSTFLAGS
-          #env.LEPTOS_WASM_BINDGEN_VERSION = "0.2.106"; #NB: must be in sync with `leptos` crate's version. Suggestion of `-f` wasm-bindgen install in their error is wrong, - this is how you actually do it.
 
           packages = with pkgs; [
-            mold-wrapped
+            mold
             openssl
             pkg-config
             perl
             sccache
             rust
-          ] ++ github.enabledPackages;
+            binaryen
+            typst # blog .typ -> .html compilation at server runtime
+            wasm-bindgen-cli # manual client builds — must match wasm-bindgen =0.2.126
+          ] ++ pre-commit-check.enabledPackages ++ combined.enabledPackages;
+
+          env.RUST_BACKTRACE = 1;
+          env.RUST_LIB_BACKTRACE = 0;
         };
       }
     );
