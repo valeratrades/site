@@ -56,7 +56,7 @@
         github = v_flakes.github {
           inherit pkgs pname rs;
           enable = true;
-          lastSupportedVersion = "nightly-2025-01-16";
+          lastSupportedVersion = "nightly-2026-06-16";
           containerRelease = { registry = "ghcr.io/valeratrades"; };
           jobs.default = true;
           lfs = true;
@@ -69,7 +69,7 @@
         readme = v_flakes.readme-fw {
           inherit pkgs pname;
           defaults = true;
-          lastSupportedVersion = "nightly-1.86";
+          lastSupportedVersion = "nightly-1.92";
           rootDir = ./.;
           badges = [ "msrv" "loc" "ci" ];
         };

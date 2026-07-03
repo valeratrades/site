@@ -1,5 +1,5 @@
 # site
-![Minimum Supported Rust Version](https://img.shields.io/badge/nightly-1.86+-ab6000.svg)
+![Minimum Supported Rust Version](https://img.shields.io/badge/nightly-1.92+-ab6000.svg)
 ![Lines Of Code](https://img.shields.io/endpoint?url=https://gist.githubusercontent.com/valeratrades/b48e6f02c61942200e7d1e3eeabf9bcb/raw/site-loc.json)
 <br>
 [<img alt="ci errors" src="https://img.shields.io/github/actions/workflow/status/valeratrades/site/errors.yml?branch=main&style=for-the-badge&style=flat-square&label=errors&labelColor=420d09" height="20">](https://github.com/valeratrades/site/actions?query=branch%3Amain) <!--NB: Won't find it if repo is private-->
