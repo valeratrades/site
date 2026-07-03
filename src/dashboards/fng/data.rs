@@ -43,7 +43,7 @@ pub async fn btc_fngs_hourly(limit: usize) -> Result<Vec<Fng>> {
 		.get(format!("https://api.alternative.me/fng/?limit={limit}"))
 		.send()
 		.await
-		.map_err(|e| eyre!("Failed to fetch Fear and Greed Index: {}", e))?;
+		.map_err(|e| eyre!("Failed to fetch Fear and Greed Index: {e}"))?;
 
 	if !response.status().is_success() {
 		bail!("Failed to fetch Fear and Greed Index. Status: {}", response.status());

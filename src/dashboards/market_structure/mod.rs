@@ -98,7 +98,7 @@ pub async fn request_market_structure() -> Result<MarketStructure, ServerFnError
 	let html = match result {
 		Ok(plot) => plot.to_inline_html(None),
 		Err(e) => {
-			tracing::error!("Failed to build market structure: {:?}", e);
+			tracing::error!("Failed to build market structure: {e:?}");
 			render_error_html(&e.to_string())
 		}
 	};

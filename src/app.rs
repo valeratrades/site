@@ -43,8 +43,8 @@ pub mod server_impl {
 		let db = get_db()?;
 
 		if db.email_exists(&email).await.map_err(|e| {
-			error!("Database error checking email: {}", e);
-			ServerFnError::new(format!("Database error: {}", e))
+			error!("Database error checking email: {e}");
+			ServerFnError::new(format!("Database error: {e}"))
 		})? {
 			info!("Email already registered");
 			return Err(ServerFnError::new("Email already registered"));
@@ -52,28 +52,28 @@ pub mod server_impl {
 
 		let user_id = uuid::Uuid::new_v4().to_string();
 		db.create_user(&user_id, &email, &username, &password).await.map_err(|e| {
-			error!("Failed to create user: {}", e);
-			ServerFnError::new(format!("Failed to create user: {}", e))
+			error!("Failed to create user: {e}");
+			ServerFnError::new(format!("Failed to create user: {e}"))
 		})?;
 
 		// Create verification token and send email
 		let token = uuid::Uuid::new_v4().to_string();
 		db.create_email_token(&token, &user_id, 24).await.map_err(|e| {
-			error!("Failed to create verification token: {}", e);
-			ServerFnError::new(format!("Failed to create verification token: {}", e))
+			error!("Failed to create verification token: {e}");
+			ServerFnError::new(format!("Failed to create verification token: {e}"))
 		})?;
 
 		// Send verification email
 		if !settings.smtp.username.is_empty() {
-			let email_sender = EmailSender::new(&settings.smtp).map_err(|e| {
-				error!("Email configuration error: {}", e);
-				ServerFnError::new(format!("Email configuration error: {}", e))
+			let email_sender = EmailSender::try_new(&settings.smtp).map_err(|e| {
+				error!("Email configuration error: {e}");
+				ServerFnError::new(format!("Email configuration error: {e}"))
 			})?;
 
-			let verification_link = format!("{}/verify?token={}", settings.site_url, token);
+			let verification_link = format!("{}/verify?token={token}", settings.site_url);
 			email_sender.send_verification_email(&email, &username, &verification_link).await.map_err(|e| {
-				error!("Failed to send verification email: {}", e);
-				ServerFnError::new(format!("Failed to send verification email: {}", e))
+				error!("Failed to send verification email: {e}");
+				ServerFnError::new(format!("Failed to send verification email: {e}"))
 			})?;
 
 			info!("Registration successful, verification email sent");
@@ -81,8 +81,8 @@ pub mod server_impl {
 		} else {
 			// SMTP not configured, auto-verify for dev
 			db.mark_email_verified(&user_id).await.map_err(|e| {
-				error!("Failed to mark email verified: {}", e);
-				ServerFnError::new(format!("Failed to verify email: {}", e))
+				error!("Failed to mark email verified: {e}");
+				ServerFnError::new(format!("Failed to verify email: {e}"))
 			})?;
 			info!("Registration successful (SMTP not configured, auto-verified)");
 			Ok("Account created (email verification skipped - SMTP not configured)".to_string())
@@ -96,12 +96,12 @@ pub mod server_impl {
 		let user_id = db
 			.verify_email_token(&token)
 			.await
-			.map_err(|e| ServerFnError::new(format!("Database error: {}", e)))?
+			.map_err(|e| ServerFnError::new(format!("Database error: {e}")))?
 			.ok_or_else(|| ServerFnError::new("Invalid or expired verification token"))?;
 
-		db.mark_email_verified(&user_id).await.map_err(|e| ServerFnError::new(format!("Failed to verify email: {}", e)))?;
+		db.mark_email_verified(&user_id).await.map_err(|e| ServerFnError::new(format!("Failed to verify email: {e}")))?;
 
-		db.delete_email_token(&token).await.map_err(|e| ServerFnError::new(format!("Failed to delete token: {}", e)))?;
+		db.delete_email_token(&token).await.map_err(|e| ServerFnError::new(format!("Failed to delete token: {e}")))?;
 
 		Ok(())
 	}
@@ -114,8 +114,8 @@ pub mod server_impl {
 
 		// Try email first, then username
 		let user_result = db.get_user_by_email(&email_or_username).await.map_err(|e| {
-			error!("Database error during login: {}", e);
-			ServerFnError::new(format!("Database error: {}", e))
+			error!("Database error during login: {e}");
+			ServerFnError::new(format!("Database error: {e}"))
 		})?;
 
 		let (user, password_hash) = match user_result {
@@ -125,8 +125,8 @@ pub mod server_impl {
 				db.get_user_by_username(&email_or_username)
 					.await
 					.map_err(|e| {
-						error!("Database error during login: {}", e);
-						ServerFnError::new(format!("Database error: {}", e))
+						error!("Database error during login: {e}");
+						ServerFnError::new(format!("Database error: {e}"))
 					})?
 					.ok_or_else(|| {
 						info!("No account found for email or username");
@@ -144,8 +144,8 @@ pub mod server_impl {
 		let smtp_configured = !settings.smtp.username.is_empty();
 		if smtp_configured
 			&& !db.is_email_verified(&user.id).await.map_err(|e| {
-				error!("Database error checking email verification: {}", e);
-				ServerFnError::new(format!("Database error: {}", e))
+				error!("Database error checking email verification: {e}");
+				ServerFnError::new(format!("Database error: {e}"))
 			})? {
 			info!("Email not verified");
 			return Err(ServerFnError::new("Please verify your email before logging in"));
@@ -154,8 +154,8 @@ pub mod server_impl {
 		// Create session
 		let session_id = uuid::Uuid::new_v4().to_string();
 		db.create_session(&session_id, &user.id, 24 * 7).await.map_err(|e| {
-			error!("Failed to create session: {}", e);
-			ServerFnError::new(format!("Failed to create session: {}", e))
+			error!("Failed to create session: {e}");
+			ServerFnError::new(format!("Failed to create session: {e}"))
 		})?;
 
 		// Set cookie via response header
@@ -164,8 +164,7 @@ pub mod server_impl {
 			response.insert_header(
 				axum::http::header::SET_COOKIE,
 				axum::http::HeaderValue::from_str(&format!(
-					"session_id={}; Path=/; HttpOnly; SameSite=Lax; Max-Age={}",
-					session_id,
+					"session_id={session_id}; Path=/; HttpOnly; SameSite=Lax; Max-Age={}",
 					60 * 60 * 24 * 7 // 1 week in seconds
 				))
 				.unwrap(),
@@ -180,7 +179,7 @@ pub mod server_impl {
 		use axum::http::header::COOKIE;
 		use leptos_axum::extract;
 
-		let headers: axum::http::HeaderMap = extract().await.map_err(|e| ServerFnError::new(format!("Failed to extract headers: {}", e)))?;
+		let headers: axum::http::HeaderMap = extract().await.map_err(|e| ServerFnError::new(format!("Failed to extract headers: {e}")))?;
 
 		let session_id = headers.get(COOKIE).and_then(|v| v.to_str().ok()).and_then(|cookies| {
 			cookies.split(';').find_map(|cookie| {
@@ -199,14 +198,14 @@ pub mod server_impl {
 
 		let db = get_db()?;
 
-		db.get_session_user(&session_id).await.map_err(|e| ServerFnError::new(format!("Database error: {}", e)))
+		db.get_session_user(&session_id).await.map_err(|e| ServerFnError::new(format!("Database error: {e}")))
 	}
 
 	pub async fn logout_impl() -> Result<(), ServerFnError> {
 		use axum::http::header::COOKIE;
 		use leptos_axum::{ResponseOptions, extract};
 
-		let headers: axum::http::HeaderMap = extract().await.map_err(|e| ServerFnError::new(format!("Failed to extract headers: {}", e)))?;
+		let headers: axum::http::HeaderMap = extract().await.map_err(|e| ServerFnError::new(format!("Failed to extract headers: {e}")))?;
 
 		let session_id = headers.get(COOKIE).and_then(|v| v.to_str().ok()).and_then(|cookies| {
 			cookies.split(';').find_map(|cookie| {
@@ -256,7 +255,7 @@ pub mod server_impl {
 		// Store the state for verification
 		db.create_oauth_state(&state, 10) // 10 minutes expiry
 			.await
-			.map_err(|e| ServerFnError::new(format!("Failed to store OAuth state: {}", e)))?;
+			.map_err(|e| ServerFnError::new(format!("Failed to store OAuth state: {e}")))?;
 
 		let (auth_url, _) = client
 			.authorize_url(|| csrf_token)
@@ -275,7 +274,7 @@ pub mod server_impl {
 		let db = get_db()?;
 
 		// Verify state
-		if !db.verify_oauth_state(&state).await.map_err(|e| ServerFnError::new(format!("Database error: {}", e)))? {
+		if !db.verify_oauth_state(&state).await.map_err(|e| ServerFnError::new(format!("Database error: {e}")))? {
 			return Err(ServerFnError::new("Invalid or expired OAuth state"));
 		}
 
@@ -292,14 +291,14 @@ pub mod server_impl {
 		let http_client = reqwest::ClientBuilder::new()
 			.redirect(reqwest::redirect::Policy::none())
 			.build()
-			.map_err(|e| ServerFnError::new(format!("Failed to create HTTP client: {}", e)))?;
+			.map_err(|e| ServerFnError::new(format!("Failed to create HTTP client: {e}")))?;
 
 		// Exchange code for token
 		let token_result = client
 			.exchange_code(AuthorizationCode::new(code))
 			.request_async(&http_client)
 			.await
-			.map_err(|e| ServerFnError::new(format!("Failed to exchange code for token: {}", e)))?;
+			.map_err(|e| ServerFnError::new(format!("Failed to exchange code for token: {e}")))?;
 
 		let access_token = token_result.access_token().secret();
 
@@ -310,16 +309,16 @@ pub mod server_impl {
 			.bearer_auth(access_token)
 			.send()
 			.await
-			.map_err(|e| ServerFnError::new(format!("Failed to fetch user info: {}", e)))?
+			.map_err(|e| ServerFnError::new(format!("Failed to fetch user info: {e}")))?
 			.json()
 			.await
-			.map_err(|e| ServerFnError::new(format!("Failed to parse user info: {}", e)))?;
+			.map_err(|e| ServerFnError::new(format!("Failed to parse user info: {e}")))?;
 
 		let display_name = user_info.name.unwrap_or_default();
 		let avatar_url = user_info.picture.unwrap_or_default();
 
 		// Check if user exists by Google ID
-		let user = if let Some(user) = db.get_user_by_google_id(&user_info.id).await.map_err(|e| ServerFnError::new(format!("Database error: {}", e)))? {
+		let user = if let Some(user) = db.get_user_by_google_id(&user_info.id).await.map_err(|e| ServerFnError::new(format!("Database error: {e}")))? {
 			// Update avatar/display_name from Google on each login
 			let _ = db.update_google_user_info(&user.id, &avatar_url, &display_name).await;
 			User {
@@ -327,11 +326,11 @@ pub mod server_impl {
 				avatar_url: if avatar_url.is_empty() { None } else { Some(avatar_url) },
 				..user
 			}
-		} else if let Some((existing_user, _)) = db.get_user_by_email(&user_info.email).await.map_err(|e| ServerFnError::new(format!("Database error: {}", e)))? {
+		} else if let Some((existing_user, _)) = db.get_user_by_email(&user_info.email).await.map_err(|e| ServerFnError::new(format!("Database error: {e}")))? {
 			// Link Google account to existing user
 			db.link_google_to_user(&existing_user.id, &user_info.id, &avatar_url, &display_name)
 				.await
-				.map_err(|e| ServerFnError::new(format!("Failed to link Google account: {}", e)))?;
+				.map_err(|e| ServerFnError::new(format!("Failed to link Google account: {e}")))?;
 			User {
 				display_name: if display_name.is_empty() { None } else { Some(display_name) },
 				avatar_url: if avatar_url.is_empty() { None } else { Some(avatar_url) },
@@ -343,7 +342,7 @@ pub mod server_impl {
 			let username = user_info.email.clone();
 			db.create_google_user(&user_id, &user_info.email, &username, &user_info.id, &display_name, &avatar_url)
 				.await
-				.map_err(|e| ServerFnError::new(format!("Failed to create user: {}", e)))?;
+				.map_err(|e| ServerFnError::new(format!("Failed to create user: {e}")))?;
 			User {
 				id: user_id,
 				email: user_info.email,
@@ -357,14 +356,14 @@ pub mod server_impl {
 		let session_id = uuid::Uuid::new_v4().to_string();
 		db.create_session(&session_id, &user.id, 24 * 7)
 			.await
-			.map_err(|e| ServerFnError::new(format!("Failed to create session: {}", e)))?;
+			.map_err(|e| ServerFnError::new(format!("Failed to create session: {e}")))?;
 
 		// Set cookie
 		use leptos_axum::ResponseOptions;
 		if let Some(response) = use_context::<ResponseOptions>() {
 			response.insert_header(
 				axum::http::header::SET_COOKIE,
-				axum::http::HeaderValue::from_str(&format!("session_id={}; Path=/; HttpOnly; SameSite=Lax; Max-Age={}", session_id, 60 * 60 * 24 * 7)).unwrap(),
+				axum::http::HeaderValue::from_str(&format!("session_id={session_id}; Path=/; HttpOnly; SameSite=Lax; Max-Age={}", 60 * 60 * 24 * 7)).unwrap(),
 			);
 		}
 
@@ -400,56 +399,110 @@ pub mod server_impl {
 
 		let db = get_db()?;
 
-		if db.username_exists(&new_username).await.map_err(|e| ServerFnError::new(format!("Database error: {}", e)))? {
+		if db.username_exists(&new_username).await.map_err(|e| ServerFnError::new(format!("Database error: {e}")))? {
 			return Err(ServerFnError::new("Username already taken"));
 		}
 
 		db.update_username(&user.id, &new_username)
 			.await
-			.map_err(|e| ServerFnError::new(format!("Failed to update username: {}", e)))?;
+			.map_err(|e| ServerFnError::new(format!("Failed to update username: {e}")))?;
 
 		Ok(())
 	}
 }
 
-#[server(RegisterUser)]
-pub async fn register_user(email: String, username: String, password: String) -> Result<String, ServerFnError> {
-	server_impl::register_impl(email, username, password).await
+pub use crate::tmp::TmpView;
+
+#[component]
+pub fn NotFoundView() -> impl IntoView {
+	div().class("p-4 text-center").child((
+		h1().class("text-2xl font-bold"),
+		p().child("Sorry, we can't find that page"),
+		A(AProps {
+			href: "/".to_string(),
+			children: Box::new(|| view! { "Go Home" }.into_any()),
+			target: None,
+			exact: false,
+			strict_trailing_slash: false,
+			scroll: true,
+		})
+		.attr("class", "inline-block px-4 py-2 bg-green-500 text-white rounded mt-4"),
+	))
 }
 
-#[server(LoginUser)]
-pub async fn login_user(email_or_username: String, password: String) -> Result<User, ServerFnError> {
-	server_impl::login_impl(email_or_username, password).await
+#[derive(Routable)]
+#[routes(view_prefix = "", view_suffix = "View", transition = false)]
+pub enum AppRoutes {
+	#[route(path = "/")]
+	Home,
+	#[parent_route(path = "/dashboards")]
+	Dashboards(dashboards::Routes),
+	#[parent_route(path = "/blog")]
+	Blog(blog::Routes),
+	#[route(path = "/contacts")]
+	Contacts,
+	#[route(path = "/profile")]
+	Profile,
+	#[route(path = "/login")]
+	Login,
+	#[route(path = "/verify")]
+	Verify,
+	#[route(path = "/auth/google/callback")]
+	GoogleCallback,
+	#[route(path = "/tmp")]
+	Tmp,
+	#[route(path = "/admin")]
+	Admin,
+	#[fallback]
+	#[route(path = "/404")]
+	NotFound,
 }
 
-#[server(GetCurrentUser)]
-pub async fn get_current_user() -> Result<Option<User>, ServerFnError> {
-	server_impl::get_current_user_impl().await
+#[component]
+pub fn App() -> impl IntoView {
+	provide_meta_context();
+	(
+		Stylesheet(StylesheetProps {
+			id: Some("leptos".to_owned()),
+			href: format!("/pkg/{}.css", env!("CARGO_PKG_NAME")),
+		}),
+		Stylesheet(StylesheetProps {
+			id: None,
+			href: "/custom.css".to_owned(),
+		}),
+		Script(ScriptProps::builder().src("https://cdn.tailwindcss.com").build()),
+		Script(ScriptProps::builder().src("/tailwind.config.js").build()),
+		Title(TitleProps {
+			formatter: None,
+			text: Some("My Site".into()),
+		}),
+		view! {
+			<Router>
+				<TopBar />
+				<main class="min-h-screen">{move || AppRoutes::routes()}</main>
+			</Router>
+		},
+	)
 }
 
-#[server(LogoutUser)]
-pub async fn logout_user() -> Result<(), ServerFnError> {
-	server_impl::logout_impl().await
-}
-
-#[server(VerifyEmail)]
-pub async fn verify_email(token: String) -> Result<(), ServerFnError> {
-	server_impl::verify_email_impl(token).await
-}
-
-#[server(GoogleAuthStart)]
-pub async fn google_auth_start() -> Result<String, ServerFnError> {
-	server_impl::google_auth_start_impl().await
-}
-
-#[server(GoogleAuthCallback)]
-pub async fn google_auth_callback(code: String, state: String) -> Result<User, ServerFnError> {
-	server_impl::google_auth_callback_impl(code, state).await
-}
-
-#[server(IsGoogleOAuthConfigured)]
-pub async fn is_google_oauth_configured() -> Result<bool, ServerFnError> {
-	Ok(server_impl::is_google_oauth_configured_impl())
+pub fn shell(options: LeptosOptions) -> impl IntoView {
+	view! {
+		<!DOCTYPE html>
+		<html lang="en">
+			<head>
+				<meta charset="utf-8" />
+				<meta name="viewport" content="width=device-width, initial-scale=1" />
+				<AutoReload options=options.clone() />
+				<HydrationScripts options islands=true />
+				<MetaTags />
+				// all embedded plotly plots assume this is in scope
+				<script src="https://cdn.plot.ly/plotly-3.0.1.min.js"></script>
+			</head>
+			<body>
+				<App />
+			</body>
+		</html>
+	}
 }
 
 #[server(UpdateUsername)]
@@ -457,6 +510,45 @@ pub async fn update_username(new_username: String) -> Result<(), ServerFnError> 
 	server_impl::update_username_impl(new_username).await
 }
 
+#[server(IsGoogleOAuthConfigured)]
+pub async fn is_google_oauth_configured() -> Result<bool, ServerFnError> {
+	Ok(server_impl::is_google_oauth_configured_impl())
+}
+
+#[server(GoogleAuthCallback)]
+pub async fn google_auth_callback(code: String, state: String) -> Result<User, ServerFnError> {
+	server_impl::google_auth_callback_impl(code, state).await
+}
+
+#[server(GoogleAuthStart)]
+pub async fn google_auth_start() -> Result<String, ServerFnError> {
+	server_impl::google_auth_start_impl().await
+}
+
+#[server(VerifyEmail)]
+pub async fn verify_email(token: String) -> Result<(), ServerFnError> {
+	server_impl::verify_email_impl(token).await
+}
+
+#[server(LogoutUser)]
+pub async fn logout_user() -> Result<(), ServerFnError> {
+	server_impl::logout_impl().await
+}
+
+#[server(GetCurrentUser)]
+pub async fn get_current_user() -> Result<Option<User>, ServerFnError> {
+	server_impl::get_current_user_impl().await
+}
+
+#[server(LoginUser)]
+pub async fn login_user(email_or_username: String, password: String) -> Result<User, ServerFnError> {
+	server_impl::login_impl(email_or_username, password).await
+}
+
+#[server(RegisterUser)]
+pub async fn register_user(email: String, username: String, password: String) -> Result<String, ServerFnError> {
+	server_impl::register_impl(email, username, password).await
+}
 /// Navigation link that highlights when the current route matches (or is a child of) the href.
 /// For the root path "/", uses exact matching.
 #[component]
@@ -468,7 +560,7 @@ fn NavLink(href: &'static str, label: &'static str) -> impl IntoView {
 		if href == "/" {
 			pathname == "/"
 		} else {
-			pathname == href || pathname.starts_with(&format!("{}/", href))
+			pathname == href || pathname.starts_with(&format!("{href}/"))
 		}
 	});
 
@@ -538,8 +630,7 @@ fn UserButton() -> impl IntoView {
 						let bg_color = colors[color_idx];
 						div()
 							.class(format!(
-								"w-8 h-8 rounded-full {} flex items-center justify-center font-bold text-white hover:opacity-80 transition-opacity",
-								bg_color
+								"w-8 h-8 rounded-full {bg_color} flex items-center justify-center font-bold text-white hover:opacity-80 transition-opacity"
 							))
 							.child(initial)
 							.into_any()
@@ -566,81 +657,6 @@ fn UserButton() -> impl IntoView {
 			}
 		}
 	}
-}
-
-pub fn shell(options: LeptosOptions) -> impl IntoView {
-	view! {
-		<!DOCTYPE html>
-		<html lang="en">
-			<head>
-				<meta charset="utf-8" />
-				<meta name="viewport" content="width=device-width, initial-scale=1" />
-				<AutoReload options=options.clone() />
-				<HydrationScripts options islands=true />
-				<MetaTags />
-				// all embedded plotly plots assume this is in scope
-				<script src="https://cdn.plot.ly/plotly-3.0.1.min.js"></script>
-			</head>
-			<body>
-				<App />
-			</body>
-		</html>
-	}
-}
-
-#[component]
-pub fn App() -> impl IntoView {
-	provide_meta_context();
-	(
-		Stylesheet(StylesheetProps {
-			id: Some("leptos".to_owned()),
-			href: format!("/pkg/{}.css", env!("CARGO_PKG_NAME")),
-		}),
-		Stylesheet(StylesheetProps {
-			id: None,
-			href: "/custom.css".to_owned(),
-		}),
-		Script(ScriptProps::builder().src("https://cdn.tailwindcss.com").build()),
-		Script(ScriptProps::builder().src("/tailwind.config.js").build()),
-		Title(TitleProps {
-			formatter: None,
-			text: Some("My Site".into()),
-		}),
-		view! {
-			<Router>
-				<TopBar />
-				<main class="min-h-screen">{move || AppRoutes::routes()}</main>
-			</Router>
-		},
-	)
-}
-
-#[derive(Routable)]
-#[routes(view_prefix = "", view_suffix = "View", transition = false)]
-pub enum AppRoutes {
-	#[route(path = "/")]
-	Home,
-	#[parent_route(path = "/dashboards")]
-	Dashboards(dashboards::Routes),
-	#[parent_route(path = "/blog")]
-	Blog(blog::Routes),
-	#[route(path = "/contacts")]
-	Contacts,
-	#[route(path = "/profile")]
-	Profile,
-	#[route(path = "/login")]
-	Login,
-	#[route(path = "/verify")]
-	Verify,
-	#[route(path = "/auth/google/callback")]
-	GoogleCallback,
-	#[route(path = "/tmp")]
-	Tmp,
-	#[route(path = "/admin")]
-	Admin,
-	#[fallback]
-	#[route(path = "/404")]
-	NotFound,
 }
 
 /// Renders the home page - redirects to /dashboards
@@ -765,12 +781,12 @@ fn LoginForm() -> impl IntoView {
 						is_loading.set(false);
 					}
 					Err(e) => {
-						let msg = format!("{}", e);
+						let msg = format!("{e}");
 						let clean_msg = if msg.contains("Email already registered") {
 							"This email is already registered. Please login instead.".to_string()
 						} else {
 							// Show actual error for debugging
-							format!("Registration failed: {}", msg)
+							format!("Registration failed: {msg}")
 						};
 						error.set(Some(clean_msg));
 						is_loading.set(false);
@@ -787,7 +803,7 @@ fn LoginForm() -> impl IntoView {
 						},
 					Err(e) => {
 						// Extract clean error message from ServerFnError
-						let msg = format!("{}", e);
+						let msg = format!("{e}");
 						let clean_msg = if msg.contains("No account found") {
 							"No account found with this email or username. Please register first.".to_string()
 						} else if msg.contains("Incorrect password") {
@@ -1106,7 +1122,7 @@ fn ProfileContent() -> impl IntoView {
 															let _ = window.location().reload();
 														},
 													Err(e) => {
-														let msg = format!("{}", e);
+														let msg = format!("{e}");
 														let clean = if msg.contains("already taken") { "Username already taken".to_string() } else { msg };
 														username_error.set(Some(clean));
 														username_saving.set(false);
@@ -1354,22 +1370,3 @@ fn GoogleCallbackHandler() -> impl IntoView {
 		}
 	}
 }
-
-#[component]
-pub fn NotFoundView() -> impl IntoView {
-	div().class("p-4 text-center").child((
-		h1().class("text-2xl font-bold"),
-		p().child("Sorry, we can't find that page"),
-		A(AProps {
-			href: "/".to_string(),
-			children: Box::new(|| view! { "Go Home" }.into_any()),
-			target: None,
-			exact: false,
-			strict_trailing_slash: false,
-			scroll: true,
-		})
-		.attr("class", "inline-block px-4 py-2 bg-green-500 text-white rounded mt-4"),
-	))
-}
-
-pub use crate::tmp::TmpView;

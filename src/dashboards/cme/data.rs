@@ -5,17 +5,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use v_utils::{NowThen, PrettyPrint};
 
-static CFTC_CODE_BTC: u32 = 133741;
-
-#[allow(unused)]
-#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, derive_new::new)]
-struct PositionsInfo {
-	current: f64,
-	change_since_last_week: f64,
-	percent_of_open: f64,
-	number_of_traders: Option<u32>,
-}
-
 #[allow(unused)]
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, derive_new::new)]
 pub struct Positions {
@@ -23,7 +12,6 @@ pub struct Positions {
 	short: PositionsInfo,
 	spreading: PositionsInfo,
 }
-
 #[allow(unused)]
 #[derive(Clone, Debug, Default, Deserialize, Serialize, derive_new::new)]
 pub struct CftcReport {
@@ -39,7 +27,7 @@ impl CftcReport {
 	pub fn parse_by_index(page: &[String], index: u32) -> Result<Self> {
 		let index_line_pos = page
 			.iter()
-			.position(|line| line.contains(&format!("#{}", index)))
+			.position(|line| line.contains(&format!("#{index}")))
 			.ok_or_else(|| eyre!("Could not find the block with BTC index /*{CFTC_CODE_BTC}*/ in parsed CFTC report"))?;
 		let block: &[String; 20] = page
 			.get((index_line_pos - 8)..=(index_line_pos + 11))
@@ -50,8 +38,8 @@ impl CftcReport {
 	}
 
 	pub fn to_markdown_table(&self) -> String {
-		let format_num = |n: f64| format!("{:.0}", n);
-		let format_pct = |n: f64| format!("{:.1}", n);
+		let format_num = |n: f64| format!("{n:.0}");
+		let format_pct = |n: f64| format!("{n:.1}");
 		let format_trader = |n: Option<u32>| n.map_or(".".to_string(), |v| v.to_string());
 
 		let date_str = self.date.format("%B %d, %Y").to_string();
@@ -121,6 +109,24 @@ impl CftcReport {
 		)
 	}
 }
+
+pub async fn fetch_cftc_positions() -> Result<CftcReport> {
+	let url = "https://www.cftc.gov/dea/futures/financial_lf.htm";
+	let response = reqwest::get(url).await?.text().await?;
+	let lines: Vec<String> = response.lines().map(String::from).collect();
+
+	CftcReport::parse_by_index(&lines, CFTC_CODE_BTC)
+}
+static CFTC_CODE_BTC: u32 = 133741;
+
+#[allow(unused)]
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, derive_new::new)]
+struct PositionsInfo {
+	current: f64,
+	change_since_last_week: f64,
+	percent_of_open: f64,
+	number_of_traders: Option<u32>,
+}
 impl TryFrom<&[String; 20]> for CftcReport {
 	type Error = Report;
 
@@ -131,7 +137,7 @@ impl TryFrom<&[String; 20]> for CftcReport {
 				Some(pos) => &date_line[pos + 6..].trim(),
 				None => bail!("Date not found"),
 			};
-			let naive_date = chrono::NaiveDate::parse_from_str(date_str, "%B %d, %Y").map_err(|e| eyre!("Failed to parse date: {}", e))?;
+			let naive_date = chrono::NaiveDate::parse_from_str(date_str, "%B %d, %Y").map_err(|e| eyre!("Failed to parse date: {e}"))?;
 
 			let eastern_time = naive_date.and_hms_opt(15, 30, 0).ok_or_else(|| eyre!("Failed to create time"))?;
 
@@ -149,7 +155,7 @@ impl TryFrom<&[String; 20]> for CftcReport {
 				.filter(|s| !s.is_empty())
 				.map(|s| s.replace(",", "").parse::<T>())
 				.collect::<std::result::Result<Vec<_>, _>>()
-				.map_err(|e| eyre!("Failed to parse numbers: {}\nIn line: {line}", e))
+				.map_err(|e| eyre!("Failed to parse numbers: {e}\nIn line: {line}"))
 		}
 
 		let positions = parse_nums::<f64>(&block[10])?;
@@ -219,12 +225,4 @@ impl PrettyPrint for DirectionalPositionsChange {
 		let indent = " ".repeat(root_indent as usize);
 		write!(f, "{indent}Long: {}, Short: {}", self.long, self.short)
 	}
-}
-
-pub async fn fetch_cftc_positions() -> Result<CftcReport> {
-	let url = "https://www.cftc.gov/dea/futures/financial_lf.htm";
-	let response = reqwest::get(url).await?.text().await?;
-	let lines: Vec<String> = response.lines().map(String::from).collect();
-
-	CftcReport::parse_by_index(&lines, CFTC_CODE_BTC)
 }

@@ -20,6 +20,11 @@ pub struct Settings {
 	#[primitives(skip)]
 	pub admin: AdminConf,
 }
+impl Settings {
+	pub fn mock(&self) -> bool {
+		self.mock.unwrap_or(false)
+	}
+}
 
 impl Default for Settings {
 	fn default() -> Self {
@@ -33,16 +38,6 @@ impl Default for Settings {
 	}
 }
 
-impl Settings {
-	pub fn mock(&self) -> bool {
-		self.mock.unwrap_or(false)
-	}
-}
-
-fn __default_site_url() -> String {
-	"http://localhost:61156".to_string()
-}
-
 #[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize)]
 pub struct AdminConf {
 	/// Usernames that have admin access, mapped to their permission level (0.0 to 1.0)
@@ -54,8 +49,6 @@ pub struct AdminConf {
 	#[serde(default)]
 	pub creds: Option<HashMap<String, HashMap<String, String>>>,
 }
-
-// MyConfigPrimitives enables `{ env = "VAR" }` for plain String fields
 #[derive(Clone, Debug, v_utils::macros::MyConfigPrimitives, v_utils::macros::SettingsNested)]
 pub struct SmtpConfig {
 	pub host: String,
@@ -65,6 +58,24 @@ pub struct SmtpConfig {
 	pub from_email: String,
 	pub from_name: String,
 }
+#[derive(Clone, Debug, Default, v_utils::macros::MyConfigPrimitives, v_utils::macros::SettingsNested)]
+pub struct GoogleOAuthConfig {
+	/// Google OAuth2 Client ID (from Google Cloud Console)
+	pub client_id: String,
+	/// Google OAuth2 Client Secret (from Google Cloud Console)
+	pub client_secret: String,
+}
+impl GoogleOAuthConfig {
+	pub fn is_configured(&self) -> bool {
+		!self.client_id.is_empty() && !self.client_secret.is_empty()
+	}
+}
+
+fn __default_site_url() -> String {
+	"http://localhost:61156".to_string()
+}
+
+// MyConfigPrimitives enables `{ env = "VAR" }` for plain String fields
 
 impl Default for SmtpConfig {
 	fn default() -> Self {
@@ -76,19 +87,5 @@ impl Default for SmtpConfig {
 			from_email: String::new(),
 			from_name: String::new(),
 		}
-	}
-}
-
-#[derive(Clone, Debug, Default, v_utils::macros::MyConfigPrimitives, v_utils::macros::SettingsNested)]
-pub struct GoogleOAuthConfig {
-	/// Google OAuth2 Client ID (from Google Cloud Console)
-	pub client_id: String,
-	/// Google OAuth2 Client Secret (from Google Cloud Console)
-	pub client_secret: String,
-}
-
-impl GoogleOAuthConfig {
-	pub fn is_configured(&self) -> bool {
-		!self.client_id.is_empty() && !self.client_secret.is_empty()
 	}
 }

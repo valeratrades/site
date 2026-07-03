@@ -4,6 +4,11 @@ use std::time::Duration;
 use clap::Parser;
 use site::config::*;
 
+#[cfg(not(feature = "ssr"))]
+pub fn main() {
+	// hydration is bootstrapped in [./lib.rs]
+	panic!("not the correct access point");
+}
 #[derive(Debug, Parser)]
 #[command(author, version, about, long_about = None)]
 struct Cli {
@@ -79,14 +84,8 @@ async fn main() {
 	let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
 	{
 		let msg = format!("listening on http://{}", &addr);
-		println!("{}", msg);
-		info!("{}", msg);
+		println!("{msg}");
+		info!("{msg}");
 	}
 	axum::serve(listener, app.into_make_service()).await.unwrap();
-}
-
-#[cfg(not(feature = "ssr"))]
-pub fn main() {
-	// hydration is bootstrapped in [./lib.rs]
-	panic!("not the correct access point");
 }

@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use color_eyre::eyre::{Result, eyre};
+use color_eyre::eyre::{Result, bail, eyre};
 use v_utils::NowThen;
 
 ///// Fetch VIX volatility index data
@@ -96,9 +96,9 @@ use v_utils::NowThen;
 
 pub async fn bvol(duration: Duration) -> Result<NowThen> {
 	if duration.as_secs() / 3600 > 24 {
-		return Err(eyre!("Duration must be less than 24h"));
+		bail!("Duration must be less than 24h");
 	} else if duration.as_secs() / 3600 < 10 {
-		return Err(eyre!("Duration must be greater than 10m"));
+		bail!("Duration must be greater than 10m");
 	}
 
 	let bm = v_exchanges::bitmex::Bitmex::default();
@@ -111,7 +111,7 @@ pub async fn bvol(duration: Duration) -> Result<NowThen> {
 		(Some(last), Some(first)) => (last.price, first.price),
 		_ => {
 			tracing::warn!("BVOL data is empty or incomplete");
-			return Err(eyre!("BVOL data is empty or incomplete"));
+			bail!("BVOL data is empty or incomplete");
 		}
 	};
 
@@ -123,9 +123,9 @@ pub async fn bvol(duration: Duration) -> Result<NowThen> {
 
 pub async fn vix(duration: Duration) -> Result<NowThen> {
 	if duration.as_secs() / 3600 > 24 {
-		return Err(eyre!("Duration must be less than 24 hours"));
+		bail!("Duration must be less than 24 hours");
 	} else if duration.as_secs() / 3600 <= 2 {
-		return Err(eyre!("Duration must be at least 2h"));
+		bail!("Duration must be at least 2h");
 	}
 
 	let hours_floored = (duration.as_secs() / 3600) as u8; //NB: relies on previous check that should (for other reasons) ensure that this is a valid u8

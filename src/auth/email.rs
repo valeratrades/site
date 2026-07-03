@@ -13,7 +13,7 @@ pub struct EmailSender {
 }
 
 impl EmailSender {
-	pub fn new(config: &SmtpConfig) -> Result<Self> {
+	pub fn try_new(config: &SmtpConfig) -> Result<Self> {
 		let creds = Credentials::new(config.username.clone(), config.password.clone());
 
 		let mailer = AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(&config.host)

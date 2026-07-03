@@ -11,9 +11,6 @@ use v_exchanges::{Lsrs, prelude::*};
 use v_utils::{trades::Timeframe, xdg_data_file};
 
 use crate::utils::Mock;
-static INSTRUMENT: Instrument = Instrument::Perp;
-
-//Q: potentially fix to "1D", req and store full month of data for both Global and Top Positions, to display when searching for specific one.
 #[instrument]
 pub async fn get(tf: Timeframe, range: RequestRange) -> Result<SortedLsrs> {
 	let mut bn = Binance::default();
@@ -75,7 +72,6 @@ pub async fn get(tf: Timeframe, range: RequestRange) -> Result<SortedLsrs> {
 
 	Ok(sorted_lsrs)
 }
-
 /// Inner values are guaranteed to be sorted
 #[derive(Clone, Debug, Default, derive_more::Deref, derive_more::DerefMut, Deserialize, Serialize)]
 pub struct SortedLsrs {
@@ -124,19 +120,22 @@ impl SortedLsrs {
 
 		// Color only the numerator based on success rate
 		let pairs_info = if success_rate < 70.0 {
-			warn!("LSR data: {}/{} pairs loaded ({:.1}% - below 70% threshold)", self.len(), total_pairs, success_rate);
+			warn!("LSR data: {}/{total_pairs} pairs loaded ({success_rate:.1}% - below 70% threshold)", self.len());
 			format!(
-				"\nCollected for <span style=\"color: #f59e0b;\">{}</span>/{} pairs on Binance/{INSTRUMENT:?}",
-				self.len(),
-				total_pairs
+				"\nCollected for <span style=\"color: #f59e0b;\">{}</span>/{total_pairs} pairs on Binance/{INSTRUMENT:?}",
+				self.len()
 			)
 		} else {
-			info!("LSR data: {}/{} pairs loaded ({:.1}%)", self.len(), total_pairs, success_rate);
-			format!("\nCollected for {}/{} pairs on Binance/{INSTRUMENT:?}", self.len(), total_pairs)
+			info!("LSR data: {}/{total_pairs} pairs loaded ({success_rate:.1}%)", self.len());
+			format!("\nCollected for {}/{total_pairs} pairs on Binance/{INSTRUMENT:?}", self.len())
 		};
 		s.push_str(&pairs_info);
 
 		s
 	}
 }
+
+static INSTRUMENT: Instrument = Instrument::Perp;
+
+//Q: potentially fix to "1D", req and store full month of data for both Global and Top Positions, to display when searching for specific one.
 impl Mock for SortedLsrs {}

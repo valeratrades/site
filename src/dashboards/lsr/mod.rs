@@ -106,6 +106,19 @@ pub fn LsrSearchAndDisplayIsland(rendered_lsrs: Vec<RenderedLsr>) -> impl IntoVi
 	)
 }
 
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize, derive_new::new)]
+pub struct RenderedLsr {
+	pub pair: Pair,
+	pub rend: String,
+	/// The LSR value (% longs) for sorting
+	pub value: f64,
+}
+#[derive(Clone, Debug, Default, derive_more::Deref, Deserialize, PartialEq, Serialize)]
+pub struct RenderedLsrs {
+	#[deref]
+	pub v: Vec<RenderedLsr>,
+	pub outliers: String,
+}
 #[component]
 fn LsrDisplay(rendered_lsrs: Memo<Vec<RenderedLsr>>, selected_pairs: RwSignal<Vec<Pair>>) -> impl IntoView {
 	let selected_lsrs = Memo::new(move |_| {
@@ -129,7 +142,7 @@ fn LsrDisplay(rendered_lsrs: Memo<Vec<RenderedLsr>>, selected_pairs: RwSignal<Ve
 					"/dashboards".to_string()
 				} else {
 					let lsr_param = pairs.iter().map(|p| p.base().to_string()).collect::<Vec<_>>().join(",");
-					format!("/dashboards?lsr={}", lsr_param)
+					format!("/dashboards?lsr={lsr_param}")
 				};
 				let _ = history.push_state_with_url(&JsValue::NULL, "", Some(&new_url));
 			}
@@ -228,7 +241,7 @@ fn LsrSearch(rendered_lsrs: Memo<Vec<RenderedLsr>>, selected_pairs: RwSignal<Vec
 			let pairs = selected_pairs.get();
 			let lsr_param = pairs.iter().map(|p| p.base().to_string()).collect::<Vec<_>>().join(",");
 			if let Ok(history) = window.history() {
-				let new_url = format!("/dashboards?lsr={}", lsr_param);
+				let new_url = format!("/dashboards?lsr={lsr_param}");
 				let _ = history.push_state_with_url(&JsValue::NULL, "", Some(&new_url));
 			}
 		}
@@ -330,19 +343,6 @@ async fn build_lsrs() -> Result<RenderedLsrs, ServerFnError> {
 	};
 	lsrs.persist()?;
 	Ok(lsrs.into())
-}
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize, derive_new::new)]
-pub struct RenderedLsr {
-	pub pair: Pair,
-	pub rend: String,
-	/// The LSR value (% longs) for sorting
-	pub value: f64,
-}
-#[derive(Clone, Debug, Default, derive_more::Deref, Deserialize, PartialEq, Serialize)]
-pub struct RenderedLsrs {
-	#[deref]
-	pub v: Vec<RenderedLsr>,
-	pub outliers: String,
 }
 #[cfg(feature = "ssr")]
 impl From<data::SortedLsrs> for RenderedLsrs {

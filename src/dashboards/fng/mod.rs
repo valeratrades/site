@@ -37,6 +37,8 @@ pub fn FngView() -> impl IntoView {
 	}))
 }
 
+#[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize, derive_new::new)]
+pub struct FngRendered(String);
 #[server]
 async fn try_build() -> Result<FngRendered, ServerFnError> {
 	crate::try_load_mock!(data::Fng; .into());
@@ -56,8 +58,6 @@ async fn try_build() -> Result<FngRendered, ServerFnError> {
 }
 #[cfg(feature = "ssr")]
 impl Mock for data::Fng {}
-#[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize, derive_new::new)]
-pub struct FngRendered(String);
 #[cfg(feature = "ssr")]
 impl From<data::Fng> for FngRendered {
 	fn from(fng: data::Fng) -> Self {

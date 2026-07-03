@@ -249,12 +249,12 @@ fn AdminFilesSection() -> impl IntoView {
 								let data_base64 = STANDARD.encode(&bytes);
 
 								if let Err(e) = upload_admin_file(filename.clone(), content_type, data_base64).await {
-									error_msg.set(Some(format!("Failed to upload {}: {e}", filename)));
+									error_msg.set(Some(format!("Failed to upload {filename}: {e}")));
 									break;
 								}
 							}
 							Err(_) => {
-								error_msg.set(Some(format!("Failed to read {}", filename)));
+								error_msg.set(Some(format!("Failed to read {filename}")));
 								break;
 							}
 						}
@@ -399,7 +399,7 @@ fn CopyableCredential(key: String, value: String) -> impl IntoView {
 	};
 
 	div().class("flex items-center gap-3").child((
-		span().class("text-gray-400 min-w-32 text-right").child(format!("{}:", key)),
+		span().class("text-gray-400 min-w-32 text-right").child(format!("{key}:")),
 		div()
 			.class("flex-1 flex items-center gap-2 bg-gray-800 rounded px-3 py-2 font-mono text-sm cursor-pointer hover:bg-gray-700 transition-colors")
 			.on(ev::click, on_copy)

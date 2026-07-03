@@ -5,29 +5,10 @@ use tracing::info;
 
 use super::User;
 
-fn none_if_empty(s: String) -> Option<String> {
-	if s.is_empty() { None } else { Some(s) }
-}
-
-fn expires_at_hours(hours: u32) -> String {
-	(Utc::now() + chrono::Duration::hours(hours as i64)).format("%Y-%m-%dT%H:%M:%SZ").to_string()
-}
-
-fn expires_at_minutes(minutes: u32) -> String {
-	(Utc::now() + chrono::Duration::minutes(minutes as i64)).format("%Y-%m-%dT%H:%M:%SZ").to_string()
-}
-
 #[derive(Clone)]
 pub struct Database {
 	pool: SqlitePool,
 }
-
-impl std::fmt::Debug for Database {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct("Database").finish()
-	}
-}
-
 impl Database {
 	pub async fn try_new() -> Result<Self> {
 		let app_name = env!("CARGO_PKG_NAME");
@@ -451,7 +432,6 @@ pub struct AdminFile {
 	pub uploaded_by: String,
 	pub uploaded_at: String,
 }
-
 #[derive(Clone, Debug, serde::Deserialize, serde::Serialize)]
 pub struct AdminFileWithData {
 	pub id: String,
@@ -460,4 +440,21 @@ pub struct AdminFileWithData {
 	pub data: String,
 	pub uploaded_by: String,
 	pub uploaded_at: String,
+}
+fn none_if_empty(s: String) -> Option<String> {
+	if s.is_empty() { None } else { Some(s) }
+}
+
+fn expires_at_hours(hours: u32) -> String {
+	(Utc::now() + chrono::Duration::hours(hours as i64)).format("%Y-%m-%dT%H:%M:%SZ").to_string()
+}
+
+fn expires_at_minutes(minutes: u32) -> String {
+	(Utc::now() + chrono::Duration::minutes(minutes as i64)).format("%Y-%m-%dT%H:%M:%SZ").to_string()
+}
+
+impl std::fmt::Debug for Database {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("Database").finish()
+	}
 }

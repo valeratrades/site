@@ -41,6 +41,11 @@ pub fn VolView() -> impl IntoView {
 	}))
 }
 
+#[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize, derive_new::new)]
+pub struct VolData {
+	vix: NowThen,
+	bvol: NowThen,
+}
 #[server]
 async fn try_pull(duration: std::time::Duration) -> Result<VolData, ServerFnError> {
 	crate::try_load_mock!(VolData);
@@ -60,11 +65,6 @@ async fn try_pull(duration: std::time::Duration) -> Result<VolData, ServerFnErro
 #[cfg(feature = "ssr")]
 impl Mock for VolData {}
 //TODO!!!!: NowThen it
-#[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize, derive_new::new)]
-pub struct VolData {
-	vix: NowThen,
-	bvol: NowThen,
-}
 impl std::fmt::Display for VolData {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "VIX: {}; BVOL: {}", self.vix, self.bvol)

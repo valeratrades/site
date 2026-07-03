@@ -31,6 +31,36 @@ pub fn BlogView() -> impl IntoView {
 	leptos_router::components::Outlet()
 }
 
+#[server(GetBlogPost)]
+pub async fn get_blog_post(slug: String) -> Result<Option<(String, String)>, ServerFnError> {
+	let posts = compile::get_blog_posts();
+	let post = posts.iter().find(|p| p.slug == slug);
+
+	match post {
+		Some(p) => {
+			let full_html = std::fs::read_to_string(&p.html_path).map_err(|e| ServerFnError::new(e.to_string()))?;
+			// Extract just the body content - typst outputs full HTML documents
+			let body_content = extract_body_content(&full_html);
+			Ok(Some((p.title.clone(), body_content)))
+		}
+		None => Ok(None),
+	}
+}
+#[server(GetBlogPosts)]
+pub async fn get_posts(year: Option<i32>, month: Option<u32>, day: Option<u32>) -> Result<Vec<PostSummary>, ServerFnError> {
+	use chrono::Datelike;
+	let posts = compile::get_blog_posts();
+	Ok(posts
+		.iter()
+		.filter(|p| year.is_none_or(|y| p.created.year() == y) && month.is_none_or(|m| p.created.month() == m) && day.is_none_or(|d| p.created.day() == d))
+		.map(|p| PostSummary {
+			date_display: p.created.format("%b %d, %Y").to_string(),
+			url: format!("/blog/{}/{:02}/{:02}/{}.html", p.created.year(), p.created.month(), p.created.day(), p.slug),
+			title: p.title.clone(),
+			text_content: p.text_content.clone(),
+		})
+		.collect())
+}
 #[component]
 fn ListView() -> impl IntoView {
 	BlogListPage(BlogListPageProps { year: None, month: None, day: None })
@@ -55,22 +85,6 @@ fn DateFilterView() -> impl IntoView {
 	let day = parts.get(2).and_then(|s| s.parse::<u32>().ok());
 
 	BlogListPage(BlogListPageProps { year, month, day }).into_any()
-}
-
-#[server(GetBlogPost)]
-pub async fn get_blog_post(slug: String) -> Result<Option<(String, String)>, ServerFnError> {
-	let posts = compile::get_blog_posts();
-	let post = posts.iter().find(|p| p.slug == slug);
-
-	match post {
-		Some(p) => {
-			let full_html = std::fs::read_to_string(&p.html_path).map_err(|e| ServerFnError::new(e.to_string()))?;
-			// Extract just the body content - typst outputs full HTML documents
-			let body_content = extract_body_content(&full_html);
-			Ok(Some((p.title.clone(), body_content)))
-		}
-		None => Ok(None),
-	}
 }
 
 /// Extracts content between <body> and </body> tags from a full HTML document
@@ -115,34 +129,18 @@ fn BlogPostView(slug: String) -> impl IntoView {
 						div().class("blog-post-content max-w-2xl mx-auto px-4 py-8").inner_html(content),
 					))
 					.into_any(),
-				Err(e) => div().class("max-w-2xl mx-auto px-4 py-8 text-red-600").child(format!("Error: {}", e)).into_any(),
+				Err(e) => div().class("max-w-2xl mx-auto px-4 py-8 text-red-600").child(format!("Error: {e}")).into_any(),
 			}
 		})
 	}
 }
 
-#[server(GetBlogPosts)]
-pub async fn get_posts(year: Option<i32>, month: Option<u32>, day: Option<u32>) -> Result<Vec<PostSummary>, ServerFnError> {
-	use chrono::Datelike;
-	let posts = compile::get_blog_posts();
-	Ok(posts
-		.iter()
-		.filter(|p| year.is_none_or(|y| p.created.year() == y) && month.is_none_or(|m| p.created.month() == m) && day.is_none_or(|d| p.created.day() == d))
-		.map(|p| PostSummary {
-			date_display: p.created.format("%b %d, %Y").to_string(),
-			url: format!("/blog/{}/{:02}/{:02}/{}.html", p.created.year(), p.created.month(), p.created.day(), p.slug),
-			title: p.title.clone(),
-			text_content: p.text_content.clone(),
-		})
-		.collect())
-}
-
 #[component]
 fn BlogListPage(year: Option<i32>, month: Option<u32>, day: Option<u32>) -> impl IntoView {
 	let title = match (year, month, day) {
-		(Some(y), Some(m), Some(d)) => format!("Blog - {}/{:02}/{:02}", y, m, d),
-		(Some(y), Some(m), None) => format!("Blog - {}/{:02}", y, m),
-		(Some(y), None, None) => format!("Blog - {}", y),
+		(Some(y), Some(m), Some(d)) => format!("Blog - {y}/{m:02}/{d:02}"),
+		(Some(y), Some(m), None) => format!("Blog - {y}/{m:02}"),
+		(Some(y), None, None) => format!("Blog - {y}"),
 		_ => "Blog".to_string(),
 	};
 
@@ -158,7 +156,7 @@ fn BlogListPage(year: Option<i32>, month: Option<u32>, day: Option<u32>) -> impl
 			Suspend::new(async move {
 				match posts.await {
 					Ok(posts) => BlogPostList(BlogPostListProps { posts }).into_any(),
-					Err(e) => div().class("text-red-600").child(format!("Error: {}", e)).into_any(),
+					Err(e) => div().class("text-red-600").child(format!("Error: {e}")).into_any(),
 				}
 			})
 		},

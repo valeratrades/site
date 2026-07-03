@@ -37,6 +37,11 @@ pub fn CftcReportView() -> impl IntoView {
 	}))
 }
 
+#[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize, derive_new::new)]
+pub struct CftcReportRendered {
+	short: String,
+	markdown: String,
+}
 #[server]
 async fn try_build() -> Result<CftcReportRendered, ServerFnError> {
 	crate::try_load_mock!(data::CftcReport; .into());
@@ -50,11 +55,6 @@ async fn try_build() -> Result<CftcReportRendered, ServerFnError> {
 }
 #[cfg(feature = "ssr")]
 impl Mock for data::CftcReport {}
-#[derive(Clone, Debug, Default, serde::Deserialize, serde::Serialize, derive_new::new)]
-pub struct CftcReportRendered {
-	short: String,
-	markdown: String,
-}
 #[cfg(feature = "ssr")]
 impl From<data::CftcReport> for CftcReportRendered {
 	fn from(report: data::CftcReport) -> Self {

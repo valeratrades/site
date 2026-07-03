@@ -77,29 +77,6 @@ ssr = [
 ]
 
 [dependencies]
-color-eyre = "=0.6.5"
-derive-new = "=0.7.0"
-derive_more = { version = "=2.1.1", features = ["from", "display", "deref", "deref_mut", "debug"] }
-futures = "=0.3.32"
-js-sys = "=0.3.103"
-leptos = { version = "=0.8.20", features = ["islands"] }
-leptos-routable = { git = "https://github.com/stefanboere/leptos-routable" }
-leptos_meta = { version = "=0.8.6" }
-leptos_router = { version = "=0.8.14" }
-proc-macro2 = "=1.0.106"
-serde = { version = "=1.0.228", features = ["derive"] }
-v_utils = { version = "=2.15.54", features = ["cli", "xdg"] }
-web-sys = { version = "=0.3.103", features = ["Navigator", "Clipboard", "HtmlInputElement", "FileList", "File", "Blob", "BlobPropertyBag", "Url", "HtmlAnchorElement"] }
-
-# optional-hydrate {{{
-console_error_panic_hook = { version = "=0.1.7", optional = true }
-gloo-timers = { version = "=0.4.0", features = ["futures"], optional = true }
-send_wrapper = { version = "=0.6.0", optional = true }
-wasm-bindgen = "=0.2.126" #NB: version must match that of wasm-bindgen-cli (pinned in flake.nix)
-wasm-bindgen-futures = "=0.4.76"
-#,}}}
-
-# optional-ssr {{{
 any_spawner = { version = "=0.3.0", optional = true }
 axum = { version = "=0.8.9", optional = true }
 base64 = "=0.22.1"
@@ -107,15 +84,29 @@ bcrypt = { version = "=0.19.2", optional = true }
 chrono = { version = "=0.4.45", optional = true, features = ["serde"] }
 chrono-tz = { version = "=0.10.4", optional = true }
 clap = { version = "=4.6.1", features = ["derive"] }
+color-eyre = "=0.6.5"
+console_error_panic_hook = { version = "=0.1.7", optional = true }
+derive-new = "=0.7.0"
+derive_more = { version = "=2.1.1", features = ["from", "display", "deref", "deref_mut", "debug"] }
+futures = "=0.3.32"
+gloo-timers = { version = "=0.4.0", features = ["futures"], optional = true }
 jiff = { version = "=0.2.31", features = ["serde"] }
+js-sys = "=0.3.103"
+leptos = { version = "=0.8.20", features = ["islands"] }
+leptos-routable = { git = "https://github.com/stefanboere/leptos-routable" }
 leptos_axum = { version = "=0.8.10", optional = true }
+leptos_meta = { version = "=0.8.6" }
+leptos_router = { version = "=0.8.14" }
 lettre = { version = "=0.11.22", features = ["tokio1-native-tls", "builder"], optional = true }
 miette = { version = "=7.6.0", features = ["fancy"], optional = true } # required in scope by v_utils' `clientside!` macro
 notify = { version = "=8.2.0", optional = true }
 oauth2 = { version = "=5.0.0", optional = true }
 plotly = { version = "=0.14.1", features = ["image", "kaleido"], optional = true }
+proc-macro2 = "=1.0.106"
 pulldown-cmark = { version = "=0.13.4", optional = true }
 reqwest = { version = "=0.12.28", features = ["json"], optional = true } # pinned to 0.12: oauth2 5.0 has not migrated to reqwest 0.13 (its `request_async` only accepts its own reqwest 0.12 client type)
+send_wrapper = { version = "=0.6.0", optional = true }
+serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = { version = "=1.0.150", optional = true }
 serde_with = { version = "=3.21.0", features = ["chrono"] }
 sqlx = { version = "^0.9", features = ["sqlite", "runtime-tokio"], optional = true }
@@ -125,6 +116,10 @@ tower-http = { version = "=0.7.0", features = ["fs"], optional = true }
 tracing = { version = "=0.1.44", optional = true }
 uuid = { version = "=1.23.4", features = ["v4"], optional = true }
 v_exchanges = { version = "=0.18.5", features = ["binance", "bybit", "data"], optional = true }
+v_utils = { version = "=2.15.54", features = ["cli", "xdg"] }
+wasm-bindgen = "=0.2.126" #NB: version must match that of wasm-bindgen-cli (pinned in flake.nix)
+wasm-bindgen-futures = "=0.4.76"
+web-sys = { version = "=0.3.103", features = ["Navigator", "Clipboard", "HtmlInputElement", "FileList", "File", "Blob", "BlobPropertyBag", "Url", "HtmlAnchorElement"] }
 xdg = { version = "=3.0.0", optional = true }
 
 # v_utils 2.15.47 pulls `ustr` -> `ahash` -> `getrandom 0.3` unconditionally; on wasm getrandom needs its `wasm_js` backend feature (+ the cfg in .cargo/config.toml)

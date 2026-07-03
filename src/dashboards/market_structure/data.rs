@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
 
 use color_eyre::eyre::{Result, bail};
 use futures::future::join_all;
@@ -18,83 +18,9 @@ use v_utils::{
 /// Collected market data: normalized closes per pair and the time index
 pub type MarketData = (HashMap<Pair, Vec<f64>>, Vec<Timestamp>);
 
-/// Persisted market structure data with metadata for cache invalidation
-#[derive(Clone, Debug, Deserialize, Serialize)]
-struct PersistedMarketData {
-	/// When this data was collected
-	timestamp: std::time::SystemTime,
-	/// Normalized data (pair -> log-normalized closes)
-	normalized_df: HashMap<Pair, Vec<f64>>,
-	/// Time index from BTC-USDT
-	dt_index: Vec<Timestamp>,
-	/// Parameters used to collect this data
-	params: CollectionParams,
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-struct CollectionParams {
-	timeframe: Timeframe,
-	range_debug: String,
-	instrument_debug: String,
-}
-
-impl CollectionParams {
-	fn new(timeframe: Timeframe, range: RequestRange, instrument: Instrument) -> Self {
-		Self {
-			timeframe,
-			range_debug: format!("{:?}", range),
-			instrument_debug: format!("{:?}", instrument),
-		}
-	}
-}
-
-impl PersistedMarketData {
-	fn cache_file(params: &CollectionParams) -> std::path::PathBuf {
-		let filename = format!(
-			"market_structure_{}_{:?}_{}.json",
-			params.instrument_debug,
-			params.timeframe,
-			params.range_debug.replace([':', ' ', '{', '}'], "_")
-		);
-		xdg_state_file!(filename)
-	}
-
-	fn try_load(params: &CollectionParams, max_age: Duration) -> Option<Self> {
-		let cache_file = Self::cache_file(params);
-
-		let metadata = std::fs::metadata(&cache_file).ok()?;
-		let age = metadata.modified().ok()?.elapsed().ok()?;
-
-		if age > max_age {
-			tracing::info!("Cache file exists but is too old (age: {:?}, max: {:?})", age, max_age);
-			return None;
-		}
-
-		let json = std::fs::read_to_string(&cache_file).ok()?;
-		let data: Self = serde_json::from_str(&json).ok()?;
-
-		// Verify params match
-		if data.params != *params {
-			tracing::warn!("Cache params mismatch, ignoring cached data");
-			return None;
-		}
-
-		tracing::info!("Loaded market structure data from cache (age: {:?})", age);
-		Some(data)
-	}
-
-	fn save(&self) -> Result<()> {
-		let cache_file = Self::cache_file(&self.params);
-		let json = serde_json::to_string_pretty(self)?;
-		std::fs::write(&cache_file, json)?;
-		tracing::info!("Saved market structure data to {:?}", cache_file);
-		Ok(())
-	}
-}
-
 #[instrument]
 pub async fn try_build(limit: RequestRange, tf: Timeframe, exchange_name: ExchangeName, instrument: Instrument) -> Result<Plot> {
-	tracing::info!("Building market structure for {} {} with limit={:?}, tf={:?}", exchange_name, instrument, limit, tf);
+	tracing::info!("Building market structure for {exchange_name} {instrument} with limit={limit:?}, tf={tf:?}");
 
 	let mut exchange = exchange_name.init_client();
 	exchange.set_retry_config(RetryConfig {
@@ -107,7 +33,7 @@ pub async fn try_build(limit: RequestRange, tf: Timeframe, exchange_name: Exchan
 	let exch_info = match exchange.exchange_info(instrument).await {
 		Ok(info) => info,
 		Err(e) => {
-			tracing::error!("Failed to fetch exchange info: {:?}", e);
+			tracing::error!("Failed to fetch exchange info: {e:?}");
 			return Err(e.into());
 		}
 	};
@@ -117,15 +43,14 @@ pub async fn try_build(limit: RequestRange, tf: Timeframe, exchange_name: Exchan
 
 	// Check if BTC-USDT is in the list
 	let has_btc_usdt = all_usdt_pairs.iter().any(|p| "BTC-USDT" == *p);
-	tracing::info!("BTC-USDT in pairs list: {}", has_btc_usdt);
+	tracing::info!("BTC-USDT in pairs list: {has_btc_usdt}");
 
 	let (normalized_df, dt_index) = collect_data(&all_usdt_pairs, tf, limit, instrument, Arc::new(exchange)).await?;
 	Ok(plotly_closes(normalized_df, dt_index, tf, instrument, &all_usdt_pairs))
 }
-
 #[instrument(skip_all)]
 pub async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, instrument: Instrument, exchange: Arc<Box<dyn Exchange>>) -> Result<MarketData> {
-	tracing::info!("Starting data collection for {} pairs with tf={:?}, range={:?}", pairs.len(), tf, range);
+	tracing::info!("Starting data collection for {} pairs with tf={tf:?}, range={range:?}", pairs.len());
 
 	let params = CollectionParams::new(tf, range, instrument);
 
@@ -148,7 +73,7 @@ pub async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, in
 		async move {
 			match get_historical_data(symbol, tf, range, exchange).await {
 				Ok(series) => {
-					tracing::debug!("Successfully fetched {} data points for {}", series.col_closes.len(), symbol);
+					tracing::debug!("Successfully fetched {} data points for {symbol}", series.col_closes.len());
 					Ok((symbol, series))
 				}
 				Err(e) => {
@@ -177,7 +102,7 @@ pub async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, in
 			}
 			Err(e) => {
 				// Track which pairs failed - the symbol info is lost here, but we logged it above
-				failed_pairs.push(format!("{:?}", e));
+				failed_pairs.push(format!("{e:?}"));
 			}
 		}
 	});
@@ -186,17 +111,15 @@ pub async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, in
 	let success_rate = (data.len() as f64 / total_pairs as f64) * 100.0;
 	if success_rate < 70.0 {
 		tracing::warn!(
-			"Successfully fetched data for {} pairs, {} pairs failed ({:.1}% success rate - below 70% threshold)",
+			"Successfully fetched data for {} pairs, {} pairs failed ({success_rate:.1}% success rate - below 70% threshold)",
 			data.len(),
-			failed_pairs.len(),
-			success_rate
+			failed_pairs.len()
 		);
 	} else {
 		tracing::info!(
-			"Successfully fetched data for {} pairs, {} pairs failed ({:.1}% success rate)",
+			"Successfully fetched data for {} pairs, {} pairs failed ({success_rate:.1}% success rate)",
 			data.len(),
-			failed_pairs.len(),
-			success_rate
+			failed_pairs.len()
 		);
 	}
 
@@ -247,12 +170,11 @@ pub async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, in
 	};
 
 	if let Err(e) = persisted_data.save() {
-		tracing::warn!("Failed to save market structure data to cache: {:?}", e);
+		tracing::warn!("Failed to save market structure data to cache: {e:?}");
 	}
 
 	Ok((normalized_df, dt_index))
 }
-
 #[allow(unused)]
 #[derive(Clone, Debug, Default, derive_new::new)]
 //HACK: manual roll of a DataFrame. No checks for alignment (or proper vectorization, for that matter)...
@@ -266,15 +188,15 @@ pub struct RelevantHistoricalData {
 }
 #[instrument(skip_all, fields(symbol = %symbol))]
 pub async fn get_historical_data(symbol: Symbol, tf: Timeframe, range: RequestRange, exchange: Arc<Box<dyn Exchange>>) -> Result<RelevantHistoricalData> {
-	tracing::debug!("Fetching klines for {} (tf={:?}, range={:?})", symbol, tf, range);
+	tracing::debug!("Fetching klines for {symbol} (tf={tf:?}, range={range:?})");
 
 	let klines = match exchange.klines(symbol, tf, range).await {
 		Ok(k) => {
-			tracing::debug!("Received {} klines for {}", k.len(), symbol);
+			tracing::debug!("Received {} klines for {symbol}", k.len());
 			k
 		}
 		Err(e) => {
-			tracing::error!("Failed to fetch klines for {}: {:?}", symbol, e);
+			tracing::error!("Failed to fetch klines for {symbol}: {e:?}");
 			return Err(e.into());
 		}
 	};
@@ -302,8 +224,6 @@ pub async fn get_historical_data(symbol: Symbol, tf: Timeframe, range: RequestRa
 		col_volumes: volume,
 	})
 }
-
-//TODO!!!: provide additional information: 1) BTCDOM, 2) average, 3) correlation, 4) volatility
 pub fn plotly_closes(normalized_closes: HashMap<Pair, Vec<f64>>, dt_index: Vec<Timestamp>, tf: Timeframe, instrument: Instrument, all_pairs: &[Pair]) -> Plot {
 	let mut performance: Vec<(Pair, f64)> = normalized_closes.iter().map(|(k, v)| (*k, (v[v.len() - 1] - v[0]))).collect();
 	performance.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
@@ -368,7 +288,7 @@ pub fn plotly_closes(normalized_closes: HashMap<Pair, Vec<f64>>, dt_index: Vec<T
 		};
 		let sign = if p >= 0.0 { '+' } else { '-' };
 		let change = format!("{:.2}", 100.0 * p.abs());
-		let legend = format!("{:<5}{}{:>5}%", symbol, sign, change);
+		let legend = format!("{symbol:<5}{sign}{change:>5}%");
 		add_trace(col_name, line_width, color, Some(legend));
 	};
 	for col_name in top.into_iter() {
@@ -383,3 +303,77 @@ pub fn plotly_closes(normalized_closes: HashMap<Pair, Vec<f64>>, dt_index: Vec<T
 
 	plot
 }
+/// Persisted market structure data with metadata for cache invalidation
+#[derive(Clone, Debug, Deserialize, Serialize)]
+struct PersistedMarketData {
+	/// When this data was collected
+	timestamp: std::time::SystemTime,
+	/// Normalized data (pair -> log-normalized closes)
+	normalized_df: HashMap<Pair, Vec<f64>>,
+	/// Time index from BTC-USDT
+	dt_index: Vec<Timestamp>,
+	/// Parameters used to collect this data
+	params: CollectionParams,
+}
+impl PersistedMarketData {
+	fn cache_file(params: &CollectionParams) -> PathBuf {
+		let filename = format!(
+			"market_structure_{}_{:?}_{}.json",
+			params.instrument_debug,
+			params.timeframe,
+			params.range_debug.replace([':', ' ', '{', '}'], "_")
+		);
+		xdg_state_file!(filename)
+	}
+
+	fn try_load(params: &CollectionParams, max_age: Duration) -> Option<Self> {
+		let cache_file = Self::cache_file(params);
+
+		let metadata = std::fs::metadata(&cache_file).ok()?;
+		let age = metadata.modified().ok()?.elapsed().ok()?;
+
+		if age > max_age {
+			tracing::info!("Cache file exists but is too old (age: {age:?}, max: {max_age:?})");
+			return None;
+		}
+
+		let json = std::fs::read_to_string(&cache_file).ok()?;
+		let data: Self = serde_json::from_str(&json).ok()?;
+
+		// Verify params match
+		if data.params != *params {
+			tracing::warn!("Cache params mismatch, ignoring cached data");
+			return None;
+		}
+
+		tracing::info!("Loaded market structure data from cache (age: {age:?})");
+		Some(data)
+	}
+
+	fn save(&self) -> Result<()> {
+		let cache_file = Self::cache_file(&self.params);
+		let json = serde_json::to_string_pretty(self)?;
+		std::fs::write(&cache_file, json)?;
+		tracing::info!("Saved market structure data to {cache_file:?}");
+		Ok(())
+	}
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+struct CollectionParams {
+	timeframe: Timeframe,
+	range_debug: String,
+	instrument_debug: String,
+}
+
+impl CollectionParams {
+	fn new(timeframe: Timeframe, range: RequestRange, instrument: Instrument) -> Self {
+		Self {
+			timeframe,
+			range_debug: format!("{range:?}"),
+			instrument_debug: format!("{instrument:?}"),
+		}
+	}
+}
+
+//TODO!!!: provide additional information: 1) BTCDOM, 2) average, 3) correlation, 4) volatility

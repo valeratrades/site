@@ -28,6 +28,12 @@ pub enum Routes {
 pub fn DashboardsView() -> impl IntoView {
 	Outlet()
 }
+/// Animated loading indicator that blinks "..." on and off.
+/// Uses CSS animation so it works immediately from SSR without waiting for hydration.
+#[component]
+pub fn LoadingIndicator(label: String) -> impl IntoView {
+	pre().child((format!("Loading {label}"), span().class("loading-dots").child("...")))
+}
 #[component]
 fn NotFoundView() -> impl IntoView {
 	let loc = use_location();
@@ -60,11 +66,4 @@ fn HomeView() -> impl IntoView {
 		vol::VolView(),
 		fng::FngView(),
 	))
-}
-
-/// Animated loading indicator that blinks "..." on and off.
-/// Uses CSS animation so it works immediately from SSR without waiting for hydration.
-#[component]
-pub fn LoadingIndicator(label: String) -> impl IntoView {
-	pre().child((format!("Loading {label}"), span().class("loading-dots").child("...")))
 }
