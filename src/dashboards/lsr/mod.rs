@@ -62,7 +62,7 @@ pub fn LsrView() -> impl IntoView {
 	}))
 }
 
-#[island]
+#[component]
 pub fn LsrSearchAndDisplayIsland(rendered_lsrs: Vec<RenderedLsr>) -> impl IntoView {
 	let rendered_lsrs_memo = Memo::new(move |_| rendered_lsrs.clone());
 

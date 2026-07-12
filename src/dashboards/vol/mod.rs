@@ -6,7 +6,7 @@ use v_utils::NowThen;
 
 use super::{LoadingIndicator, LoadingIndicatorProps};
 
-#[island]
+#[component]
 pub fn VolView() -> impl IntoView {
 	let trigger = RwSignal::new(());
 	let vol_resource = Resource::new(move || trigger.get(), move |_| async move { try_pull().await });

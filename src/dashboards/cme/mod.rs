@@ -4,7 +4,7 @@ use leptos::{html::*, prelude::*};
 
 use super::{LoadingIndicator, LoadingIndicatorProps};
 
-#[island]
+#[component]
 pub fn CftcReportView() -> impl IntoView {
 	let trigger = RwSignal::new(());
 	let report_resource = Resource::new(move || trigger.get(), |_| async move { try_build().await });

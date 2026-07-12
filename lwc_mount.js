@@ -1,6 +1,8 @@
 import { createChart, LineSeries } from "https://cdn.jsdelivr.net/npm/lightweight-charts@5/dist/lightweight-charts.standalone.production.mjs";
 
 const GREY = '#88888855';
+// axis is log-return space; show tags/ticks as the % move they represent, matching the legend
+const PCT = { type: 'custom', minMove: 0.0001, formatter: v => (v >= 0 ? '+' : '') + ((Math.exp(v) - 1) * 100).toFixed(1) + '%' };
 
 let chart, seriesByPair = new Map(), bulk, bulkHost;
 
@@ -61,7 +63,7 @@ export async function mount(el, src) {
     seen.add(m.pair);
     let s = seriesByPair.get(m.pair);
     if (!s) {
-      s = chart.addSeries(LineSeries, { color: m.color, lineWidth: m.width, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+      s = chart.addSeries(LineSeries, { color: m.color, lineWidth: m.width, priceFormat: PCT, priceLineVisible: false, lastValueVisible: true, crosshairMarkerVisible: true });
       seriesByPair.set(m.pair, s);
     } else {
       s.applyOptions({ color: m.color, lineWidth: m.width });
@@ -87,7 +89,7 @@ function renderLegend(el, legend, title) {
   if (!box) {
     box = document.createElement('div');
     box.className = 'ms-legend';
-    box.style.cssText = 'position:absolute;top:8px;right:8px;z-index:3;font:11px ui-monospace,monospace;line-height:1.4;pointer-events:none;text-align:right';
+    box.style.cssText = 'position:absolute;top:8px;left:8px;z-index:3;font:11px ui-monospace,monospace;line-height:1.4;pointer-events:none;text-align:left';
     el.appendChild(box);
   }
   box.replaceChildren();

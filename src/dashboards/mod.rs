@@ -1,6 +1,7 @@
 #[cfg(feature = "ssr")]
 pub mod _core;
 pub mod cme;
+pub mod deck;
 pub mod fng;
 pub mod lsr;
 pub mod market_structure;
@@ -57,15 +58,11 @@ fn NotFoundView() -> impl IntoView {
 
 #[component]
 fn HomeView() -> impl IntoView {
-	section().class("p-4 text-center").child((
+	section().child((
 		Title(TitleProps {
 			formatter: None,
 			text: Some("Dashboards".into()),
 		}),
-		market_structure::MarketStructureView(),
-		lsr::LsrView(),
-		cme::CftcReportView(),
-		vol::VolView(),
-		fng::FngView(),
+		deck::DashboardDeck(),
 	))
 }

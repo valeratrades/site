@@ -1408,6 +1408,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "dockviewers"
+version = "0.1.9"
+dependencies = [
+ "dockviewers_core",
+ "dockviewers_leptos",
+]
+
+[[package]]
+name = "dockviewers_core"
+version = "0.1.9"
+dependencies = [
+ "serde",
+ "serde_json",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
+name = "dockviewers_leptos"
+version = "0.1.9"
+dependencies = [
+ "dockviewers_core",
+ "leptos",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
 name = "dotenvy"
 version = "0.15.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4893,6 +4921,7 @@ dependencies = [
  "console_error_panic_hook",
  "derive-new",
  "derive_more",
+ "dockviewers",
  "futures",
  "getrandom 0.3.4",
  "gloo-timers",

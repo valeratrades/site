@@ -1,7 +1,7 @@
 use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
 
 use color_eyre::eyre::{Result, bail};
-use futures::future::join_all;
+use futures::stream::{self, StreamExt as _};
 use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
@@ -181,9 +181,9 @@ pub async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, in
 
 	let params = CollectionParams::new(tf, range, instrument);
 
-	// Calculate max age based on timeframe - reload cycle should be proportional to the timeframe
-	// For 1h data, reload every hour; for 1d data, reload every day, etc.
-	let max_age = tf.duration();
+	// decay horizon: how long a full-universe sweep stays servable before we repoll.
+	// deliberately NOT tf.duration() — candle granularity (5m) is not poll frequency.
+	let max_age = Duration::from_mins(30);
 
 	// Try to load from cache first
 	if let Some(cached) = PersistedMarketData::try_load(&params, max_age) {
@@ -194,9 +194,11 @@ pub async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, in
 	tracing::info!("No valid cache found, fetching fresh data");
 
 	//HACK: assumes we're never misaligned here
-	let futures = pairs.iter().map(|pair| {
+	// ponytail: fixed cap keeps the per-pair burst under Binance's 2400 weight/min IP limit; tune if the universe grows
+	const CONCURRENCY: usize = 12;
+	let results: Vec<_> = stream::iter(pairs.to_vec().into_iter().map(|pair| {
 		let exchange = Arc::clone(&exchange);
-		let symbol = Symbol::new(*pair, instrument);
+		let symbol = Symbol::new(pair, instrument);
 		async move {
 			match get_historical_data(symbol, tf, range, exchange).await {
 				Ok(series) => {
@@ -209,9 +211,10 @@ pub async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, in
 				}
 			}
 		}
-	});
-
-	let results = join_all(futures).await;
+	}))
+	.buffer_unordered(CONCURRENCY)
+	.collect()
+	.await;
 	let mut data: HashMap<Pair, Vec<f64>> = HashMap::new();
 	let mut dt_index = Vec::new();
 	let mut failed_pairs = Vec::new();

@@ -41,7 +41,9 @@ crate-type = ["cdylib", "rlib"]
 #,}}}
 
 [features]
-default = ["ssr", "hydrate"]
+# ssr + hydrate are mutually exclusive (see skip_feature_sets); plain `cargo r/b` must pick one.
+# cargo-leptos overrides via bin-/lib-features, so this only governs bare cargo → server target.
+default = ["ssr"]
 hydrate = [
     "leptos/hydrate",
     "dep:console_error_panic_hook",
@@ -89,6 +91,7 @@ color-eyre = "=0.6.5"
 console_error_panic_hook = { version = "=0.1.7", optional = true }
 derive-new = "=0.7.0"
 derive_more = { version = "=2.1.1", features = ["from", "display", "deref", "deref_mut", "debug"] }
+dockviewers = { path = "../ev_invest/dockviewers/dockviewers", features = ["leptos"] }
 futures = "=0.3.32"
 gloo-timers = { version = "=0.4.0", features = ["futures"], optional = true }
 jiff = { version = "=0.2.31", features = ["serde"] }

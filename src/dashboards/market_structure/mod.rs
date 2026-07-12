@@ -11,7 +11,7 @@ extern "C" {
 	async fn mount(el: web_sys::HtmlElement, src: &str);
 }
 
-#[island]
+#[component]
 pub fn MarketStructureView() -> impl IntoView {
 	#[cfg(feature = "hydrate")]
 	{
@@ -33,7 +33,7 @@ pub fn MarketStructureView() -> impl IntoView {
 		on_cleanup(move || drop(interval));
 	}
 
-	div().id("ms-chart").style("height:70vh;position:relative")
+	div().id("ms-chart").style("height:100%;position:relative")
 }
 
 #[cfg(feature = "ssr")]
