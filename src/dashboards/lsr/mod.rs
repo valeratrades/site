@@ -11,8 +11,6 @@ use v_utils::trades::Pair;
 use web_sys::wasm_bindgen::JsValue;
 
 use super::{LoadingIndicator, LoadingIndicatorProps};
-#[cfg(feature = "ssr")]
-use crate::utils::Mock;
 
 /// Main wrapper component that fetches LSR data and passes it to both search and display
 #[component]
@@ -330,19 +328,22 @@ fn LsrSearch(rendered_lsrs: Memo<Vec<RenderedLsr>>, selected_pairs: RwSignal<Vec
 
 #[server]
 async fn build_lsrs() -> Result<RenderedLsrs, ServerFnError> {
-	crate::try_load_mock!(data::SortedLsrs; .into());
-
-	let tf = "5m".into();
-	let range = (24 * 12 + 1).into(); // 24h, given `5m` tf
-	let lsrs = match data::get(tf, range).await {
-		Ok(lsrs) => lsrs,
-		Err(e) => {
-			tracing::error!("Failed to fetch LSR data: {e:?}");
-			return Err(ServerFnError::new(format!("Failed to fetch LSR data: {e}")));
-		}
-	};
-	lsrs.persist()?;
+	let lsrs = super::_core::load::<data::SortedLsrs>().await.map_err(|e| {
+		tracing::error!("Failed to load LSR data: {e:?}");
+		ServerFnError::new(format!("Failed to load LSR data: {e}"))
+	})?;
 	Ok(lsrs.into())
+}
+#[cfg(feature = "ssr")]
+impl super::_core::SourceData for data::SortedLsrs {
+	fn decay_horizon() -> v_utils::trades::Timeframe {
+		"5m".into()
+	}
+
+	async fn fetch() -> color_eyre::eyre::Result<Self> {
+		let range = (24 * 12 + 1).into(); // 24h, given `5m` tf
+		data::get("5m".into(), range).await
+	}
 }
 #[cfg(feature = "ssr")]
 impl From<data::SortedLsrs> for RenderedLsrs {

@@ -3,8 +3,6 @@ mod data;
 use leptos::{html::*, prelude::*};
 
 use super::{LoadingIndicator, LoadingIndicatorProps};
-#[cfg(feature = "ssr")]
-use crate::utils::Mock;
 
 #[island]
 pub fn FngView() -> impl IntoView {
@@ -41,23 +39,26 @@ pub fn FngView() -> impl IntoView {
 pub struct FngRendered(String);
 #[server]
 async fn try_build() -> Result<FngRendered, ServerFnError> {
-	crate::try_load_mock!(data::Fng; .into());
-
-	let fngs = data::btc_fngs_hourly(1).await.map_err(|e| {
-		tracing::error!("Failed to fetch Fear & Greed Index: {e:?}");
-		ServerFnError::new(format!("Failed to fetch Fear & Greed Index: {e}"))
+	let fng = super::_core::load::<data::Fng>().await.map_err(|e| {
+		tracing::error!("Failed to load Fear & Greed Index: {e:?}");
+		ServerFnError::new(format!("Failed to load Fear & Greed Index: {e}"))
 	})?;
-
-	let fng = fngs.into_iter().next().ok_or_else(|| {
-		tracing::error!("Fear & Greed Index response was empty");
-		ServerFnError::new("Fear & Greed Index response was empty")
-	})?;
-
-	fng.persist()?;
 	Ok(fng.into())
 }
 #[cfg(feature = "ssr")]
-impl Mock for data::Fng {}
+impl super::_core::SourceData for data::Fng {
+	fn decay_horizon() -> v_utils::trades::Timeframe {
+		"1h".into()
+	}
+
+	async fn fetch() -> color_eyre::eyre::Result<Self> {
+		data::btc_fngs_hourly(1)
+			.await?
+			.into_iter()
+			.next()
+			.ok_or_else(|| color_eyre::eyre::eyre!("Fear & Greed Index response was empty"))
+	}
+}
 #[cfg(feature = "ssr")]
 impl From<data::Fng> for FngRendered {
 	fn from(fng: data::Fng) -> Self {

@@ -10,7 +10,6 @@ use tracing::{info, instrument, warn};
 use v_exchanges::{Lsrs, prelude::*};
 use v_utils::{trades::Timeframe, xdg_data_file};
 
-use crate::utils::Mock;
 #[instrument]
 pub async fn get(tf: Timeframe, range: RequestRange) -> Result<SortedLsrs> {
 	let mut bn = Binance::default();
@@ -138,4 +137,3 @@ impl SortedLsrs {
 static INSTRUMENT: Instrument = Instrument::Perp;
 
 //Q: potentially fix to "1D", req and store full month of data for both Global and Top Positions, to display when searching for specific one.
-impl Mock for SortedLsrs {}

@@ -1,3 +1,5 @@
+#[cfg(feature = "ssr")]
+pub mod _core;
 pub mod cme;
 pub mod fng;
 pub mod lsr;

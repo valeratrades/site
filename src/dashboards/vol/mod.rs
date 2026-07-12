@@ -5,14 +5,11 @@ use leptos::{html::*, prelude::*};
 use v_utils::NowThen;
 
 use super::{LoadingIndicator, LoadingIndicatorProps};
-#[cfg(feature = "ssr")]
-use crate::utils::Mock;
 
 #[island]
 pub fn VolView() -> impl IntoView {
-	let duration = std::time::Duration::from_hours(24);
 	let trigger = RwSignal::new(());
-	let vol_resource = Resource::new(move || trigger.get(), move |_| async move { try_pull(duration).await });
+	let vol_resource = Resource::new(move || trigger.get(), move |_| async move { try_pull().await });
 
 	// Set up retry interval - retry every 1 minute on error
 	#[cfg(not(feature = "ssr"))]
@@ -47,23 +44,24 @@ pub struct VolData {
 	bvol: NowThen,
 }
 #[server]
-async fn try_pull(duration: std::time::Duration) -> Result<VolData, ServerFnError> {
-	crate::try_load_mock!(VolData);
-
-	let (vix, bvol) = match tokio::try_join!(data::vix(duration), data::bvol(duration)) {
-		Ok(results) => results,
-		Err(e) => {
-			tracing::error!("Failed to fetch volatility data: {e:?}");
-			return Err(ServerFnError::new(format!("Failed to fetch volatility data: {e}")));
-		}
-	};
-	let data = VolData::new(vix, bvol);
-
-	data.persist()?;
-	Ok(data)
+async fn try_pull() -> Result<VolData, ServerFnError> {
+	super::_core::load::<VolData>().await.map_err(|e| {
+		tracing::error!("Failed to load volatility data: {e:?}");
+		ServerFnError::new(format!("Failed to load volatility data: {e}"))
+	})
 }
 #[cfg(feature = "ssr")]
-impl Mock for VolData {}
+impl super::_core::SourceData for VolData {
+	fn decay_horizon() -> v_utils::trades::Timeframe {
+		"1h".into()
+	}
+
+	async fn fetch() -> color_eyre::eyre::Result<Self> {
+		let duration = std::time::Duration::from_hours(24);
+		let (vix, bvol) = tokio::try_join!(data::vix(duration), data::bvol(duration))?;
+		Ok(VolData::new(vix, bvol))
+	}
+}
 //TODO!!!!: NowThen it
 impl std::fmt::Display for VolData {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

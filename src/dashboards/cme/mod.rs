@@ -3,8 +3,6 @@ mod data;
 use leptos::{html::*, prelude::*};
 
 use super::{LoadingIndicator, LoadingIndicatorProps};
-#[cfg(feature = "ssr")]
-use crate::utils::Mock;
 
 #[island]
 pub fn CftcReportView() -> impl IntoView {
@@ -44,17 +42,22 @@ pub struct CftcReportRendered {
 }
 #[server]
 async fn try_build() -> Result<CftcReportRendered, ServerFnError> {
-	crate::try_load_mock!(data::CftcReport; .into());
-
-	let report = data::fetch_cftc_positions().await.map_err(|e| {
-		tracing::error!("Failed to fetch CFTC positions: {e:?}");
-		ServerFnError::new(format!("Failed to fetch CFTC positions: {e}"))
+	let report = super::_core::load::<data::CftcReport>().await.map_err(|e| {
+		tracing::error!("Failed to load CFTC positions: {e:?}");
+		ServerFnError::new(format!("Failed to load CFTC positions: {e}"))
 	})?;
-	report.persist()?;
 	Ok(report.into())
 }
 #[cfg(feature = "ssr")]
-impl Mock for data::CftcReport {}
+impl super::_core::SourceData for data::CftcReport {
+	fn decay_horizon() -> v_utils::trades::Timeframe {
+		"6h".into() // report publishes weekly; a few polls/day catches the Friday release
+	}
+
+	async fn fetch() -> color_eyre::eyre::Result<Self> {
+		data::fetch_cftc_positions().await
+	}
+}
 #[cfg(feature = "ssr")]
 impl From<data::CftcReport> for CftcReportRendered {
 	fn from(report: data::CftcReport) -> Self {

@@ -11,7 +11,6 @@ pub mod config;
 pub mod dashboards;
 pub mod keyboard;
 pub mod tmp;
-pub(crate) mod utils;
 
 #[cfg(feature = "hydrate")]
 #[wasm_bindgen::prelude::wasm_bindgen]
