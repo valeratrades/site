@@ -116,12 +116,22 @@ pub fn DashboardDeck() -> impl IntoView {
 	// A real height so the dock's first measure lands; the app nav sits above it. Defaults already
 	// ship a dark theme, so only the accent is nudged to the site's green.
 	// ponytail: 3.5rem tracks the nav's `py-2` + h-8 avatar; retune if the nav height changes.
+	// PackedState holds `Rc`s → the dock's `RwSignal::new_local` wraps a `!Send` value in a
+	// `SendWrapper`, which panics if built during SSR (the streamed render disposes its owner on a
+	// different worker thread). Gate the dock behind a client-only `mounted` flag: server and client
+	// both first render the empty host (hydration matches), then this effect — which never runs on the
+	// server — flips it and the dock is built on the wasm thread.
+	let mounted = RwSignal::new(false);
+	Effect::new(move |_| mounted.set(true));
+
 	view! {
 		<div
 			class="dv-host"
 			style="position:relative; height:calc(100vh - 3.5rem); --dv-accent:#22c55e;"
 		>
-			<PackedArea panels=panels on_ready=on_ready />
+			<Show when=move || mounted.get() fallback=|| ()>
+				<PackedArea panels=panels on_ready=on_ready.clone() />
+			</Show>
 		</div>
 	}
 }

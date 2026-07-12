@@ -1,4 +1,9 @@
-import { createChart, LineSeries } from "https://cdn.jsdelivr.net/npm/lightweight-charts@5/dist/lightweight-charts.standalone.production.mjs";
+// Loaded lazily inside mount() — a *static* top-level CDN import here becomes a hard dependency of
+// the wasm hydration bundle (site.js imports this snippet), so a slow/failed CDN would silently
+// stall hydration and blank the whole app.
+const CDN = "https://cdn.jsdelivr.net/npm/lightweight-charts@5/dist/lightweight-charts.standalone.production.mjs";
+let _lib;
+const lib = async () => (_lib ??= await import(CDN));
 
 const GREY = '#88888855';
 // axis is log-return space; show tags/ticks as the % move they represent, matching the legend
@@ -47,6 +52,7 @@ class BulkLines {
 }
 
 export async function mount(el, src) {
+  const { createChart, LineSeries } = await lib();
   const d = await (await fetch(src)).json();
   if (!chart) {
     chart = createChart(el, {
