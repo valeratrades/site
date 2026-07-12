@@ -1,6 +1,48 @@
 import { createChart, LineSeries } from "https://cdn.jsdelivr.net/npm/lightweight-charts@5/dist/lightweight-charts.standalone.production.mjs";
 
-let chart, seriesByPair = new Map();
+const GREY = '#88888855';
+
+let chart, seriesByPair = new Map(), bulk, bulkHost;
+
+// The grey background pairs, drawn as one canvas pass pinned to the chart's scales.
+// Non-interactive (no crosshair / legend), but zooms & pans with the real series.
+class BulkLines {
+  setData(time, lines) {
+    this._time = time; this._lines = lines;
+    let lo = Infinity, hi = -Infinity;
+    for (const line of lines) for (const v of line) { if (v < lo) lo = v; if (v > hi) hi = v; }
+    this._range = lines.length ? { minValue: lo, maxValue: hi } : null;
+    this._req && this._req();
+  }
+  attached({ chart, series, requestUpdate }) { this._chart = chart; this._series = series; this._req = requestUpdate; }
+  updateAllViews() {}
+  // contribute grey extent to autoscale so the price scale still fits the bulk
+  autoscaleInfo() { return this._range ? { priceRange: this._range } : null; }
+  paneViews() { return [{ zOrder: () => 'bottom', renderer: () => ({ draw: t => this._draw(t) }) }]; }
+  _draw(target) {
+    if (!this._lines || !this._lines.length) return;
+    const ts = this._chart.timeScale();
+    const xs = this._time.map(t => ts.timeToCoordinate(t));
+    // price scale is linear here, so derive the affine value→pixel map from two probes
+    const c0 = this._series.priceToCoordinate(0), c1 = this._series.priceToCoordinate(1);
+    if (c0 == null || c1 == null) return;
+    const slope = c1 - c0;
+    target.useBitmapCoordinateSpace(scope => {
+      const ctx = scope.context, hr = scope.horizontalPixelRatio, vr = scope.verticalPixelRatio;
+      ctx.lineWidth = vr; ctx.strokeStyle = GREY;
+      for (const line of this._lines) {
+        ctx.beginPath();
+        let started = false;
+        for (let j = 0; j < xs.length; j++) {
+          const x = xs[j]; if (x == null) continue;
+          const px = x * hr, py = (c0 + line[j] * slope) * vr;
+          if (started) ctx.lineTo(px, py); else { ctx.moveTo(px, py); started = true; }
+        }
+        ctx.stroke();
+      }
+    });
+  }
+}
 
 export async function mount(el, src) {
   const d = await (await fetch(src)).json();
@@ -29,6 +71,13 @@ export async function mount(el, src) {
   for (const [pair, s] of seriesByPair) {
     if (!seen.has(pair)) { chart.removeSeries(s); seriesByPair.delete(pair); }
   }
+
+  // greys: one primitive, hosted on any live series (they share the right price scale)
+  if (!bulk) bulk = new BulkLines();
+  bulk.setData(d.time, d.bulk);
+  const host = d.series[0] && seriesByPair.get(d.series[0].pair);
+  if (host && host !== bulkHost) { host.attachPrimitive(bulk); bulkHost = host; }
+
   chart.timeScale().fitContent();
   renderLegend(el, d.legend, d.title);
 }

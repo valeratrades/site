@@ -19,8 +19,9 @@ pub type MarketData = (HashMap<Pair, Vec<f64>>, Vec<Timestamp>);
 #[derive(Serialize)]
 pub struct MarketStructureChart {
 	time: Vec<i64>,           // UNIX seconds, ascending
+	bulk: Vec<Vec<f64>>,      // grey background pairs: drawn as a single non-interactive canvas primitive
 	values: Vec<Vec<f64>>,    // per-series, parallel to `series`, in draw order
-	series: Vec<SeriesMeta>,  // draw order: greys, then non-BTC highlights, then BTC (painted on top)
+	series: Vec<SeriesMeta>,  // interactive highlights only: non-BTC highlights, then BTC (painted on top)
 	legend: Vec<LegendEntry>, // legend order: top…, BTC (middle), …bottom
 	title: String,
 }
@@ -38,7 +39,6 @@ struct LegendEntry {
 
 /// category10, cycled across highlighted (non-BTC) series
 const PALETTE: [&str; 10] = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"];
-const GREY: &str = "#88888855";
 
 #[instrument]
 pub async fn market_structure_json(limit: RequestRange, tf: Timeframe, exchange_name: ExchangeName, instrument: Instrument) -> Result<MarketStructureChart> {
@@ -128,20 +128,18 @@ pub async fn market_structure_json(limit: RequestRange, tf: Timeframe, exchange_
 		push_highlight(pair, &mut legend, &mut color_of);
 	}
 
-	// draw order: greys first (bulk), then non-BTC highlights, then BTC last so it paints on top
-	let mut series = Vec::new();
-	let mut values = Vec::new();
+	// greys never become interactive series — collected as `bulk` for the canvas primitive
+	let mut bulk = Vec::new();
 	for (pair, v) in &closes {
 		if *pair == btc || color_of.contains_key(pair) {
 			continue;
 		}
-		series.push(SeriesMeta {
-			pair: pair.to_string(),
-			color: GREY.into(),
-			width: 1,
-		});
-		values.push(column(v));
+		bulk.push(column(v));
 	}
+
+	// draw order: non-BTC highlights, then BTC last so it paints on top
+	let mut series = Vec::new();
+	let mut values = Vec::new();
 	let highlight_order = top.iter().chain(bottom.iter().rev()).copied().filter(|p| *p != btc);
 	let mut seen = std::collections::HashSet::new();
 	for pair in highlight_order {
@@ -170,6 +168,7 @@ pub async fn market_structure_json(limit: RequestRange, tf: Timeframe, exchange_
 
 	Ok(MarketStructureChart {
 		time,
+		bulk,
 		values,
 		series,
 		legend,
