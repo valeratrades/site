@@ -3,10 +3,6 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
 use color_eyre::eyre::{Result, bail};
 use futures::future::join_all;
 use jiff::Timestamp;
-use plotly::{
-	Plot, Scatter,
-	common::{Line, Title},
-};
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 use v_exchanges::prelude::*;
@@ -18,8 +14,34 @@ use v_utils::{
 /// Collected market data: normalized closes per pair and the time index
 pub type MarketData = (HashMap<Pair, Vec<f64>>, Vec<Timestamp>);
 
+/// Compact chart payload for the client-side Lightweight Charts shim.
+/// Columnar (parallel arrays, no per-point keys) to keep the JSON small under gzip.
+#[derive(Serialize)]
+pub struct MarketStructureChart {
+	time: Vec<i64>,           // UNIX seconds, ascending
+	values: Vec<Vec<f64>>,    // per-series, parallel to `series`, in draw order
+	series: Vec<SeriesMeta>,  // draw order: greys, then non-BTC highlights, then BTC (painted on top)
+	legend: Vec<LegendEntry>, // legend order: top…, BTC (middle), …bottom
+	title: String,
+}
+#[derive(Serialize)]
+struct SeriesMeta {
+	pair: String,
+	color: String,
+	width: u8,
+}
+#[derive(Serialize)]
+struct LegendEntry {
+	label: String,
+	color: String,
+}
+
+/// category10, cycled across highlighted (non-BTC) series
+const PALETTE: [&str; 10] = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"];
+const GREY: &str = "#88888855";
+
 #[instrument]
-pub async fn try_build(limit: RequestRange, tf: Timeframe, exchange_name: ExchangeName, instrument: Instrument) -> Result<Plot> {
+pub async fn market_structure_json(limit: RequestRange, tf: Timeframe, exchange_name: ExchangeName, instrument: Instrument) -> Result<MarketStructureChart> {
 	tracing::info!("Building market structure for {exchange_name} {instrument} with limit={limit:?}, tf={tf:?}");
 
 	let mut exchange = exchange_name.init_client();
@@ -29,7 +51,6 @@ pub async fn try_build(limit: RequestRange, tf: Timeframe, exchange_name: Exchan
 	});
 	exchange.set_timeout(Duration::from_secs(60));
 
-	tracing::debug!("Fetching exchange info for {instrument}");
 	let exch_info = match exchange.exchange_info(instrument).await {
 		Ok(info) => info,
 		Err(e) => {
@@ -38,15 +59,122 @@ pub async fn try_build(limit: RequestRange, tf: Timeframe, exchange_name: Exchan
 		}
 	};
 
-	let all_usdt_pairs = exch_info.usdt_pairs().collect::<Vec<Pair>>();
-	tracing::info!("Found {} USDT pairs from exchange info", all_usdt_pairs.len());
+	let all_pairs = exch_info.usdt_pairs().collect::<Vec<Pair>>();
+	tracing::info!("Found {} USDT pairs from exchange info", all_pairs.len());
 
-	// Check if BTC-USDT is in the list
-	let has_btc_usdt = all_usdt_pairs.iter().any(|p| "BTC-USDT" == *p);
-	tracing::info!("BTC-USDT in pairs list: {has_btc_usdt}");
+	let (normalized_df, dt_index) = collect_data(&all_pairs, tf, limit, instrument, Arc::new(exchange)).await?;
 
-	let (normalized_df, dt_index) = collect_data(&all_usdt_pairs, tf, limit, instrument, Arc::new(exchange)).await?;
-	Ok(plotly_closes(normalized_df, dt_index, tf, instrument, &all_usdt_pairs))
+	// collect_data returns the un-aligned frame; drop any series whose length disagrees with the
+	// time index so `values[i]` indexing below is always in bounds.
+	let closes: HashMap<Pair, Vec<f64>> = normalized_df.into_iter().filter(|(_, v)| v.len() == dt_index.len()).collect();
+
+	let mut performance: Vec<(Pair, f64)> = closes.iter().map(|(k, v)| (*k, v[v.len() - 1] - v[0])).collect();
+	performance.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+	let n_samples = (performance.len() as f64).ln().round() as usize;
+	let top: Vec<Pair> = performance.iter().rev().take(n_samples).map(|x| x.0).collect();
+	let bottom: Vec<Pair> = performance.iter().take(n_samples).map(|x| x.0).collect();
+
+	// time index, sorted ascending; `order` re-indexes every series to match
+	let mut order: Vec<usize> = (0..dt_index.len()).collect();
+	order.sort_by_key(|&i| dt_index[i].as_second());
+	let time: Vec<i64> = order.iter().map(|&i| dt_index[i].as_second()).collect();
+	let column = |v: &[f64]| -> Vec<f64> { order.iter().map(|&i| (v[i] * 1e5).round() / 1e5).collect() };
+
+	let btc: Pair = "BTC-USDT".try_into().unwrap();
+	let contains_btc = closes.contains_key(&btc);
+
+	let label_for = |pair: Pair, symbol: Option<&str>| -> String {
+		let p = performance.iter().find(|a| a.0 == pair).unwrap().1;
+		let symbol = match symbol {
+			Some(s) => s.to_string(),
+			//HACK: should be formatted at this point. We want to always omit 1000, and the quote when it's USDT //TODO: unify this with LSR, etc
+			None => {
+				let s = pair.to_string();
+				s[0..s.len() - 5].replace("1000", "")
+			}
+		};
+		let sign = if p >= 0.0 { '+' } else { '-' };
+		let change = format!("{:.2}", 100.0 * p.abs());
+		format!("{symbol:<5}{sign}{change:>5}%")
+	};
+
+	// assign a stable palette color to each highlighted (non-BTC) pair, in legend order
+	let mut color_of: HashMap<Pair, String> = HashMap::new();
+	let mut legend = Vec::new();
+	let mut palette_i = 0;
+	let mut push_highlight = |pair: Pair, legend: &mut Vec<LegendEntry>, color_of: &mut HashMap<Pair, String>| {
+		if pair == btc {
+			return;
+		}
+		let color = PALETTE[palette_i % PALETTE.len()].to_string();
+		palette_i += 1;
+		color_of.insert(pair, color.clone());
+		legend.push(LegendEntry {
+			label: label_for(pair, None),
+			color,
+		});
+	};
+	for &pair in &top {
+		push_highlight(pair, &mut legend, &mut color_of);
+	}
+	if contains_btc {
+		color_of.insert(btc, "gold".to_string());
+		legend.push(LegendEntry {
+			label: label_for(btc, Some("~BTC~")),
+			color: "gold".to_string(),
+		});
+	}
+	for &pair in bottom.iter().rev() {
+		push_highlight(pair, &mut legend, &mut color_of);
+	}
+
+	// draw order: greys first (bulk), then non-BTC highlights, then BTC last so it paints on top
+	let mut series = Vec::new();
+	let mut values = Vec::new();
+	for (pair, v) in &closes {
+		if *pair == btc || color_of.contains_key(pair) {
+			continue;
+		}
+		series.push(SeriesMeta {
+			pair: pair.to_string(),
+			color: GREY.into(),
+			width: 1,
+		});
+		values.push(column(v));
+	}
+	let highlight_order = top.iter().chain(bottom.iter().rev()).copied().filter(|p| *p != btc);
+	let mut seen = std::collections::HashSet::new();
+	for pair in highlight_order {
+		if !seen.insert(pair) {
+			continue;
+		}
+		series.push(SeriesMeta {
+			pair: pair.to_string(),
+			color: color_of[&pair].clone(),
+			width: 2,
+		});
+		values.push(column(&closes[&pair]));
+	}
+	if contains_btc {
+		series.push(SeriesMeta {
+			pair: btc.to_string(),
+			color: "gold".into(),
+			width: 4,
+		});
+		values.push(column(&closes[&btc]));
+	}
+
+	let span_secs = time.last().unwrap() - time.first().unwrap();
+	let hours = ((span_secs + tf.duration().as_secs() as i64 * 2/*compensate for off-by-ones*/) as f64 / 3600.0).round() as i64;
+	let title = format!("Last {hours}h of {}/{} pairs on {instrument}", closes.len(), all_pairs.len());
+
+	Ok(MarketStructureChart {
+		time,
+		values,
+		series,
+		legend,
+		title,
+	})
 }
 #[instrument(skip_all)]
 pub async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, instrument: Instrument, exchange: Arc<Box<dyn Exchange>>) -> Result<MarketData> {
@@ -223,85 +351,6 @@ pub async fn get_historical_data(symbol: Symbol, tf: Timeframe, range: RequestRa
 		col_closes: close,
 		col_volumes: volume,
 	})
-}
-pub fn plotly_closes(normalized_closes: HashMap<Pair, Vec<f64>>, dt_index: Vec<Timestamp>, tf: Timeframe, instrument: Instrument, all_pairs: &[Pair]) -> Plot {
-	let mut performance: Vec<(Pair, f64)> = normalized_closes.iter().map(|(k, v)| (*k, (v[v.len() - 1] - v[0]))).collect();
-	performance.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-
-	let n_samples = (performance.len() as f64).ln().round() as usize;
-	let top: Vec<Pair> = performance.iter().rev().take(n_samples).map(|x| x.0).collect();
-	let bottom: Vec<Pair> = performance.iter().take(n_samples).map(|x| x.0).collect();
-
-	let mut plot = Plot::new();
-	let hours = (dt_index.first().unwrap().duration_since(*dt_index.last().unwrap()) + tf.signed_duration() * 2/*compensate for off-by-ones*/)
-		.as_hours()
-		.abs();
-
-	// Calculate success rate and color only the numerator if below 70%
-	let success_rate = (normalized_closes.len() as f64 / all_pairs.len() as f64) * 100.0;
-	let title_text = if success_rate < 70.0 {
-		format!(
-			"Last {hours}h of <span style=\"color: #f59e0b;\">{}</span>/{} pairs on {instrument}",
-			normalized_closes.len(),
-			all_pairs.len()
-		)
-	} else {
-		format!("Last {hours}h of {}/{} pairs on {instrument}", normalized_closes.len(), all_pairs.len())
-	};
-	plot.set_layout(plotly::Layout::new().title(Title::with_text(&title_text)));
-
-	let mut add_trace = |name: Pair, width: f64, color: Option<&'static str>, legend: Option<String>| {
-		let y_values: Vec<f64> = normalized_closes.get(&name).unwrap().to_owned();
-		let x_values: Vec<String> = dt_index.iter().map(|dt| dt.to_string()).collect();
-
-		let mut line = Line::new().width(width);
-		if let Some(c) = color {
-			line = line.color(c);
-		}
-
-		let mut trace = Scatter::new(x_values, y_values).mode(plotly::common::Mode::Lines).line(line);
-
-		if let Some(l) = legend {
-			trace = trace.name(&l);
-		} else {
-			trace = trace.show_legend(false);
-		}
-		plot.add_trace(trace);
-	};
-
-	let mut contains_btcusdt = false;
-	for col_name in normalized_closes.keys() {
-		if &col_name.to_string() == "BTC-USDT" {
-			contains_btcusdt = true;
-			continue;
-		}
-		if top.contains(col_name) || bottom.contains(col_name) {
-			continue;
-		}
-		add_trace(*col_name, 1.0, Some("grey"), None);
-	}
-	let mut labeled_trace = |col_name: Pair, symbol: Option<&str>, line_width: f64, color: Option<&'static str>| {
-		let p: f64 = performance.iter().find(|a| a.0 == col_name).unwrap().1;
-		let symbol = match symbol {
-			Some(s) => s,
-			None => &col_name.to_string()[0..col_name.to_string().len() - 5].to_string().replace("1000", ""), //HACK: should be formatted at this point. We want to always omit 1000, and the quote when it's USDT //TODO: unify this with LSR, etc
-		};
-		let sign = if p >= 0.0 { '+' } else { '-' };
-		let change = format!("{:.2}", 100.0 * p.abs());
-		let legend = format!("{symbol:<5}{sign}{change:>5}%");
-		add_trace(col_name, line_width, color, Some(legend));
-	};
-	for col_name in top.into_iter() {
-		labeled_trace(col_name, None, 2.0, None);
-	}
-	if contains_btcusdt {
-		labeled_trace("BTC-USDT".try_into().unwrap(), Some("~BTC~"), 3.5, Some("gold"));
-	}
-	for col_name in bottom.into_iter().rev() {
-		labeled_trace(col_name, None, 2.0, None);
-	}
-
-	plot
 }
 /// Persisted market structure data with metadata for cache invalidation
 #[derive(Clone, Debug, Deserialize, Serialize)]

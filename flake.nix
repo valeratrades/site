@@ -171,6 +171,21 @@
             exec ${siteBin}/bin/${pname}
           '';
         };
+        # `nix run .#dev` → `cargo leptos watch`, from anywhere in the repo.
+        # Resolve the repo at runtime (`git rev-parse`), never `toString ./.`:
+        # the latter locks the wrapper to the read-only /nix/store snapshot where
+        # cargo can't write target/. Delegates to `nix develop` since cargo-leptos
+        # (version-pinned to the leptos crate, installed on shell entry) and the
+        # .cargo/config.toml accelerators live in the devShell, not this bare app.
+        runDev = pkgs.writeShellApplication {
+          name = "run-dev";
+          runtimeInputs = [ pkgs.git ];
+          text = ''
+            repo="$(git rev-parse --show-toplevel)"
+            cd "$repo"
+            exec nix develop "$repo" --command cargo leptos watch
+          '';
+        };
         containerStd = v_flakes.container.implement {
           inherit pkgs pname;
           containers."" = {
@@ -191,9 +206,15 @@
 
         containers = containerStd.containers;
 
-        apps.default = {
-          type = "app";
-          program = "${siteBin}/bin/${pname}";
+        apps = {
+          default = {
+            type = "app";
+            program = "${siteBin}/bin/${pname}";
+          };
+          dev = {
+            type = "app";
+            program = "${runDev}/bin/run-dev";
+          };
         };
 
         devShells.default = pkgs.mkShell {

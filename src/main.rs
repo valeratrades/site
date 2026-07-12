@@ -73,12 +73,18 @@ async fn main() {
 				move || shell(leptos_options.clone())
 			},
 		)
+		// public klines JSON for the Lightweight Charts island — no leptos ctx/DB/state
+		.route(
+			"/data/market_structure.json",
+			axum::routing::get(site::dashboards::market_structure::market_structure_json_handler),
+		)
 		.fallback(file_and_error_handler(move |_| {
 			provide_context(live_settings.clone());
 			provide_context(db.clone());
 			shell(leptos_options_clone.clone())
 		}))
-		.with_state(leptos_options);
+		.with_state(leptos_options)
+		.layer(tower_http::compression::CompressionLayer::new());
 
 	// run our app with hyper (`axum::Server` is a re-export of `hyper::Server`)
 	let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();

@@ -60,7 +60,7 @@ ssr = [
     "dep:reqwest",
     "dep:chrono",
     "dep:chrono-tz",
-    "dep:plotly",
+    "dep:arrow",
     "dep:sqlx",
     "dep:bcrypt",
     "dep:uuid",
@@ -78,6 +78,7 @@ ssr = [
 
 [dependencies]
 any_spawner = { version = "=0.3.0", optional = true }
+arrow = { version = "=59.1.0", default-features = false, features = ["ipc"], optional = true }
 axum = { version = "=0.8.9", optional = true }
 base64 = "=0.22.1"
 bcrypt = { version = "=0.19.2", optional = true }
@@ -101,7 +102,6 @@ lettre = { version = "=0.11.22", features = ["tokio1-native-tls", "builder"], op
 miette = { version = "=7.6.0", features = ["fancy"], optional = true } # required in scope by v_utils' `clientside!` macro
 notify = { version = "=8.2.0", optional = true }
 oauth2 = { version = "=5.0.0", optional = true }
-plotly = { version = "=0.14.1", features = ["image", "kaleido"], optional = true }
 proc-macro2 = "=1.0.106"
 pulldown-cmark = { version = "=0.13.4", optional = true }
 reqwest = { version = "=0.12.28", features = ["json"], optional = true } # pinned to 0.12: oauth2 5.0 has not migrated to reqwest 0.13 (its `request_async` only accepts its own reqwest 0.12 client type)
@@ -112,14 +112,14 @@ serde_with = { version = "=3.21.0", features = ["chrono"] }
 sqlx = { version = "^0.9", features = ["sqlite", "runtime-tokio"], optional = true }
 tokio = { version = "=1.52.3", features = ["rt-multi-thread"], optional = true }
 tower-cookies = { version = "=0.11.0", optional = true }
-tower-http = { version = "=0.7.0", features = ["fs"], optional = true }
+tower-http = { version = "=0.7.0", features = ["fs", "compression-gzip"], optional = true }
 tracing = { version = "=0.1.44", optional = true }
 uuid = { version = "=1.23.4", features = ["v4"], optional = true }
 v_exchanges = { version = "=0.18.5", features = ["binance", "bybit", "data"], optional = true }
 v_utils = { version = "=2.15.54", features = ["cli", "xdg"] }
 wasm-bindgen = "=0.2.126" #NB: version must match that of wasm-bindgen-cli (pinned in flake.nix)
 wasm-bindgen-futures = "=0.4.76"
-web-sys = { version = "=0.3.103", features = ["Navigator", "Clipboard", "HtmlInputElement", "FileList", "File", "Blob", "BlobPropertyBag", "Url", "HtmlAnchorElement"] }
+web-sys = { version = "=0.3.103", features = ["Navigator", "Clipboard", "Document", "Element", "HtmlElement", "HtmlInputElement", "FileList", "File", "Blob", "BlobPropertyBag", "Url", "HtmlAnchorElement"] }
 xdg = { version = "=3.0.0", optional = true }
 
 # v_utils 2.15.47 pulls `ustr` -> `ahash` -> `getrandom 0.3` unconditionally; on wasm getrandom needs its `wasm_js` backend feature (+ the cfg in .cargo/config.toml)
