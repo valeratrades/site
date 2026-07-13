@@ -37,6 +37,43 @@ pub fn DashboardsView() -> impl IntoView {
 pub fn LoadingIndicator(label: String) -> impl IntoView {
 	pre().child((format!("Loading {label}"), span().class("loading-dots").child("...")))
 }
+
+/// Reads live fetch progress registered under `name`.
+#[server]
+async fn dashboard_progress(name: String) -> Result<Option<String>, ServerFnError> {
+	Ok(_core::progress_of(&name))
+}
+
+/// Loading indicator that polls [`dashboard_progress`] (~500ms) and shows `X/Y` while a fetch runs.
+#[component]
+pub fn LoadingWithProgress(label: String, name: String) -> impl IntoView {
+	let progress = RwSignal::new(None::<String>);
+	#[cfg(feature = "hydrate")]
+	{
+		use gloo_timers::callback::Interval;
+		use send_wrapper::SendWrapper;
+		use wasm_bindgen_futures::spawn_local;
+
+		let interval = SendWrapper::new(Interval::new(500, move || {
+			let name = name.clone();
+			spawn_local(async move {
+				if let Ok(p) = dashboard_progress(name).await {
+					progress.set(p);
+				}
+			});
+		}));
+		on_cleanup(move || drop(interval));
+	}
+	#[cfg(not(feature = "hydrate"))]
+	drop(name);
+	pre().child((
+		move || match progress.get() {
+			Some(p) => format!("Loading {label} — {p}"),
+			None => format!("Loading {label}"),
+		},
+		span().class("loading-dots").child("..."),
+	))
+}
 #[component]
 fn NotFoundView() -> impl IntoView {
 	let loc = use_location();

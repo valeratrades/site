@@ -5,7 +5,7 @@
 
 use std::{cell::Cell, rc::Rc, sync::Arc};
 
-use dockviewers::leptos::{Breakpoint, DockPanel, Group, MinSize, PackedApi, PackedArea, PanelId};
+use dockviewers::leptos::{Breakpoint, Config, DockPanel, Group, Keybind, MinSize, PackedApi, PackedArea, PackedState, PanelId};
 use leptos::prelude::*;
 
 use super::{cme, fng, lsr, market_structure, vol};
@@ -36,6 +36,27 @@ fn seed(api: &PackedApi) {
 	for (id, w, h, min) in specs {
 		let group = Group::new(api.mint_group_id(), PanelId(id.into()));
 		api.place(group, w, h, min);
+	}
+}
+
+/// `s` persists the live arrangement under its band key, via dockviewers' own keydown path (the same
+/// one that drives `u`/`f`/`?`), so it inherits its editable-field guard and hydration timing. Built
+/// fresh per render so the `!Send` `Rc` action is born on the client, not captured by the island view.
+fn keybinds() -> Config {
+	Config {
+		actions: vec![(
+			Keybind { key: "s", alt: false, ctrl: false },
+			std::rc::Rc::new(|s: &mut PackedState| {
+				let json = s.save();
+				let key = seed_key(s.breakpoint()).to_string();
+				leptos::task::spawn_local(async move {
+					if let Err(e) = save_layout(key, json).await {
+						leptos::logging::error!("save_layout failed: {e}");
+					}
+				});
+			}) as dockviewers::leptos::Action,
+		)],
+		..Default::default()
 	}
 }
 
@@ -97,20 +118,6 @@ pub fn DashboardDeck() -> impl IntoView {
 				}
 			});
 		});
-
-		// `s` → persist the live arrangement under its band key. dockview's own keydown ignores `s`.
-		crate::keyboard::use_key(move |k| {
-			if k != "s" {
-				return;
-			}
-			let json = api.save();
-			let key = seed_key(api.breakpoint()).to_string();
-			leptos::task::spawn_local(async move {
-				if let Err(e) = save_layout(key, json).await {
-					leptos::logging::error!("save_layout failed: {e}");
-				}
-			});
-		});
 	}) as Arc<dyn Fn(PackedApi) + Send + Sync>;
 
 	// A real height so the dock's first measure lands; the app nav sits above it. Defaults already
@@ -130,7 +137,7 @@ pub fn DashboardDeck() -> impl IntoView {
 			style="position:relative; height:calc(100vh - 3.5rem); --dv-accent:#22c55e;"
 		>
 			<Show when=move || mounted.get() fallback=|| ()>
-				<PackedArea panels=panels on_ready=on_ready.clone() />
+				<PackedArea panels=panels config=keybinds() on_ready=on_ready.clone() />
 			</Show>
 		</div>
 	}

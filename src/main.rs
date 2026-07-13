@@ -22,7 +22,10 @@ async fn main() {
 	use std::path::Path;
 
 	use axum::Router;
-	use leptos::prelude::*;
+	use leptos::{
+		prelude::*,
+		reactive::{computed::ScopedFuture, owner::Owner},
+	};
 	use leptos_axum::*;
 	use site::{app::*, auth::Database, blog, config::LiveSettings};
 	use tracing::info;
@@ -58,6 +61,7 @@ async fn main() {
 	// Build the router with server functions
 	let leptos_options_clone = leptos_options.clone();
 	let live_settings_clone = live_settings.clone();
+	let live_settings_route = live_settings.clone();
 	let db_clone = db.clone();
 
 	let app = Router::new()
@@ -73,10 +77,20 @@ async fn main() {
 				move || shell(leptos_options.clone())
 			},
 		)
-		// public klines JSON for the Lightweight Charts island — no leptos ctx/DB/state
+		// public klines JSON for the Lightweight Charts island. runs under an owner + LiveSettings
+		// context so the shared SourceData `load()` (mock check) resolves, same as server fns do.
 		.route(
 			"/data/market_structure.json",
-			axum::routing::get(site::dashboards::market_structure::market_structure_json_handler),
+			axum::routing::get(move || {
+				let live_settings = live_settings_route.clone();
+				let owner = Owner::new();
+				owner.with(|| {
+					ScopedFuture::new(async move {
+						provide_context(live_settings);
+						site::dashboards::market_structure::market_structure_json_handler().await
+					})
+				})
+			}),
 		)
 		.fallback(file_and_error_handler(move |_| {
 			provide_context(live_settings.clone());

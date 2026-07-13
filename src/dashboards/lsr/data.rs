@@ -39,12 +39,14 @@ pub async fn get(tf: Timeframe, range: RequestRange) -> Result<SortedLsrs> {
 	};
 	let lsr_pairs = pairs.into_iter().filter(|p| !lsr_no_data_pairs.contains(&p.to_string())).collect::<Vec<_>>();
 
+	let progress = crate::dashboards::_core::Progress::of::<SortedLsrs>();
+	progress.set_target(lsr_pairs.len());
 	let new_no_data_pairs = Arc::new(Mutex::new(Vec::new()));
 	let handles = lsr_pairs.iter().map(|p| {
 		let new_no_data_pairs = Arc::clone(&new_no_data_pairs);
 		let bn = Arc::new(&bn);
 		async move {
-			match bn.lsr(*p, tf, range, "Global".into()).await {
+			let r = match bn.lsr(*p, tf, range, "Global".into()).await {
 				Ok(lsr_vec) if !lsr_vec.is_empty() => Some(lsr_vec),
 				Ok(_) => {
 					info!("No data for {p}");
@@ -55,7 +57,9 @@ pub async fn get(tf: Timeframe, range: RequestRange) -> Result<SortedLsrs> {
 					warn!("Couldn't fetch data for {p}: {e:?}");
 					None
 				}
-			}
+			};
+			progress.inc();
+			r
 		}
 	});
 	let results = join_all(handles).await;

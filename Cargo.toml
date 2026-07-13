@@ -94,7 +94,7 @@ derive_more = { version = "=2.1.1", features = ["from", "display", "deref", "der
 dockviewers = { path = "../ev_invest/dockviewers/dockviewers", features = ["leptos"] }
 futures = "=0.3.32"
 gloo-timers = { version = "=0.4.0", features = ["futures"], optional = true }
-jiff = { version = "=0.2.31", features = ["serde"] }
+jiff = { version = "=0.2.32", features = ["serde"] }
 js-sys = "=0.3.103"
 leptos = { version = "=0.8.20", features = ["islands"] }
 leptos-routable = { git = "https://github.com/stefanboere/leptos-routable" }
@@ -117,7 +117,7 @@ tokio = { version = "=1.52.3", features = ["rt-multi-thread"], optional = true }
 tower-cookies = { version = "=0.11.0", optional = true }
 tower-http = { version = "=0.7.0", features = ["fs", "compression-gzip"], optional = true }
 tracing = { version = "=0.1.44", optional = true }
-uuid = { version = "=1.23.4", features = ["v4"], optional = true }
+uuid = { version = "=1.23.5", features = ["v4"], optional = true }
 v_exchanges = { version = "=0.18.5", features = ["binance", "bybit", "data"], optional = true }
 v_utils = { version = "=2.15.54", features = ["cli", "xdg"] }
 wasm-bindgen = "=0.2.126" #NB: version must match that of wasm-bindgen-cli (pinned in flake.nix)
@@ -128,7 +128,7 @@ xdg = { version = "=3.0.0", optional = true }
 # v_utils 2.15.47 pulls `ustr` -> `ahash` -> `getrandom 0.3` unconditionally; on wasm getrandom needs its `wasm_js` backend feature (+ the cfg in .cargo/config.toml)
 [target.wasm32-unknown-unknown.dependencies]
 # must stay on the same major as the transitive getrandom that reaches wasm (0.3 via ahash) — a 0.4 dep here would not enable wasm_js on the 0.3 copy
-getrandom = { version = "0.3", features = ["wasm_js"] }
+getrandom = { version = "=0.3.4", features = ["wasm_js"] }
 
 [profile.wasm-release]
 inherits = "release"

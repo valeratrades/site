@@ -1,6 +1,11 @@
 //! Standardizes polled data sources: persist every poll to `$XDG_DATA_HOME`, and
 //! don't hit upstream again until the persisted copy is older than [`SourceData::decay_horizon`].
-use std::{future::Future, path::PathBuf};
+use std::{
+	collections::HashMap,
+	future::Future,
+	path::PathBuf,
+	sync::{LazyLock, Mutex},
+};
 
 use chrono::{DateTime, Utc};
 use color_eyre::eyre::Result;
@@ -17,6 +22,48 @@ pub trait SourceData: Sized + Serialize + DeserializeOwned + Send {
 		let p = std::any::type_name::<Self>();
 		p.rsplit("::").next().unwrap_or(p)
 	}
+
+	/// How an in-flight fetch's `(loaded, target)` is rendered to the client poller.
+	fn fmt_progress(loaded: usize, target: usize) -> String {
+		format!("{loaded}/{target}")
+	}
+}
+
+struct Entry {
+	loaded: usize,
+	target: usize,
+	fmt: fn(usize, usize) -> String,
+}
+// ponytail: global map, single-user dashboard — a lock per source only matters under real concurrency
+static REGISTRY: LazyLock<Mutex<HashMap<&'static str, Entry>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// Live per-source fetch progress, opted into by multi-pair sources inside their `fetch()`.
+#[derive(Clone, Copy)]
+pub struct Progress {
+	name: &'static str,
+}
+impl Progress {
+	pub fn of<T: SourceData>() -> Self {
+		Self { name: T::name() }
+	}
+
+	pub fn set_target(&self, target: usize) {
+		if let Some(e) = REGISTRY.lock().unwrap().get_mut(self.name) {
+			e.target = target;
+		}
+	}
+
+	pub fn inc(&self) {
+		if let Some(e) = REGISTRY.lock().unwrap().get_mut(self.name) {
+			e.loaded += 1;
+		}
+	}
+}
+
+/// Formatted progress of an in-flight fetch, or `None` when nothing is loading under `name`.
+pub fn progress_of(name: &str) -> Option<String> {
+	let reg = REGISTRY.lock().unwrap();
+	reg.get(name).map(|e| (e.fmt)(e.loaded, e.target))
 }
 
 /// Serve the persisted copy while fresh (or always, under mock); otherwise repoll and persist.
@@ -30,7 +77,17 @@ pub async fn load<T: SourceData>() -> Result<T> {
 		}
 		tracing::debug!("{} stale (age {age}), repolling", T::name());
 	}
-	let data = T::fetch().await?;
+	REGISTRY.lock().unwrap().insert(
+		T::name(),
+		Entry {
+			loaded: 0,
+			target: 0,
+			fmt: T::fmt_progress,
+		},
+	);
+	let result = T::fetch().await;
+	REGISTRY.lock().unwrap().remove(T::name());
+	let data = result?;
 	write(&data)?;
 	Ok(data)
 }

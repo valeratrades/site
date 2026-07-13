@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use v_utils::trades::Pair;
 use web_sys::wasm_bindgen::JsValue;
 
-use super::{LoadingIndicator, LoadingIndicatorProps};
+use super::{LoadingWithProgress, LoadingWithProgressProps};
 
 /// Main wrapper component that fetches LSR data and passes it to both search and display
 #[component]
@@ -43,7 +43,15 @@ pub fn LsrView() -> impl IntoView {
 	}
 
 	section().class("p-4 text-center").child(Suspense(SuspenseProps {
-		fallback: { || LoadingIndicator(LoadingIndicatorProps { label: "LSR".into() }) }.into(),
+		fallback: {
+			|| {
+				LoadingWithProgress(LoadingWithProgressProps {
+					label: "LSR".into(),
+					name: "SortedLsrs".into(),
+				})
+			}
+		}
+		.into(),
 		children: ToChildren::to_children(move || {
 			IntoRender::into_render(move || match lsrs_resource.get() {
 				Some(Ok(rendered_lsrs)) => {
@@ -56,7 +64,14 @@ pub fn LsrView() -> impl IntoView {
 						.into_any()
 				}
 				Some(Err(e)) => (pre().child(format!("Error loading Lsrs: {e} (retrying...)")), ().into_any()).into_any(),
-				None => (LoadingIndicator(LoadingIndicatorProps { label: "LSR".into() }), ().into_any()).into_any(),
+				None => (
+					LoadingWithProgress(LoadingWithProgressProps {
+						label: "LSR".into(),
+						name: "SortedLsrs".into(),
+					}),
+					().into_any(),
+				)
+					.into_any(),
 			})
 		}),
 	}))
@@ -343,6 +358,10 @@ impl super::_core::SourceData for data::SortedLsrs {
 	async fn fetch() -> color_eyre::eyre::Result<Self> {
 		let range = (24 * 12 + 1).into(); // 24h, given `5m` tf
 		data::get("5m".into(), range).await
+	}
+
+	fn fmt_progress(loaded: usize, target: usize) -> String {
+		format!("pulled {loaded}/{target} pairs")
 	}
 }
 #[cfg(feature = "ssr")]

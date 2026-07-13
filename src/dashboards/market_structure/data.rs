@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use color_eyre::eyre::{Result, bail};
 use futures::stream::{self, StreamExt as _};
@@ -6,17 +6,14 @@ use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 use v_exchanges::prelude::*;
-use v_utils::{
-	trades::{Pair, Timeframe},
-	xdg_state_file,
-};
+use v_utils::trades::{Pair, Timeframe};
 
 /// Collected market data: normalized closes per pair and the time index
 pub type MarketData = (HashMap<Pair, Vec<f64>>, Vec<Timestamp>);
 
 /// Compact chart payload for the client-side Lightweight Charts shim.
 /// Columnar (parallel arrays, no per-point keys) to keep the JSON small under gzip.
-#[derive(Serialize)]
+#[derive(Deserialize, Serialize)]
 pub struct MarketStructureChart {
 	time: Vec<i64>,           // UNIX seconds, ascending
 	bulk: Vec<Vec<f64>>,      // grey background pairs: drawn as a single non-interactive canvas primitive
@@ -25,16 +22,32 @@ pub struct MarketStructureChart {
 	legend: Vec<LegendEntry>, // legend order: top…, BTC (middle), …bottom
 	title: String,
 }
-#[derive(Serialize)]
+#[derive(Deserialize, Serialize)]
 struct SeriesMeta {
 	pair: String,
 	color: String,
 	width: u8,
 }
-#[derive(Serialize)]
+#[derive(Deserialize, Serialize)]
 struct LegendEntry {
 	label: String,
 	color: String,
+}
+
+impl crate::dashboards::_core::SourceData for MarketStructureChart {
+	fn decay_horizon() -> Timeframe {
+		"30m".into()
+	}
+
+	async fn fetch() -> Result<Self> {
+		let tf = "5m".into();
+		let range = (24 * 12 + 1).into(); // 24h, given `5m` tf
+		market_structure_json(range, tf, ExchangeName::Binance, Instrument::Perp).await
+	}
+
+	fn fmt_progress(loaded: usize, target: usize) -> String {
+		format!("pulled {loaded}/{target} pairs")
+	}
 }
 
 /// category10, cycled across highlighted (non-BTC) series
@@ -179,19 +192,8 @@ pub async fn market_structure_json(limit: RequestRange, tf: Timeframe, exchange_
 pub async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, instrument: Instrument, exchange: Arc<Box<dyn Exchange>>) -> Result<MarketData> {
 	tracing::info!("Starting data collection for {} pairs with tf={tf:?}, range={range:?}", pairs.len());
 
-	let params = CollectionParams::new(tf, range, instrument);
-
-	// decay horizon: how long a full-universe sweep stays servable before we repoll.
-	// deliberately NOT tf.duration() — candle granularity (5m) is not poll frequency.
-	let max_age = Duration::from_mins(30);
-
-	// Try to load from cache first
-	if let Some(cached) = PersistedMarketData::try_load(&params, max_age) {
-		tracing::info!("Using cached market structure data");
-		return Ok((cached.normalized_df, cached.dt_index));
-	}
-
-	tracing::info!("No valid cache found, fetching fresh data");
+	let progress = crate::dashboards::_core::Progress::of::<MarketStructureChart>();
+	progress.set_target(pairs.len());
 
 	//HACK: assumes we're never misaligned here
 	// ponytail: fixed cap keeps the per-pair burst under Binance's 2400 weight/min IP limit; tune if the universe grows
@@ -200,7 +202,7 @@ pub async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, in
 		let exchange = Arc::clone(&exchange);
 		let symbol = Symbol::new(pair, instrument);
 		async move {
-			match get_historical_data(symbol, tf, range, exchange).await {
+			let r = match get_historical_data(symbol, tf, range, exchange).await {
 				Ok(series) => {
 					tracing::debug!("Successfully fetched {} data points for {symbol}", series.col_closes.len());
 					Ok((symbol, series))
@@ -209,7 +211,9 @@ pub async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, in
 					tracing::warn!("Failed to fetch data for symbol: {symbol}. Error: {e:?}");
 					Err(e)
 				}
-			}
+			};
+			progress.inc();
+			r
 		}
 	}))
 	.buffer_unordered(CONCURRENCY)
@@ -291,18 +295,6 @@ pub async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, in
 		}
 	}
 
-	// Persist the collected data to cache
-	let persisted_data = PersistedMarketData {
-		timestamp: std::time::SystemTime::now(),
-		normalized_df: normalized_df.clone(),
-		dt_index: dt_index.clone(),
-		params,
-	};
-
-	if let Err(e) = persisted_data.save() {
-		tracing::warn!("Failed to save market structure data to cache: {e:?}");
-	}
-
 	Ok((normalized_df, dt_index))
 }
 #[allow(unused)]
@@ -354,77 +346,4 @@ pub async fn get_historical_data(symbol: Symbol, tf: Timeframe, range: RequestRa
 		col_volumes: volume,
 	})
 }
-/// Persisted market structure data with metadata for cache invalidation
-#[derive(Clone, Debug, Deserialize, Serialize)]
-struct PersistedMarketData {
-	/// When this data was collected
-	timestamp: std::time::SystemTime,
-	/// Normalized data (pair -> log-normalized closes)
-	normalized_df: HashMap<Pair, Vec<f64>>,
-	/// Time index from BTC-USDT
-	dt_index: Vec<Timestamp>,
-	/// Parameters used to collect this data
-	params: CollectionParams,
-}
-impl PersistedMarketData {
-	fn cache_file(params: &CollectionParams) -> PathBuf {
-		let filename = format!(
-			"market_structure_{}_{:?}_{}.json",
-			params.instrument_debug,
-			params.timeframe,
-			params.range_debug.replace([':', ' ', '{', '}'], "_")
-		);
-		xdg_state_file!(filename)
-	}
-
-	fn try_load(params: &CollectionParams, max_age: Duration) -> Option<Self> {
-		let cache_file = Self::cache_file(params);
-
-		let metadata = std::fs::metadata(&cache_file).ok()?;
-		let age = metadata.modified().ok()?.elapsed().ok()?;
-
-		if age > max_age {
-			tracing::info!("Cache file exists but is too old (age: {age:?}, max: {max_age:?})");
-			return None;
-		}
-
-		let json = std::fs::read_to_string(&cache_file).ok()?;
-		let data: Self = serde_json::from_str(&json).ok()?;
-
-		// Verify params match
-		if data.params != *params {
-			tracing::warn!("Cache params mismatch, ignoring cached data");
-			return None;
-		}
-
-		tracing::info!("Loaded market structure data from cache (age: {age:?})");
-		Some(data)
-	}
-
-	fn save(&self) -> Result<()> {
-		let cache_file = Self::cache_file(&self.params);
-		let json = serde_json::to_string_pretty(self)?;
-		std::fs::write(&cache_file, json)?;
-		tracing::info!("Saved market structure data to {cache_file:?}");
-		Ok(())
-	}
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-struct CollectionParams {
-	timeframe: Timeframe,
-	range_debug: String,
-	instrument_debug: String,
-}
-
-impl CollectionParams {
-	fn new(timeframe: Timeframe, range: RequestRange, instrument: Instrument) -> Self {
-		Self {
-			timeframe,
-			range_debug: format!("{range:?}"),
-			instrument_debug: format!("{instrument:?}"),
-		}
-	}
-}
-
 //TODO!!!: provide additional information: 1) BTCDOM, 2) average, 3) correlation, 4) volatility
