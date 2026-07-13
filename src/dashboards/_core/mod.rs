@@ -4,11 +4,12 @@ use std::{
 	collections::HashMap,
 	future::Future,
 	path::PathBuf,
-	sync::{LazyLock, Mutex},
+	sync::{Arc, LazyLock, Mutex},
 };
 
 use color_eyre::eyre::Result;
-use jiff::Timestamp;
+use futures::lock::Mutex as AsyncMutex;
+use jiff::{SignedDuration, Timestamp};
 use serde::{Serialize, de::DeserializeOwned};
 use v_utils::trades::Timeframe;
 
@@ -57,7 +58,7 @@ pub fn progress_of(name: &str) -> Option<String> {
 	let reg = REGISTRY.lock().unwrap();
 	reg.get(name).map(|e| (e.fmt)(e.loaded, e.target))
 }
-/// A loaded source, plus a marker when upstream was unreachable and we served the last-good copy.
+/// A loaded source, plus a marker when the served copy is old enough to surface as stale.
 pub struct Loaded<T> {
 	pub data: T,
 	pub stale: Option<Stale>,
@@ -67,20 +68,41 @@ pub struct Stale {
 	pub error: String,
 }
 
-/// Serve the persisted copy while fresh (or always, under mock); otherwise repoll and persist.
-/// If the repoll fails but a persisted copy exists, serve that copy flagged [`Stale`] rather than
-/// erroring — a rate-limit ban shouldn't blank a dashboard that has good data on disk.
+/// At/over `horizon` — or negative, since a future `fetched_at` (clock skew) should count as due.
+fn past(age: SignedDuration, horizon: std::time::Duration) -> bool {
+	age.is_negative() || age.unsigned_abs() >= horizon
+}
+
+/// Serve the persisted copy while inside its refresh interval (or always, under mock). Past the
+/// interval, refresh under a per-source lock so concurrent callers coalesce into one upstream poll
+/// rather than each fanning out. If the refresh fails, still serve the persisted copy — flagged
+/// [`Stale`] only once it's older than `interval × stale_multiplier`, so a blip inside the grace
+/// window stays quiet.
 pub async fn load<T: SourceData>() -> Result<Loaded<T>> {
-	let cached = read::<T>();
-	let serve_cached = cached.as_ref().is_some_and(|c| {
+	let interval = T::decay_horizon().duration();
+
+	// Fast path: a fresh (or mock) copy needs neither the lock nor a poll.
+	if let Some(c) = read::<T>() {
 		let age = Timestamp::now().duration_since(c.fetched_at);
-		mock_enabled() || !(age.is_negative() || age.unsigned_abs() >= T::decay_horizon().duration())
-	});
-	if serve_cached {
-		let c = cached.expect("serve_cached implies Some");
-		tracing::debug!("serving persisted {}", T::name());
-		return Ok(Loaded { data: c.data, stale: None });
+		if mock_enabled() || !past(age, interval) {
+			return Ok(Loaded { data: c.data, stale: None });
+		}
 	}
+
+	// Refresh due — hold the source lock across the poll so a second caller queues behind us and,
+	// on waking, finds the copy we just wrote instead of launching its own fan-out.
+	let lock = source_lock::<T>();
+	let _guard = lock.lock().await;
+
+	let cached = read::<T>();
+	let now_fresh = cached.as_ref().is_some_and(|c| !past(Timestamp::now().duration_since(c.fetched_at), interval));
+	if now_fresh {
+		return Ok(Loaded {
+			data: cached.expect("now_fresh implies Some").data,
+			stale: None,
+		});
+	}
+
 	match fetch_tracked::<T>().await {
 		Ok(data) => {
 			write(&data)?;
@@ -88,19 +110,28 @@ pub async fn load<T: SourceData>() -> Result<Loaded<T>> {
 		}
 		Err(e) => match cached {
 			Some(c) => {
-				tracing::warn!("refetch of {} failed ({e}); serving last-good copy from {}", T::name(), c.fetched_at);
-				Ok(Loaded {
-					data: c.data,
-					stale: Some(Stale {
-						fetched_at: c.fetched_at,
-						error: e.to_string(),
-					}),
-				})
+				let stale_after = interval.mul_f64(stale_multiplier());
+				let age = Timestamp::now().duration_since(c.fetched_at);
+				let stale = past(age, stale_after).then(|| Stale {
+					fetched_at: c.fetched_at,
+					error: e.to_string(),
+				});
+				match &stale {
+					Some(_) => tracing::warn!("refetch of {} failed ({e}); serving stale copy from {}", T::name(), c.fetched_at),
+					None => tracing::debug!("refetch of {} failed ({e}); serving copy from {} (within grace)", T::name(), c.fetched_at),
+				}
+				Ok(Loaded { data: c.data, stale })
 			}
 			None => Err(e),
 		},
 	}
 }
+
+/// Per-source async lock, created on first use, so `load` coalesces concurrent refreshes into one.
+fn source_lock<T: SourceData>() -> Arc<AsyncMutex<()>> {
+	LOCKS.lock().unwrap().entry(T::name()).or_insert_with(|| Arc::new(AsyncMutex::new(()))).clone()
+}
+static LOCKS: LazyLock<Mutex<HashMap<&'static str, Arc<AsyncMutex<()>>>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
 async fn fetch_tracked<T: SourceData>() -> Result<T> {
 	REGISTRY.lock().unwrap().insert(
@@ -129,6 +160,14 @@ fn mock_enabled() -> bool {
 		.config()
 		.expect("config loads")
 		.mock()
+}
+
+fn stale_multiplier() -> f64 {
+	leptos::prelude::use_context::<crate::config::LiveSettings>()
+		.expect("LiveSettings in context")
+		.config()
+		.expect("config loads")
+		.stale_multiplier()
 }
 
 fn path<T: SourceData>() -> PathBuf {

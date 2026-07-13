@@ -7,6 +7,8 @@ use std::collections::HashMap;
 #[cfg_attr(feature = "ssr", derive(v_utils::macros::Settings, v_utils::macros::LiveSettings))]
 pub struct Settings {
 	pub mock: Option<bool>,
+	/// Multiple of a source's refresh interval past which its cached copy is surfaced as stale.
+	pub stale_multiplier: Option<f64>,
 	#[serde(default)]
 	pub smtp: SmtpConfig,
 	#[serde(default)]
@@ -24,12 +26,17 @@ impl Settings {
 	pub fn mock(&self) -> bool {
 		self.mock.unwrap_or(false)
 	}
+
+	pub fn stale_multiplier(&self) -> f64 {
+		self.stale_multiplier.unwrap_or(1.15)
+	}
 }
 
 impl Default for Settings {
 	fn default() -> Self {
 		Self {
 			mock: Some(false),
+			stale_multiplier: Some(1.15),
 			smtp: SmtpConfig::default(),
 			google_oauth: GoogleOAuthConfig::default(),
 			site_url: __default_site_url(),
