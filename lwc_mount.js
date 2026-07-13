@@ -14,10 +14,11 @@ let chart, seriesByPair = new Map(), bulk, bulkHost;
 // The grey background pairs, drawn as one canvas pass pinned to the chart's scales.
 // Non-interactive (no crosshair / legend), but zooms & pans with the real series.
 class BulkLines {
-  setData(time, lines) {
-    this._time = time; this._lines = lines;
+  // lines: [{ time:[sec…], value:[…] }] — each with its own domain (late listings, market-hours gaps)
+  setData(lines) {
+    this._lines = lines;
     let lo = Infinity, hi = -Infinity;
-    for (const line of lines) for (const v of line) { if (v < lo) lo = v; if (v > hi) hi = v; }
+    for (const ln of lines) for (const v of ln.value) { if (v < lo) lo = v; if (v > hi) hi = v; }
     this._range = lines.length ? { minValue: lo, maxValue: hi } : null;
     this._req && this._req();
   }
@@ -29,7 +30,9 @@ class BulkLines {
   _draw(target) {
     if (!this._lines || !this._lines.length) return;
     const ts = this._chart.timeScale();
-    const xs = this._time.map(t => ts.timeToCoordinate(t));
+    // most lines share the BTC grid — memoize time→x so per-line domains stay cheap during pan/zoom
+    const xcache = new Map();
+    const xat = t => { let x = xcache.get(t); if (x === undefined) { x = ts.timeToCoordinate(t); xcache.set(t, x); } return x; };
     // price scale is linear here, so derive the affine value→pixel map from two probes
     const c0 = this._series.priceToCoordinate(0), c1 = this._series.priceToCoordinate(1);
     if (c0 == null || c1 == null) return;
@@ -37,12 +40,12 @@ class BulkLines {
     target.useBitmapCoordinateSpace(scope => {
       const ctx = scope.context, hr = scope.horizontalPixelRatio, vr = scope.verticalPixelRatio;
       ctx.lineWidth = vr; ctx.strokeStyle = GREY;
-      for (const line of this._lines) {
+      for (const ln of this._lines) {
         ctx.beginPath();
         let started = false;
-        for (let j = 0; j < xs.length; j++) {
-          const x = xs[j]; if (x == null) continue;
-          const px = x * hr, py = (c0 + line[j] * slope) * vr;
+        for (let j = 0; j < ln.time.length; j++) {
+          const x = xat(ln.time[j]); if (x == null) continue;
+          const px = x * hr, py = (c0 + ln.value[j] * slope) * vr;
           if (started) ctx.lineTo(px, py); else { ctx.moveTo(px, py); started = true; }
         }
         ctx.stroke();
@@ -74,7 +77,8 @@ export async function mount(el, src) {
     } else {
       s.applyOptions({ color: m.color, lineWidth: m.width });
     }
-    s.setData(d.time.map((t, j) => ({ time: t, value: d.values[i][j] })));
+    const ln = d.values[i];
+    s.setData(ln.time.map((t, j) => ({ time: t, value: ln.value[j] })));
   });
   for (const [pair, s] of seriesByPair) {
     if (!seen.has(pair)) { chart.removeSeries(s); seriesByPair.delete(pair); }
@@ -82,7 +86,7 @@ export async function mount(el, src) {
 
   // greys: one primitive, hosted on any live series (they share the right price scale)
   if (!bulk) bulk = new BulkLines();
-  bulk.setData(d.time, d.bulk);
+  bulk.setData(d.bulk);
   const host = d.series[0] && seriesByPair.get(d.series[0].pair);
   if (host && host !== bulkHost) { host.attachPrimitive(bulk); bulkHost = host; }
 

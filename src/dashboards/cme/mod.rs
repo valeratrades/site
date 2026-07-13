@@ -24,7 +24,7 @@ pub fn CftcReportView() -> impl IntoView {
 		});
 	}
 
-	div().child(Suspense(SuspenseProps {
+	div().class("panel-center").child(Suspense(SuspenseProps {
 		fallback: { || LoadingIndicator(LoadingIndicatorProps { label: "CFTC Report".into() }) }.into(),
 		#[rustfmt::skip]
 		children: ToChildren::to_children(move || IntoRender::into_render(move || match report_resource.get() {

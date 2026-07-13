@@ -26,7 +26,7 @@ pub fn VolView() -> impl IntoView {
 		});
 	}
 
-	div().child(Suspense(SuspenseProps {
+	div().class("panel-center").child(Suspense(SuspenseProps {
 		fallback: { || LoadingIndicator(LoadingIndicatorProps { label: "Vol".into() }) }.into(),
 		children: ToChildren::to_children(move || {
 			IntoRender::into_render(move || match vol_resource.get() {

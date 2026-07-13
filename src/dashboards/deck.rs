@@ -7,7 +7,7 @@
 use std::path::PathBuf;
 use std::{cell::Cell, rc::Rc, sync::Arc};
 
-use dockviewers::leptos::{Breakpoint, Config, DockPanel, Group, Keybind, MinSize, PackedApi, PackedArea, PackedState, PanelId};
+use dockviewers::leptos::{Breakpoint, Config, DockPanel, Group, Keybind, MinSize, PackedApi, PackedArea, PackedState, PanelId, Step};
 use leptos::prelude::*;
 
 use super::{cme, fng, lsr, market_structure, vol};
@@ -83,14 +83,28 @@ pub fn DashboardDeck() -> impl IntoView {
 	let mounted = RwSignal::new(false);
 	Effect::new(move |_| mounted.set(true));
 
+	// `s`-save feedback: the keybind sets this, the overlay below shows it, then it self-clears.
+	let toast = RwSignal::new(None::<String>);
+
 	view! {
 		<div
 			class="dv-host"
 			style="position:relative; height:calc(100vh - 3.5rem); --dv-accent:#22c55e;"
 		>
 			<Show when=move || mounted.get() fallback=|| ()>
-				<PackedArea panels=panels config=keybinds() on_ready=on_ready.clone() />
+				<PackedArea panels=panels config=keybinds(toast) on_ready=on_ready.clone() />
 			</Show>
+			{move || {
+				toast
+					.get()
+					.map(|msg| {
+						view! {
+							<div style="pointer-events:none;position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);z-index:50;border-radius:0.375rem;border:1px solid #22c55e55;background:rgba(0,0,0,0.85);padding:0.5rem 1rem;font:12px ui-monospace,monospace;letter-spacing:0.05em;color:#22c55e;box-shadow:0 4px 12px rgba(0,0,0,0.4)">
+								{msg}
+							</div>
+						}
+					})
+			}}
 		</div>
 	}
 }
@@ -111,8 +125,9 @@ fn seed_key(bp: Breakpoint) -> &'static str {
 fn seed(api: &PackedApi) {
 	api.reset();
 	let specs: [(&str, u32, u32, MinSize); 5] = [
-		("market_structure", 26, 16, MinSize::Rem { w: 22.0, h: 14.0 }),
-		("lsr", 22, 16, MinSize::Rem { w: 22.0, h: 12.0 }),
+		// floored at the current live session size — these two never work any smaller
+		("market_structure", 29, 16, MinSize::Steps { w: Step(29), h: Step(16) }),
+		("lsr", 22, 16, MinSize::Steps { w: Step(11), h: Step(9) }),
 		("cme", 20, 12, MinSize::Rem { w: 24.0, h: 8.0 }),
 		("vol", 14, 4, MinSize::Rem { w: 16.0, h: 3.0 }),
 		("fng", 16, 4, MinSize::Rem { w: 20.0, h: 3.0 }),
@@ -126,16 +141,27 @@ fn seed(api: &PackedApi) {
 /// `s` persists the live arrangement under its band key, via dockviewers' own keydown path (the same
 /// one that drives `u`/`f`/`?`), so it inherits its editable-field guard and hydration timing. Built
 /// fresh per render so the `!Send` `Rc` action is born on the client, not captured by the island view.
-fn keybinds() -> Config {
+fn keybinds(toast: RwSignal<Option<String>>) -> Config {
 	Config {
 		actions: vec![(
 			Keybind { key: "s", alt: false, ctrl: false },
-			std::rc::Rc::new(|s: &mut PackedState| {
+			std::rc::Rc::new(move |s: &mut PackedState| {
+				leptos::logging::log!("`s` pressed — saving layout");
 				let json = s.save();
 				let key = seed_key(s.breakpoint()).to_string();
 				leptos::task::spawn_local(async move {
-					if let Err(e) = save_layout(key, json).await {
-						leptos::logging::error!("save_layout failed: {e}");
+					let msg = match save_layout(key.clone(), json).await {
+						Ok(()) => format!("Layout saved ({key})"),
+						Err(e) => {
+							leptos::logging::error!("save_layout failed: {e}");
+							"Save failed".into()
+						}
+					};
+					toast.set(Some(msg));
+					#[cfg(target_arch = "wasm32")]
+					{
+						gloo_timers::future::TimeoutFuture::new(2500).await;
+						toast.set(None);
 					}
 				});
 			}) as dockviewers::leptos::Action,

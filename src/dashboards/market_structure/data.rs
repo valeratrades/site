@@ -10,16 +10,13 @@ use v_utils::trades::{Pair, Timeframe};
 
 /// category10, cycled across highlighted (non-BTC) series
 const PALETTE: [&str; 10] = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"];
-/// Collected market data: normalized closes per pair and the time index
-pub type MarketData = (HashMap<Pair, Vec<f64>>, Vec<Timestamp>);
-
 /// Compact chart payload for the client-side Lightweight Charts shim.
-/// Columnar (parallel arrays, no per-point keys) to keep the JSON small under gzip.
+/// Each series carries its own time domain, so late-listed pairs start where they list and
+/// stocks/commodities keep their market-hours gaps — nothing is dropped or filled.
 #[derive(Deserialize, Serialize)]
 pub struct MarketStructureChart {
-	time: Vec<i64>,           // UNIX seconds, ascending
-	bulk: Vec<Vec<f64>>,      // grey background pairs: drawn as a single non-interactive canvas primitive
-	values: Vec<Vec<f64>>,    // per-series, parallel to `series`, in draw order
+	bulk: Vec<Line>,          // grey background pairs: drawn as a single non-interactive canvas primitive
+	values: Vec<Line>,        // per-series, parallel to `series`, in draw order
 	series: Vec<SeriesMeta>,  // interactive highlights only: non-BTC highlights, then BTC (painted on top)
 	legend: Vec<LegendEntry>, // legend order: top…, BTC (middle), …bottom
 	title: String,
@@ -46,23 +43,18 @@ pub async fn market_structure_json(limit: RequestRange, tf: Timeframe, exchange_
 	let all_pairs = exch_info.usdt_pairs().collect::<Vec<Pair>>();
 	tracing::info!("Found {} USDT pairs from exchange info", all_pairs.len());
 
-	let (normalized_df, dt_index) = collect_data(&all_pairs, tf, limit, instrument, Arc::new(exchange)).await?;
+	let closes = collect_data(&all_pairs, tf, limit, instrument, Arc::new(exchange)).await?;
 
-	// collect_data returns the un-aligned frame; drop any series whose length disagrees with the
-	// time index so `values[i]` indexing below is always in bounds.
-	let closes: HashMap<Pair, Vec<f64>> = normalized_df.into_iter().filter(|(_, v)| v.len() == dt_index.len()).collect();
-
-	let mut performance: Vec<(Pair, f64)> = closes.iter().map(|(k, v)| (*k, v[v.len() - 1] - v[0])).collect();
+	let mut performance: Vec<(Pair, f64)> = closes.iter().map(|(k, v)| (*k, v.last().unwrap().1 - v.first().unwrap().1)).collect();
 	performance.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
 	let n_samples = (performance.len() as f64).ln().round() as usize;
 	let top: Vec<Pair> = performance.iter().rev().take(n_samples).map(|x| x.0).collect();
 	let bottom: Vec<Pair> = performance.iter().take(n_samples).map(|x| x.0).collect();
 
-	// time index, sorted ascending; `order` re-indexes every series to match
-	let mut order: Vec<usize> = (0..dt_index.len()).collect();
-	order.sort_by_key(|&i| dt_index[i].as_second());
-	let time: Vec<i64> = order.iter().map(|&i| dt_index[i].as_second()).collect();
-	let column = |v: &[f64]| -> Vec<f64> { order.iter().map(|&i| (v[i] * 1e5).round() / 1e5).collect() };
+	let line = |v: &[(i64, f64)]| Line {
+		time: v.iter().map(|&(t, _)| t).collect(),
+		value: v.iter().map(|&(_, x)| (x * 1e5).round() / 1e5).collect(),
+	};
 
 	let btc: Pair = "BTC-USDT".try_into().unwrap();
 	let contains_btc = closes.contains_key(&btc);
@@ -118,7 +110,7 @@ pub async fn market_structure_json(limit: RequestRange, tf: Timeframe, exchange_
 		if *pair == btc || color_of.contains_key(pair) {
 			continue;
 		}
-		bulk.push(column(v));
+		bulk.push(line(v));
 	}
 
 	// draw order: non-BTC highlights, then BTC last so it paints on top
@@ -135,7 +127,7 @@ pub async fn market_structure_json(limit: RequestRange, tf: Timeframe, exchange_
 			color: color_of[&pair].clone(),
 			width: 2,
 		});
-		values.push(column(&closes[&pair]));
+		values.push(line(&closes[&pair]));
 	}
 	if contains_btc {
 		series.push(SeriesMeta {
@@ -143,15 +135,18 @@ pub async fn market_structure_json(limit: RequestRange, tf: Timeframe, exchange_
 			color: "gold".into(),
 			width: 4,
 		});
-		values.push(column(&closes[&btc]));
+		values.push(line(&closes[&btc]));
 	}
 
-	let span_secs = time.last().unwrap() - time.first().unwrap();
-	let hours = ((span_secs + tf.duration().as_secs() as i64 * 2/*compensate for off-by-ones*/) as f64 / 3600.0).round() as i64;
+	let (mut lo, mut hi) = (i64::MAX, i64::MIN);
+	for v in closes.values() {
+		lo = lo.min(v.first().unwrap().0);
+		hi = hi.max(v.last().unwrap().0);
+	}
+	let hours = (((hi - lo) + tf.duration().as_secs() as i64 * 2/*compensate for off-by-ones*/) as f64 / 3600.0).round() as i64;
 	let title = format!("Last {hours}h of {}/{} pairs on {instrument}", closes.len(), all_pairs.len());
 
 	Ok(MarketStructureChart {
-		time,
 		bulk,
 		values,
 		series,
@@ -159,8 +154,14 @@ pub async fn market_structure_json(limit: RequestRange, tf: Timeframe, exchange_
 		title,
 	})
 }
+/// Columnar {time, value}, kept as parallel arrays to stay small under gzip.
+#[derive(Deserialize, Serialize)]
+struct Line {
+	time: Vec<i64>, // UNIX seconds, ascending
+	value: Vec<f64>,
+}
 #[instrument(skip_all)]
-pub async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, instrument: Instrument, exchange: Arc<Box<dyn Exchange>>) -> Result<MarketData> {
+async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, instrument: Instrument, exchange: Arc<Box<dyn Exchange>>) -> Result<HashMap<Pair, Vec<(i64, f64)>>> {
 	tracing::info!("Starting data collection for {} pairs with tf={tf:?}, range={range:?}", pairs.len());
 
 	let progress = crate::dashboards::_core::Progress::of::<MarketStructureChart>();
@@ -190,88 +191,49 @@ pub async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, in
 	.buffer_unordered(CONCURRENCY)
 	.collect()
 	.await;
-	let mut data: HashMap<Pair, Vec<f64>> = HashMap::new();
-	let mut dt_index = Vec::new();
+	let mut normalized: HashMap<Pair, Vec<(i64, f64)>> = HashMap::new();
 	let mut failed_pairs = Vec::new();
-	let mut btc_usdt_found = false;
+	let mut btc_found = false;
 
-	results.into_iter().for_each(|result| {
-		match result {
-			Ok((symbol, series)) => {
-				if "BTC-USDT" == symbol.pair {
-					btc_usdt_found = true;
-					dt_index = series.col_open_times.clone();
-					tracing::info!("BTC-USDT data fetched successfully with {} data points", series.col_closes.len());
-				}
-				data.insert(symbol.pair, series.col_closes);
+	results.into_iter().for_each(|result| match result {
+		Ok((symbol, series)) => {
+			if "BTC-USDT" == symbol.pair {
+				btc_found = true;
 			}
-			Err(e) => {
-				// Track which pairs failed - the symbol info is lost here, but we logged it above
-				failed_pairs.push(format!("{e:?}"));
+			let mut pts: Vec<(i64, f64)> = series.col_open_times.iter().zip(&series.col_closes).map(|(t, c)| (t.as_second(), *c)).collect();
+			pts.sort_by_key(|p| p.0);
+			match pts.first() {
+				// normalize each series to its own first close, in log-return space
+				Some(&(_, first)) => {
+					pts.iter_mut().for_each(|p| p.1 = (p.1 / first).ln());
+					normalized.insert(symbol.pair, pts);
+				}
+				None => eprintln!("Received empty data for: {symbol}"),
 			}
 		}
+		Err(e) => failed_pairs.push(format!("{e:?}")),
 	});
 
-	let total_pairs = pairs.len();
-	let success_rate = (data.len() as f64 / total_pairs as f64) * 100.0;
-	if success_rate < 70.0 {
-		tracing::warn!(
-			"Successfully fetched data for {} pairs, {} pairs failed ({success_rate:.1}% success rate - below 70% threshold)",
-			data.len(),
+	let success_rate = (normalized.len() as f64 / pairs.len() as f64) * 100.0;
+	let threshold = if success_rate < 70.0 { " - below 70% threshold" } else { "" };
+	tracing::info!("Fetched {} pairs, {} failed ({success_rate:.1}% success rate{threshold})", normalized.len(), failed_pairs.len());
+
+	if !btc_found {
+		tracing::error!(
+			"BTC-USDT missing from results. attempted: {}, succeeded: {}, failed: {}",
+			pairs.len(),
+			normalized.len(),
 			failed_pairs.len()
 		);
-	} else {
-		tracing::info!(
-			"Successfully fetched data for {} pairs, {} pairs failed ({success_rate:.1}% success rate)",
-			data.len(),
-			failed_pairs.len()
-		);
+		bail!("Failed to fetch data for BTC-USDT, aborting. Check logs for individual fetch errors.");
 	}
 
-	if dt_index.is_empty() {
-		if !btc_usdt_found {
-			tracing::error!(
-				"BTC-USDT was not in the successful results. Total pairs attempted: {}, succeeded: {}, failed: {}",
-				pairs.len(),
-				data.len(),
-				failed_pairs.len()
-			);
-			tracing::error!("BTC-USDT present in pairs list: {}", pairs.iter().any(|p| "BTC-USDT" == *p));
-			bail!("Failed to fetch data for BTC-USDT, aborting. Check logs for individual fetch errors.");
-		} else {
-			tracing::error!("BTC-USDT was found but dt_index is empty - this shouldn't happen!");
-			bail!("BTC-USDT data appears corrupted (empty time index)");
-		}
-	}
-
-	let mut normalized_df: HashMap<Pair, Vec<f64>> = HashMap::new();
-	for (symbol, closes) in data.into_iter() {
-		let first_close: f64 = match closes.first() {
-			Some(v) => *v,
-			None => {
-				eprintln!("Received empty data for: {symbol}");
-				continue;
-			}
-		};
-		let normalized = closes.into_iter().map(|p| (p / first_close).ln()).collect();
-		normalized_df.insert(symbol, normalized);
-	}
-
-	let mut aligned_df = normalized_df.clone();
-	for (key, closes) in normalized_df.iter() {
-		if closes.len() != dt_index.len() {
-			//HACK: maybe we want to fill the missing fields instead if there are not many of them
-			tracing::warn!("misaligned: {key}");
-			aligned_df.remove(key).unwrap();
-		}
-	}
-
-	Ok((normalized_df, dt_index))
+	Ok(normalized)
 }
 #[allow(unused)]
 #[derive(Clone, Debug, Default, derive_new::new)]
 //HACK: manual roll of a DataFrame. No checks for alignment (or proper vectorization, for that matter)...
-pub struct RelevantHistoricalData {
+struct RelevantHistoricalData {
 	col_open_times: Vec<Timestamp>,
 	col_opens: Vec<f64>,
 	col_highs: Vec<f64>,
@@ -280,7 +242,7 @@ pub struct RelevantHistoricalData {
 	col_volumes: Vec<f64>,
 }
 #[instrument(skip_all, fields(symbol = %symbol))]
-pub async fn get_historical_data(symbol: Symbol, tf: Timeframe, range: RequestRange, exchange: Arc<Box<dyn Exchange>>) -> Result<RelevantHistoricalData> {
+async fn get_historical_data(symbol: Symbol, tf: Timeframe, range: RequestRange, exchange: Arc<Box<dyn Exchange>>) -> Result<RelevantHistoricalData> {
 	tracing::debug!("Fetching klines for {symbol} (tf={tf:?}, range={range:?})");
 
 	let klines = match exchange.klines(symbol, tf, range).await {

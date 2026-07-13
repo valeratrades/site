@@ -24,7 +24,7 @@ pub fn FngView() -> impl IntoView {
 		});
 	}
 
-	div().child(Suspense(SuspenseProps {
+	div().class("panel-center").child(Suspense(SuspenseProps {
 		fallback: { || LoadingIndicator(LoadingIndicatorProps { label: "Fear & Greed".into() }) }.into(),
 		#[rustfmt::skip]
 		children: ToChildren::to_children(move || IntoRender::into_render(move || match fng_resource.get() {

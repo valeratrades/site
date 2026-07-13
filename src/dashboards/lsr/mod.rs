@@ -42,7 +42,7 @@ pub fn LsrView() -> impl IntoView {
 		});
 	}
 
-	section().class("p-4 text-center").child(Suspense(SuspenseProps {
+	section().class("p-4 panel-center").child(Suspense(SuspenseProps {
 		fallback: {
 			|| {
 				LoadingWithProgress(LoadingWithProgressProps {

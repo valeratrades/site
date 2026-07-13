@@ -1,5 +1,8 @@
 body { font-family: monospace; }
 
+/* Center a panel's content in the whole space the dock allots it, both axes. */
+.panel-center { height: 100%; display: flex; align-items: center; justify-content: center; text-align: center; }
+
 /* Restore browser defaults for semantic HTML inside blog posts */
 .blog-post-content :where(h1, h2, h3, h4, h5, h6, p, ul, ol, li, a, blockquote, pre, code, figure, figcaption, table, th, td, hr, strong, em) {
   all: revert;
