@@ -77,7 +77,7 @@ ssr = [
 ]
 
 [dependencies]
-dockviewers = { path = "../ev_invest/dockviewers/dockviewers", features = ["leptos"] }
+dockviewers = { version = "0.1.10", features = ["leptos"] }
 
 any_spawner = { version = "=0.3.0", optional = true }
 arrow = { version = "=59.1.0", default-features = false, features = ["ipc"], optional = true }
