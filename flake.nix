@@ -93,6 +93,9 @@
           inherit pname;
           version = manifest.version;
 
+          # No `.git` in the hermetic sandbox — hand build.rs the commit for the BuildTag.
+          SITE_BUILD_REV = self.shortRev or self.dirtyShortRev or "";
+
           src = pureSrc;
           cargoLock = {
             lockFile = ./Cargo.lock;

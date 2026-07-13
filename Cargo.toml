@@ -77,8 +77,6 @@ ssr = [
 ]
 
 [dependencies]
-dockviewers = { version = "0.1.10", features = ["leptos"] }
-
 any_spawner = { version = "=0.3.0", optional = true }
 arrow = { version = "=59.1.0", default-features = false, features = ["ipc"], optional = true }
 axum = { version = "=0.8.9", optional = true }
@@ -89,6 +87,7 @@ color-eyre = "=0.6.5"
 console_error_panic_hook = { version = "=0.1.7", optional = true }
 derive-new = "=0.7.0"
 derive_more = { version = "=2.1.1", features = ["from", "display", "deref", "deref_mut", "debug"] }
+dockviewers = { version = "0.1.10", features = ["leptos"] }
 futures = "=0.3.32"
 gloo-timers = { version = "=0.4.0", features = ["futures"], optional = true }
 jiff = { version = "=0.2.32", features = ["serde"] }

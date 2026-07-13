@@ -562,11 +562,16 @@ fn BuildTag() -> impl IntoView {
 #[cfg(feature = "ssr")]
 fn wasm_size() -> String {
 	let root = std::env::var("LEPTOS_SITE_ROOT").unwrap_or_else(|_| "target/site".into());
-	let path = format!("{root}/pkg/{}.wasm", env!("CARGO_PKG_NAME"));
+	let name = env!("CARGO_PKG_NAME");
+	// cargo-leptos emits `{name}.wasm`; the flake's raw wasm-bindgen emits `{name}_bg.wasm`.
+	let bytes = [format!("{root}/pkg/{name}_bg.wasm"), format!("{root}/pkg/{name}.wasm")]
+		.iter()
+		.find_map(|p| std::fs::metadata(p).ok())
+		.map(|m| m.len());
 	// cosmetic marker: on run layouts where the served wasm isn't on disk, show "?" rather than 500 the page
-	match std::fs::metadata(&path) {
-		Ok(m) => format!("{:.1}MiB", m.len() as f64 / (1024.0 * 1024.0)),
-		Err(_) => "?".into(),
+	match bytes {
+		Some(b) => format!("{:.1}MiB", b as f64 / (1024.0 * 1024.0)),
+		None => "?".into(),
 	}
 }
 
