@@ -60,8 +60,6 @@ ssr = [
     "dep:tracing",
     "dep:leptos_axum",
     "dep:reqwest",
-    "dep:chrono",
-    "dep:chrono-tz",
     "dep:arrow",
     "dep:sqlx",
     "dep:bcrypt",
@@ -86,8 +84,6 @@ arrow = { version = "=59.1.0", default-features = false, features = ["ipc"], opt
 axum = { version = "=0.8.9", optional = true }
 base64 = "=0.22.1"
 bcrypt = { version = "=0.19.2", optional = true }
-chrono = { version = "=0.4.45", optional = true, features = ["serde"] }
-chrono-tz = { version = "=0.10.4", optional = true }
 clap = { version = "=4.6.1", features = ["derive"] }
 color-eyre = "=0.6.5"
 console_error_panic_hook = { version = "=0.1.7", optional = true }
@@ -112,7 +108,7 @@ reqwest = { version = "=0.12.28", features = ["json"], optional = true } # pinne
 send_wrapper = { version = "=0.6.0", optional = true }
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = { version = "=1.0.150", optional = true }
-serde_with = { version = "=3.21.0", features = ["chrono"] }
+serde_with = { version = "=3.21.0" }
 sqlx = { version = "^0.9", features = ["sqlite", "runtime-tokio"], optional = true }
 tokio = { version = "=1.52.3", features = ["rt-multi-thread"], optional = true }
 tower-cookies = { version = "=0.11.0", optional = true }

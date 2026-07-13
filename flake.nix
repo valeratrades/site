@@ -186,6 +186,32 @@
             exec nix develop "$repo" --command cargo leptos watch
           '';
         };
+        # ── bump latest remote vX.Y.Z tag and push: `.#publish major|minor|patch` ──
+        runPublish = pkgs.writeShellApplication {
+          name = "publish";
+          runtimeInputs = [ pkgs.git ];
+          text = ''
+            part="''${1:-}"
+            case "$part" in major|minor|patch) ;; *) echo "usage: nix run .#publish -- major|minor|patch" >&2; exit 1 ;; esac
+            [ -z "$(git status --porcelain)" ] || { echo "uncommitted changes — commit or stash first" >&2; exit 1; }
+
+            git fetch --tags --force origin >/dev/null 2>&1
+            last="$(git tag -l 'v*' --sort=-v:refname | head -n1)"
+            ver="''${last#v}"; [ -n "$ver" ] || ver="0.0.0"
+            IFS=. read -r ma mi pa <<EOF
+            $ver
+            EOF
+            case "$part" in
+              major) ma=$((ma+1)); mi=0; pa=0 ;;
+              minor) mi=$((mi+1)); pa=0 ;;
+              patch) pa=$((pa+1)) ;;
+            esac
+            next="v$ma.$mi.$pa"
+            echo "$last → $next"
+            git tag "$next"
+            git push origin "$next"
+          '';
+        };
         containerStd = v_flakes.container.implement {
           inherit pkgs pname;
           containers."" = {
@@ -214,6 +240,10 @@
           dev = {
             type = "app";
             program = "${runDev}/bin/run-dev";
+          };
+          publish = {
+            type = "app";
+            program = "${runPublish}/bin/publish";
           };
         };
 

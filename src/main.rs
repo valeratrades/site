@@ -1,27 +1,25 @@
 #![recursion_limit = "256"] // deeply nested tachys view types blow the default 128 on layout queries
-use std::time::Duration;
-
-use clap::Parser;
-use site::config::*;
 
 #[cfg(not(feature = "ssr"))]
 pub fn main() {
 	// hydration is bootstrapped in [./lib.rs]
 	panic!("not the correct access point");
 }
-#[derive(Debug, Parser)]
+#[cfg(feature = "ssr")]
+#[derive(Debug, clap::Parser)]
 #[command(author, version, about, long_about = None)]
 struct Cli {
 	#[clap(flatten)]
-	settings: SettingsFlags,
+	settings: site::config::SettingsFlags,
 }
 
 #[cfg(feature = "ssr")]
 #[tokio::main]
 async fn main() {
-	use std::path::Path;
+	use std::{path::Path, time::Duration};
 
 	use axum::Router;
+	use clap::Parser;
 	use leptos::{
 		prelude::*,
 		reactive::{computed::ScopedFuture, owner::Owner},
@@ -103,7 +101,7 @@ async fn main() {
 	// run our app with hyper (`axum::Server` is a re-export of `hyper::Server`)
 	let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
 	{
-		let msg = format!("listening on http://{}", &addr);
+		let msg = format!("listening on http://{}", addr);
 		println!("{msg}");
 		info!("{msg}");
 	}

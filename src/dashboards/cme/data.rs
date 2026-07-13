@@ -1,6 +1,5 @@
-use chrono::{DateTime, TimeZone, Utc};
-use chrono_tz::{America::New_York, Tz};
 use color_eyre::eyre::{Report, Result, bail, eyre};
+use jiff::{Timestamp, civil::Date, tz::TimeZone};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use v_utils::{NowThen, PrettyPrint};
@@ -16,7 +15,7 @@ pub struct Positions {
 #[derive(Clone, Debug, Default, Deserialize, Serialize, derive_new::new)]
 pub struct CftcReport {
 	// pub asset: String,
-	pub date: DateTime<Utc>,
+	pub date: Timestamp,
 	pub dealer_intermidiary: Positions,
 	pub asset_manager_or_institutional: Positions,
 	pub leveraged_funds: Positions,
@@ -42,7 +41,7 @@ impl CftcReport {
 		let format_pct = |n: f64| format!("{n:.1}");
 		let format_trader = |n: Option<u32>| n.map_or(".".to_string(), |v| v.to_string());
 
-		let date_str = self.date.format("%B %d, %Y").to_string();
+		let date_str = self.date.strftime("%B %d, %Y").to_string();
 
 		format!(
 			"# Traders in Financial Futures - Futures Only Positions as of {}\n\n\
@@ -137,15 +136,13 @@ impl TryFrom<&[String; 20]> for CftcReport {
 				Some(pos) => &date_line[pos + 6..].trim(),
 				None => bail!("Date not found"),
 			};
-			let naive_date = chrono::NaiveDate::parse_from_str(date_str, "%B %d, %Y").map_err(|e| eyre!("Failed to parse date: {e}"))?;
-
-			let eastern_time = naive_date.and_hms_opt(15, 30, 0).ok_or_else(|| eyre!("Failed to create time"))?;
-
-			let eastern_datetime: DateTime<Tz> = New_York
-				.from_local_datetime(&eastern_time)
-				.earliest()
-				.ok_or_else(|| eyre!("Failed to create Eastern timezone datetime"))?;
-			eastern_datetime.with_timezone(&Utc)
+			let naive_date = Date::strptime("%B %d, %Y", date_str).map_err(|e| eyre!("Failed to parse date: {e}"))?;
+			let eastern = TimeZone::get("America/New_York").map_err(|e| eyre!("Failed to load Eastern timezone: {e}"))?;
+			naive_date
+				.at(15, 30, 0, 0)
+				.to_zoned(eastern)
+				.map_err(|e| eyre!("Failed to create Eastern timezone datetime: {e}"))?
+				.timestamp()
 		};
 
 		fn parse_nums<T: std::str::FromStr + std::fmt::Display + std::fmt::Debug>(line: &str) -> Result<Vec<T>>

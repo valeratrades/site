@@ -6,7 +6,7 @@ use std::{
 	sync::RwLock,
 };
 
-use chrono::{DateTime, Utc};
+use jiff::Timestamp;
 use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher, event::ModifyKind};
 use serde::{Deserialize, Serialize};
 use tracing::{error, info, warn};
@@ -15,7 +15,7 @@ use tracing::{error, info, warn};
 pub struct BlogPost {
 	pub title: String,
 	pub slug: String,
-	pub created: DateTime<Utc>,
+	pub created: Timestamp,
 	pub html_path: PathBuf,
 	pub text_content: String,
 }
@@ -47,7 +47,7 @@ pub fn compile_blog_posts(blog_dir: &Path, output_dir: &Path) -> Vec<BlogPost> {
 		let name = &source.name;
 
 		// Get creation time from meta.json, or fall back to file metadata for new files
-		let created: DateTime<Utc> = if let Some(&date) = meta.files.get(name) {
+		let created: Timestamp = if let Some(&date) = meta.files.get(name) {
 			date
 		} else {
 			// New file - get date from filesystem and record it
@@ -58,7 +58,11 @@ pub fn compile_blog_posts(blog_dir: &Path, output_dir: &Path) -> Vec<BlogPost> {
 					continue;
 				}
 			};
-			let date: DateTime<Utc> = metadata.created().or_else(|_| metadata.modified()).map(|t| t.into()).unwrap_or_else(|_| Utc::now());
+			let date: Timestamp = metadata
+				.created()
+				.or_else(|_| metadata.modified())
+				.map(|t| Timestamp::try_from(t).expect("filesystem time within jiff's representable range"))
+				.unwrap_or_else(|_| Timestamp::now());
 			info!("Recording new blog post in meta.json: {name} -> {date}");
 			meta.files.insert(name.clone(), date);
 			meta_changed = true;
@@ -78,9 +82,9 @@ pub fn compile_blog_posts(blog_dir: &Path, output_dir: &Path) -> Vec<BlogPost> {
 		let slug = to_slug(name);
 
 		// Create output directory structure: output_dir/YYYY/MM/DD/
-		let year = created.format("%Y").to_string();
-		let month = created.format("%m").to_string();
-		let day = created.format("%d").to_string();
+		let year = created.strftime("%Y").to_string();
+		let month = created.strftime("%m").to_string();
+		let day = created.strftime("%d").to_string();
 
 		let post_output_dir = output_dir.join(&year).join(&month).join(&day);
 		if let Err(e) = fs::create_dir_all(&post_output_dir) {
@@ -193,7 +197,7 @@ static BLOG_POSTS: RwLock<Vec<BlogPost>> = RwLock::new(Vec::new());
 #[derive(Default, Deserialize, Serialize)]
 struct BlogMeta {
 	/// Map from filename (e.g., "my_post.typ") to creation datetime
-	files: HashMap<String, DateTime<Utc>>,
+	files: HashMap<String, Timestamp>,
 }
 
 impl BlogMeta {

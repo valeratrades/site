@@ -3,7 +3,9 @@
 //! each screen class opens onto a sensible seed. This island is the whole dashboard now — its child
 //! views are plain components that hydrate within it.
 
-use std::{cell::Cell, path::PathBuf, rc::Rc, sync::Arc};
+#[cfg(feature = "ssr")]
+use std::path::PathBuf;
+use std::{cell::Cell, rc::Rc, sync::Arc};
 
 use dockviewers::leptos::{Breakpoint, Config, DockPanel, Group, Keybind, MinSize, PackedApi, PackedArea, PackedState, PanelId};
 use leptos::prelude::*;

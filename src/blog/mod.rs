@@ -48,16 +48,18 @@ pub async fn get_blog_post(slug: String) -> Result<Option<(String, String)>, Ser
 }
 #[server(GetBlogPosts)]
 pub async fn get_posts(year: Option<i32>, month: Option<u32>, day: Option<u32>) -> Result<Vec<PostSummary>, ServerFnError> {
-	use chrono::Datelike;
 	let posts = compile::get_blog_posts();
 	Ok(posts
 		.iter()
-		.filter(|p| year.is_none_or(|y| p.created.year() == y) && month.is_none_or(|m| p.created.month() == m) && day.is_none_or(|d| p.created.day() == d))
-		.map(|p| PostSummary {
-			date_display: p.created.format("%b %d, %Y").to_string(),
-			url: format!("/blog/{}/{:02}/{:02}/{}.html", p.created.year(), p.created.month(), p.created.day(), p.slug),
-			title: p.title.clone(),
-			text_content: p.text_content.clone(),
+		.filter_map(|p| {
+			let d = p.created.to_zoned(jiff::tz::TimeZone::UTC).date();
+			let matches = year.is_none_or(|y| d.year() as i32 == y) && month.is_none_or(|m| d.month() as u32 == m) && day.is_none_or(|dd| d.day() as u32 == dd);
+			matches.then(|| PostSummary {
+				date_display: p.created.strftime("%b %d, %Y").to_string(),
+				url: format!("/blog/{}/{:02}/{:02}/{}.html", d.year(), d.month(), d.day(), p.slug),
+				title: p.title.clone(),
+				text_content: p.text_content.clone(),
+			})
 		})
 		.collect())
 }

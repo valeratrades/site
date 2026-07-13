@@ -7,8 +7,8 @@ use std::{
 	sync::{LazyLock, Mutex},
 };
 
-use chrono::{DateTime, Utc};
 use color_eyre::eyre::Result;
+use jiff::Timestamp;
 use serde::{Serialize, de::DeserializeOwned};
 use v_utils::trades::Timeframe;
 
@@ -60,8 +60,8 @@ pub fn progress_of(name: &str) -> Option<String> {
 /// Serve the persisted copy while fresh (or always, under mock); otherwise repoll and persist.
 pub async fn load<T: SourceData>() -> Result<T> {
 	if let Some(cached) = read::<T>() {
-		let age = Utc::now().signed_duration_since(cached.fetched_at);
-		let stale = age.to_std().map_or(true, |a| a >= T::decay_horizon().duration());
+		let age = Timestamp::now().duration_since(cached.fetched_at);
+		let stale = age.is_negative() || age.unsigned_abs() >= T::decay_horizon().duration();
 		if mock_enabled() || !stale {
 			tracing::debug!("serving persisted {} (age {age})", T::name());
 			return Ok(cached.data);
@@ -104,12 +104,12 @@ fn path<T: SourceData>() -> PathBuf {
 
 #[derive(serde::Deserialize)]
 struct Cached<T> {
-	fetched_at: DateTime<Utc>,
+	fetched_at: Timestamp,
 	data: T,
 }
 #[derive(Serialize)]
 struct CachedRef<'a, T> {
-	fetched_at: DateTime<Utc>,
+	fetched_at: Timestamp,
 	data: &'a T,
 }
 
@@ -132,7 +132,7 @@ fn read<T: SourceData>() -> Option<Cached<T>> {
 }
 
 fn write<T: SourceData>(data: &T) -> Result<()> {
-	let record = CachedRef { fetched_at: Utc::now(), data };
+	let record = CachedRef { fetched_at: Timestamp::now(), data };
 	let p = path::<T>();
 	std::fs::write(&p, serde_json::to_string_pretty(&record)?)?;
 	tracing::info!("persisted {}", T::name());

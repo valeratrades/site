@@ -1,5 +1,5 @@
-use chrono::{/*serde::ts_seconds, */ DateTime, Utc};
 use color_eyre::eyre::{Result, bail, eyre};
+use jiff::Timestamp;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_with::{DisplayFromStr, serde_as};
@@ -33,7 +33,7 @@ pub struct Metadata {
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct Fng {
 	pub value: f64,
-	pub timestamp: DateTime<Utc>,
+	pub timestamp: Timestamp,
 }
 
 /// Is expected to be most often used wtih `limit=1`, so not exposing [Duration](std::time::Duration) instead of it.
@@ -59,7 +59,7 @@ pub async fn btc_fngs_hourly(limit: usize) -> Result<Vec<Fng>> {
 		.data
 		.into_iter()
 		.map(|raw| -> Result<Fng> {
-			let timestamp = DateTime::from_timestamp(raw.ts_seconds, 0).ok_or_else(|| eyre!("Invalid timestamp: {}", raw.ts_seconds))?;
+			let timestamp = Timestamp::from_second(raw.ts_seconds).map_err(|e| eyre!("Invalid timestamp {}: {e}", raw.ts_seconds))?;
 
 			Ok(Fng { value: raw.value, timestamp })
 		})

@@ -1,5 +1,5 @@
-use chrono::Utc;
 use color_eyre::eyre::{Result, WrapErr};
+use jiff::{Timestamp, ToSpan};
 use sqlx::{Row, SqlitePool};
 use tracing::info;
 
@@ -446,11 +446,11 @@ fn none_if_empty(s: String) -> Option<String> {
 }
 
 fn expires_at_hours(hours: u32) -> String {
-	(Utc::now() + chrono::Duration::hours(hours as i64)).format("%Y-%m-%dT%H:%M:%SZ").to_string()
+	(Timestamp::now() + (hours as i64).hours()).strftime("%Y-%m-%dT%H:%M:%SZ").to_string()
 }
 
 fn expires_at_minutes(minutes: u32) -> String {
-	(Utc::now() + chrono::Duration::minutes(minutes as i64)).format("%Y-%m-%dT%H:%M:%SZ").to_string()
+	(Timestamp::now() + (minutes as i64).minutes()).strftime("%Y-%m-%dT%H:%M:%SZ").to_string()
 }
 
 impl std::fmt::Debug for Database {
