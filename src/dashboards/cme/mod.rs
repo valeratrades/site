@@ -42,10 +42,13 @@ pub struct CftcReportRendered {
 }
 #[server]
 async fn try_build() -> Result<CftcReportRendered, ServerFnError> {
-	let report = super::_core::load::<data::CftcReport>().await.map_err(|e| {
-		tracing::error!("Failed to load CFTC positions: {e:?}");
-		ServerFnError::new(format!("Failed to load CFTC positions: {e}"))
-	})?;
+	let report = super::_core::load::<data::CftcReport>()
+		.await
+		.map_err(|e| {
+			tracing::error!("Failed to load CFTC positions: {e:?}");
+			ServerFnError::new(format!("Failed to load CFTC positions: {e}"))
+		})?
+		.data;
 	Ok(report.into())
 }
 #[cfg(feature = "ssr")]

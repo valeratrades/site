@@ -56,7 +56,11 @@ class BulkLines {
 
 export async function mount(el, src) {
   const { createChart, LineSeries } = await lib();
-  const d = await (await fetch(src)).json();
+  // Guard before .json(): a 500 (e.g. exchange ban, no cached copy) has a text body — parsing it
+  // throws, and under panic=abort a rejected await nukes the whole wasm app. Surface it as a banner.
+  const res = await fetch(src);
+  if (!res.ok) return `⚠ Exchange unavailable — ${(await res.text()).trim()}`;
+  const d = await res.json();
   if (!chart) {
     chart = createChart(el, {
       autoSize: true,
@@ -92,6 +96,7 @@ export async function mount(el, src) {
 
   chart.timeScale().fitContent();
   renderLegend(el, d.legend, d.title);
+  return d.stale ?? null;
 }
 
 function renderLegend(el, legend, title) {

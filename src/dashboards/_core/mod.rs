@@ -57,17 +57,52 @@ pub fn progress_of(name: &str) -> Option<String> {
 	let reg = REGISTRY.lock().unwrap();
 	reg.get(name).map(|e| (e.fmt)(e.loaded, e.target))
 }
+/// A loaded source, plus a marker when upstream was unreachable and we served the last-good copy.
+pub struct Loaded<T> {
+	pub data: T,
+	pub stale: Option<Stale>,
+}
+pub struct Stale {
+	pub fetched_at: Timestamp,
+	pub error: String,
+}
+
 /// Serve the persisted copy while fresh (or always, under mock); otherwise repoll and persist.
-pub async fn load<T: SourceData>() -> Result<T> {
-	if let Some(cached) = read::<T>() {
-		let age = Timestamp::now().duration_since(cached.fetched_at);
-		let stale = age.is_negative() || age.unsigned_abs() >= T::decay_horizon().duration();
-		if mock_enabled() || !stale {
-			tracing::debug!("serving persisted {} (age {age})", T::name());
-			return Ok(cached.data);
-		}
-		tracing::debug!("{} stale (age {age}), repolling", T::name());
+/// If the repoll fails but a persisted copy exists, serve that copy flagged [`Stale`] rather than
+/// erroring — a rate-limit ban shouldn't blank a dashboard that has good data on disk.
+pub async fn load<T: SourceData>() -> Result<Loaded<T>> {
+	let cached = read::<T>();
+	let serve_cached = cached.as_ref().is_some_and(|c| {
+		let age = Timestamp::now().duration_since(c.fetched_at);
+		mock_enabled() || !(age.is_negative() || age.unsigned_abs() >= T::decay_horizon().duration())
+	});
+	if serve_cached {
+		let c = cached.expect("serve_cached implies Some");
+		tracing::debug!("serving persisted {}", T::name());
+		return Ok(Loaded { data: c.data, stale: None });
 	}
+	match fetch_tracked::<T>().await {
+		Ok(data) => {
+			write(&data)?;
+			Ok(Loaded { data, stale: None })
+		}
+		Err(e) => match cached {
+			Some(c) => {
+				tracing::warn!("refetch of {} failed ({e}); serving last-good copy from {}", T::name(), c.fetched_at);
+				Ok(Loaded {
+					data: c.data,
+					stale: Some(Stale {
+						fetched_at: c.fetched_at,
+						error: e.to_string(),
+					}),
+				})
+			}
+			None => Err(e),
+		},
+	}
+}
+
+async fn fetch_tracked<T: SourceData>() -> Result<T> {
 	REGISTRY.lock().unwrap().insert(
 		T::name(),
 		Entry {
@@ -78,9 +113,7 @@ pub async fn load<T: SourceData>() -> Result<T> {
 	);
 	let result = T::fetch().await;
 	REGISTRY.lock().unwrap().remove(T::name());
-	let data = result?;
-	write(&data)?;
-	Ok(data)
+	result
 }
 struct Entry {
 	loaded: usize,

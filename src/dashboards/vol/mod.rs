@@ -45,7 +45,7 @@ pub struct VolData {
 }
 #[server]
 async fn try_pull() -> Result<VolData, ServerFnError> {
-	super::_core::load::<VolData>().await.map_err(|e| {
+	super::_core::load::<VolData>().await.map(|l| l.data).map_err(|e| {
 		tracing::error!("Failed to load volatility data: {e:?}");
 		ServerFnError::new(format!("Failed to load volatility data: {e}"))
 	})

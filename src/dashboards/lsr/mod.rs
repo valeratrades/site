@@ -343,10 +343,13 @@ fn LsrSearch(rendered_lsrs: Memo<Vec<RenderedLsr>>, selected_pairs: RwSignal<Vec
 
 #[server]
 async fn build_lsrs() -> Result<RenderedLsrs, ServerFnError> {
-	let lsrs = super::_core::load::<data::SortedLsrs>().await.map_err(|e| {
-		tracing::error!("Failed to load LSR data: {e:?}");
-		ServerFnError::new(format!("Failed to load LSR data: {e}"))
-	})?;
+	let lsrs = super::_core::load::<data::SortedLsrs>()
+		.await
+		.map_err(|e| {
+			tracing::error!("Failed to load LSR data: {e:?}");
+			ServerFnError::new(format!("Failed to load LSR data: {e}"))
+		})?
+		.data;
 	Ok(lsrs.into())
 }
 #[cfg(feature = "ssr")]

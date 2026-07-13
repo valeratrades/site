@@ -39,10 +39,13 @@ pub fn FngView() -> impl IntoView {
 pub struct FngRendered(String);
 #[server]
 async fn try_build() -> Result<FngRendered, ServerFnError> {
-	let fng = super::_core::load::<data::Fng>().await.map_err(|e| {
-		tracing::error!("Failed to load Fear & Greed Index: {e:?}");
-		ServerFnError::new(format!("Failed to load Fear & Greed Index: {e}"))
-	})?;
+	let fng = super::_core::load::<data::Fng>()
+		.await
+		.map_err(|e| {
+			tracing::error!("Failed to load Fear & Greed Index: {e:?}");
+			ServerFnError::new(format!("Failed to load Fear & Greed Index: {e}"))
+		})?
+		.data;
 	Ok(fng.into())
 }
 #[cfg(feature = "ssr")]
