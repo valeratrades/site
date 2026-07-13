@@ -8,6 +8,8 @@ use tracing::instrument;
 use v_exchanges::prelude::*;
 use v_utils::trades::{Pair, Timeframe};
 
+/// category10, cycled across highlighted (non-BTC) series
+const PALETTE: [&str; 10] = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"];
 /// Collected market data: normalized closes per pair and the time index
 pub type MarketData = (HashMap<Pair, Vec<f64>>, Vec<Timestamp>);
 
@@ -22,37 +24,6 @@ pub struct MarketStructureChart {
 	legend: Vec<LegendEntry>, // legend order: top…, BTC (middle), …bottom
 	title: String,
 }
-#[derive(Deserialize, Serialize)]
-struct SeriesMeta {
-	pair: String,
-	color: String,
-	width: u8,
-}
-#[derive(Deserialize, Serialize)]
-struct LegendEntry {
-	label: String,
-	color: String,
-}
-
-impl crate::dashboards::_core::SourceData for MarketStructureChart {
-	fn decay_horizon() -> Timeframe {
-		"30m".into()
-	}
-
-	async fn fetch() -> Result<Self> {
-		let tf = "5m".into();
-		let range = (24 * 12 + 1).into(); // 24h, given `5m` tf
-		market_structure_json(range, tf, ExchangeName::Binance, Instrument::Perp).await
-	}
-
-	fn fmt_progress(loaded: usize, target: usize) -> String {
-		format!("pulled {loaded}/{target} pairs")
-	}
-}
-
-/// category10, cycled across highlighted (non-BTC) series
-const PALETTE: [&str; 10] = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"];
-
 #[instrument]
 pub async fn market_structure_json(limit: RequestRange, tf: Timeframe, exchange_name: ExchangeName, instrument: Instrument) -> Result<MarketStructureChart> {
 	tracing::info!("Building market structure for {exchange_name} {instrument} with limit={limit:?}, tf={tf:?}");
@@ -346,4 +317,32 @@ pub async fn get_historical_data(symbol: Symbol, tf: Timeframe, range: RequestRa
 		col_volumes: volume,
 	})
 }
+#[derive(Deserialize, Serialize)]
+struct SeriesMeta {
+	pair: String,
+	color: String,
+	width: u8,
+}
+#[derive(Deserialize, Serialize)]
+struct LegendEntry {
+	label: String,
+	color: String,
+}
+
+impl crate::dashboards::_core::SourceData for MarketStructureChart {
+	fn decay_horizon() -> Timeframe {
+		"30m".into()
+	}
+
+	async fn fetch() -> Result<Self> {
+		let tf = "5m".into();
+		let range = (24 * 12 + 1).into(); // 24h, given `5m` tf
+		market_structure_json(range, tf, ExchangeName::Binance, Instrument::Perp).await
+	}
+
+	fn fmt_progress(loaded: usize, target: usize) -> String {
+		format!("pulled {loaded}/{target} pairs")
+	}
+}
+
 //TODO!!!: provide additional information: 1) BTCDOM, 2) average, 3) correlation, 4) volatility

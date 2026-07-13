@@ -3,62 +3,12 @@
 //! each screen class opens onto a sensible seed. This island is the whole dashboard now — its child
 //! views are plain components that hydrate within it.
 
-use std::{cell::Cell, rc::Rc, sync::Arc};
+use std::{cell::Cell, path::PathBuf, rc::Rc, sync::Arc};
 
 use dockviewers::leptos::{Breakpoint, Config, DockPanel, Group, Keybind, MinSize, PackedApi, PackedArea, PackedState, PanelId};
 use leptos::prelude::*;
 
 use super::{cme, fng, lsr, market_structure, vol};
-
-/// Coarse device band → saved-layout key. Xl/Lg share `xl`, Sm/Xs share `sm`.
-fn seed_key(bp: Breakpoint) -> &'static str {
-	use Breakpoint::*;
-	match bp {
-		Xl | Lg => "xl",
-		Md => "md",
-		Sm | Xs => "sm",
-	}
-}
-
-/// Built-in first-run arrangement: each panel its own group, packed left→right. Sizes are in grid
-/// steps (~64 cols × 36 rows fill the container); mins are `Rem` so a panel can't shrink below its
-/// content's natural extent — the text panels floor at roughly their one/few readable lines, while
-/// the chart keeps an elastic-but-sane range.
-fn seed(api: &PackedApi) {
-	api.reset();
-	let specs: [(&str, u32, u32, MinSize); 5] = [
-		("market_structure", 26, 16, MinSize::Rem { w: 22.0, h: 14.0 }),
-		("lsr", 22, 16, MinSize::Rem { w: 22.0, h: 12.0 }),
-		("cme", 20, 12, MinSize::Rem { w: 24.0, h: 8.0 }),
-		("vol", 14, 4, MinSize::Rem { w: 16.0, h: 3.0 }),
-		("fng", 16, 4, MinSize::Rem { w: 20.0, h: 3.0 }),
-	];
-	for (id, w, h, min) in specs {
-		let group = Group::new(api.mint_group_id(), PanelId(id.into()));
-		api.place(group, w, h, min);
-	}
-}
-
-/// `s` persists the live arrangement under its band key, via dockviewers' own keydown path (the same
-/// one that drives `u`/`f`/`?`), so it inherits its editable-field guard and hydration timing. Built
-/// fresh per render so the `!Send` `Rc` action is born on the client, not captured by the island view.
-fn keybinds() -> Config {
-	Config {
-		actions: vec![(
-			Keybind { key: "s", alt: false, ctrl: false },
-			std::rc::Rc::new(|s: &mut PackedState| {
-				let json = s.save();
-				let key = seed_key(s.breakpoint()).to_string();
-				leptos::task::spawn_local(async move {
-					if let Err(e) = save_layout(key, json).await {
-						leptos::logging::error!("save_layout failed: {e}");
-					}
-				});
-			}) as dockviewers::leptos::Action,
-		)],
-		..Default::default()
-	}
-}
 
 #[island]
 pub fn DashboardDeck() -> impl IntoView {
@@ -142,9 +92,58 @@ pub fn DashboardDeck() -> impl IntoView {
 		</div>
 	}
 }
+/// Coarse device band → saved-layout key. Xl/Lg share `xl`, Sm/Xs share `sm`.
+fn seed_key(bp: Breakpoint) -> &'static str {
+	use Breakpoint::*;
+	match bp {
+		Xl | Lg => "xl",
+		Md => "md",
+		Sm | Xs => "sm",
+	}
+}
+
+/// Built-in first-run arrangement: each panel its own group, packed left→right. Sizes are in grid
+/// steps (~64 cols × 36 rows fill the container); mins are `Rem` so a panel can't shrink below its
+/// content's natural extent — the text panels floor at roughly their one/few readable lines, while
+/// the chart keeps an elastic-but-sane range.
+fn seed(api: &PackedApi) {
+	api.reset();
+	let specs: [(&str, u32, u32, MinSize); 5] = [
+		("market_structure", 26, 16, MinSize::Rem { w: 22.0, h: 14.0 }),
+		("lsr", 22, 16, MinSize::Rem { w: 22.0, h: 12.0 }),
+		("cme", 20, 12, MinSize::Rem { w: 24.0, h: 8.0 }),
+		("vol", 14, 4, MinSize::Rem { w: 16.0, h: 3.0 }),
+		("fng", 16, 4, MinSize::Rem { w: 20.0, h: 3.0 }),
+	];
+	for (id, w, h, min) in specs {
+		let group = Group::new(api.mint_group_id(), PanelId(id.into()));
+		api.place(group, w, h, min);
+	}
+}
+
+/// `s` persists the live arrangement under its band key, via dockviewers' own keydown path (the same
+/// one that drives `u`/`f`/`?`), so it inherits its editable-field guard and hydration timing. Built
+/// fresh per render so the `!Send` `Rc` action is born on the client, not captured by the island view.
+fn keybinds() -> Config {
+	Config {
+		actions: vec![(
+			Keybind { key: "s", alt: false, ctrl: false },
+			std::rc::Rc::new(|s: &mut PackedState| {
+				let json = s.save();
+				let key = seed_key(s.breakpoint()).to_string();
+				leptos::task::spawn_local(async move {
+					if let Err(e) = save_layout(key, json).await {
+						leptos::logging::error!("save_layout failed: {e}");
+					}
+				});
+			}) as dockviewers::leptos::Action,
+		)],
+		..Default::default()
+	}
+}
 
 #[cfg(feature = "ssr")]
-fn layout_path(key: &str) -> std::path::PathBuf {
+fn layout_path(key: &str) -> PathBuf {
 	v_utils::xdg_cache_dir!("dashboards").join(format!("layout-{key}.json"))
 }
 

@@ -29,14 +29,6 @@ pub trait SourceData: Sized + Serialize + DeserializeOwned + Send {
 	}
 }
 
-struct Entry {
-	loaded: usize,
-	target: usize,
-	fmt: fn(usize, usize) -> String,
-}
-// ponytail: global map, single-user dashboard — a lock per source only matters under real concurrency
-static REGISTRY: LazyLock<Mutex<HashMap<&'static str, Entry>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
-
 /// Live per-source fetch progress, opted into by multi-pair sources inside their `fetch()`.
 #[derive(Clone, Copy)]
 pub struct Progress {
@@ -65,7 +57,6 @@ pub fn progress_of(name: &str) -> Option<String> {
 	let reg = REGISTRY.lock().unwrap();
 	reg.get(name).map(|e| (e.fmt)(e.loaded, e.target))
 }
-
 /// Serve the persisted copy while fresh (or always, under mock); otherwise repoll and persist.
 pub async fn load<T: SourceData>() -> Result<T> {
 	if let Some(cached) = read::<T>() {
@@ -91,6 +82,13 @@ pub async fn load<T: SourceData>() -> Result<T> {
 	write(&data)?;
 	Ok(data)
 }
+struct Entry {
+	loaded: usize,
+	target: usize,
+	fmt: fn(usize, usize) -> String,
+}
+// ponytail: global map, single-user dashboard — a lock per source only matters under real concurrency
+static REGISTRY: LazyLock<Mutex<HashMap<&'static str, Entry>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
 fn mock_enabled() -> bool {
 	leptos::prelude::use_context::<crate::config::LiveSettings>()

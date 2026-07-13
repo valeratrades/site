@@ -38,12 +38,6 @@ pub fn LoadingIndicator(label: String) -> impl IntoView {
 	pre().child((format!("Loading {label}"), span().class("loading-dots").child("...")))
 }
 
-/// Reads live fetch progress registered under `name`.
-#[server]
-async fn dashboard_progress(name: String) -> Result<Option<String>, ServerFnError> {
-	Ok(_core::progress_of(&name))
-}
-
 /// Loading indicator that polls [`dashboard_progress`] (~500ms) and shows `X/Y` while a fetch runs.
 #[component]
 pub fn LoadingWithProgress(label: String, name: String) -> impl IntoView {
@@ -74,6 +68,12 @@ pub fn LoadingWithProgress(label: String, name: String) -> impl IntoView {
 		span().class("loading-dots").child("..."),
 	))
 }
+/// Reads live fetch progress registered under `name`.
+#[server]
+async fn dashboard_progress(name: String) -> Result<Option<String>, ServerFnError> {
+	Ok(_core::progress_of(&name))
+}
+
 #[component]
 fn NotFoundView() -> impl IntoView {
 	let loc = use_location();
