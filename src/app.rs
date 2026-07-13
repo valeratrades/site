@@ -480,6 +480,7 @@ pub fn App() -> impl IntoView {
 			<Router>
 				<TopBar />
 				<main class="min-h-screen">{move || AppRoutes::routes()}</main>
+				<BuildTag />
 			</Router>
 		},
 	)
@@ -507,46 +508,73 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
 pub async fn update_username(new_username: String) -> Result<(), ServerFnError> {
 	server_impl::update_username_impl(new_username).await
 }
-
 #[server(IsGoogleOAuthConfigured)]
 pub async fn is_google_oauth_configured() -> Result<bool, ServerFnError> {
 	Ok(server_impl::is_google_oauth_configured_impl())
 }
-
 #[server(GoogleAuthCallback)]
 pub async fn google_auth_callback(code: String, state: String) -> Result<User, ServerFnError> {
 	server_impl::google_auth_callback_impl(code, state).await
 }
-
 #[server(GoogleAuthStart)]
 pub async fn google_auth_start() -> Result<String, ServerFnError> {
 	server_impl::google_auth_start_impl().await
 }
-
 #[server(VerifyEmail)]
 pub async fn verify_email(token: String) -> Result<(), ServerFnError> {
 	server_impl::verify_email_impl(token).await
 }
-
 #[server(LogoutUser)]
 pub async fn logout_user() -> Result<(), ServerFnError> {
 	server_impl::logout_impl().await
 }
-
 #[server(GetCurrentUser)]
 pub async fn get_current_user() -> Result<Option<User>, ServerFnError> {
 	server_impl::get_current_user_impl().await
 }
-
 #[server(LoginUser)]
 pub async fn login_user(email_or_username: String, password: String) -> Result<User, ServerFnError> {
 	server_impl::login_impl(email_or_username, password).await
 }
-
 #[server(RegisterUser)]
 pub async fn register_user(email: String, username: String, password: String) -> Result<String, ServerFnError> {
 	server_impl::register_impl(email, username, password).await
 }
+/// Inconspicuous deployed-build marker pinned bottom-right: version, short commit
+/// (links to the exact GitHub commit), and the served client wasm size. Server-rendered
+/// only (plain component, not an island), so the fs read never reaches wasm.
+#[component]
+fn BuildTag() -> impl IntoView {
+	let hash = env!("GIT_HASH");
+	let label = format!("v{}·{hash}·{}", env!("CARGO_PKG_VERSION"), wasm_size());
+	view! {
+		<a
+			href=format!("https://github.com/valeratrades/site/commit/{hash}")
+			target="_blank"
+			rel="noopener noreferrer"
+			class="fixed bottom-1 right-2 z-10 font-mono text-[10px] text-neutral-500/30 transition-colors hover:text-neutral-500/70"
+		>
+			{label}
+		</a>
+	}
+}
+
+#[cfg(feature = "ssr")]
+fn wasm_size() -> String {
+	let root = std::env::var("LEPTOS_SITE_ROOT").unwrap_or_else(|_| "target/site".into());
+	let path = format!("{root}/pkg/{}.wasm", env!("CARGO_PKG_NAME"));
+	// cosmetic marker: on run layouts where the served wasm isn't on disk, show "?" rather than 500 the page
+	match std::fs::metadata(&path) {
+		Ok(m) => format!("{:.1}MiB", m.len() as f64 / (1024.0 * 1024.0)),
+		Err(_) => "?".into(),
+	}
+}
+
+#[cfg(not(feature = "ssr"))]
+fn wasm_size() -> String {
+	String::new()
+}
+
 /// Navigation link that highlights when the current route matches (or is a child of) the href.
 /// For the root path "/", uses exact matching.
 #[component]
