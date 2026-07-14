@@ -1,7 +1,10 @@
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::LazyLock, time::Duration};
 
 use color_eyre::eyre::{Result, bail};
-use futures::stream::{self, StreamExt as _};
+use futures::{
+	lock::Mutex,
+	stream::{self, StreamExt as _},
+};
 use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
@@ -10,6 +13,19 @@ use v_utils::trades::{Pair, Timeframe};
 
 /// category10, cycled across highlighted (non-BTC) series
 const PALETTE: [&str; 10] = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"];
+
+/// One long-lived client, reused across every poll. The post-ban cooldown gate lives on the client
+/// (`banned_until`), so rebuilding it each poll would forget the ban and keep re-hitting Binance —
+/// which renews and escalates it. Reuse is what makes the gate actually stop the bleeding.
+static BINANCE: LazyLock<Mutex<Box<dyn Exchange>>> = LazyLock::new(|| {
+	let mut ex = ExchangeName::Binance.init_client();
+	ex.set_retry_config(RetryConfig {
+		max_retries: 3,
+		..Default::default()
+	});
+	ex.set_timeout(Duration::from_secs(60));
+	Mutex::new(ex)
+});
 /// Compact chart payload for the client-side Lightweight Charts shim.
 /// Each series carries its own time domain, so late-listed pairs start where they list and
 /// stocks/commodities keep their market-hours gaps — nothing is dropped or filled.
@@ -21,16 +37,9 @@ pub struct MarketStructureChart {
 	legend: Vec<LegendEntry>, // legend order: top…, BTC (middle), …bottom
 	title: String,
 }
-#[instrument]
-pub async fn market_structure_json(limit: RequestRange, tf: Timeframe, exchange_name: ExchangeName, instrument: Instrument) -> Result<MarketStructureChart> {
-	tracing::info!("Building market structure for {exchange_name} {instrument} with limit={limit:?}, tf={tf:?}");
-
-	let mut exchange = exchange_name.init_client();
-	exchange.set_retry_config(RetryConfig {
-		max_retries: 3,
-		..Default::default()
-	});
-	exchange.set_timeout(Duration::from_secs(60));
+#[instrument(skip(exchange))]
+pub async fn market_structure_json(limit: RequestRange, tf: Timeframe, exchange: &mut dyn Exchange, instrument: Instrument) -> Result<MarketStructureChart> {
+	tracing::info!("Building market structure for {} {instrument} with limit={limit:?}, tf={tf:?}", exchange.name());
 
 	let exch_info = match exchange.exchange_info(instrument).await {
 		Ok(info) => info,
@@ -43,7 +52,7 @@ pub async fn market_structure_json(limit: RequestRange, tf: Timeframe, exchange_
 	let all_pairs = exch_info.usdt_pairs().collect::<Vec<Pair>>();
 	tracing::info!("Found {} USDT pairs from exchange info", all_pairs.len());
 
-	let closes = collect_data(&all_pairs, tf, limit, instrument, Arc::new(exchange)).await?;
+	let closes = collect_data(&all_pairs, tf, limit, instrument, &*exchange).await?;
 
 	let mut performance: Vec<(Pair, f64)> = closes.iter().map(|(k, v)| (*k, v.last().unwrap().1 - v.first().unwrap().1)).collect();
 	performance.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
@@ -161,7 +170,7 @@ struct Line {
 	value: Vec<f64>,
 }
 #[instrument(skip_all)]
-async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, instrument: Instrument, exchange: Arc<Box<dyn Exchange>>) -> Result<HashMap<Pair, Vec<(i64, f64)>>> {
+async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, instrument: Instrument, exchange: &dyn Exchange) -> Result<HashMap<Pair, Vec<(i64, f64)>>> {
 	tracing::info!("Starting data collection for {} pairs with tf={tf:?}, range={range:?}", pairs.len());
 
 	let progress = crate::dashboards::_core::Progress::of::<MarketStructureChart>();
@@ -171,7 +180,6 @@ async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, instru
 	// ponytail: fixed cap keeps the per-pair burst under Binance's 2400 weight/min IP limit; tune if the universe grows
 	const CONCURRENCY: usize = 12;
 	let results: Vec<_> = stream::iter(pairs.to_vec().into_iter().map(|pair| {
-		let exchange = Arc::clone(&exchange);
 		let symbol = Symbol::new(pair, instrument);
 		async move {
 			let r = match get_historical_data(symbol, tf, range, exchange).await {
@@ -242,7 +250,7 @@ struct RelevantHistoricalData {
 	col_volumes: Vec<f64>,
 }
 #[instrument(skip_all, fields(symbol = %symbol))]
-async fn get_historical_data(symbol: Symbol, tf: Timeframe, range: RequestRange, exchange: Arc<Box<dyn Exchange>>) -> Result<RelevantHistoricalData> {
+async fn get_historical_data(symbol: Symbol, tf: Timeframe, range: RequestRange, exchange: &dyn Exchange) -> Result<RelevantHistoricalData> {
 	tracing::debug!("Fetching klines for {symbol} (tf={tf:?}, range={range:?})");
 
 	let klines = match exchange.klines(symbol, tf, range).await {
@@ -299,7 +307,8 @@ impl crate::dashboards::_core::SourceData for MarketStructureChart {
 	async fn fetch() -> Result<Self> {
 		let tf = "5m".into();
 		let range = (24 * 12 + 1).into(); // 24h, given `5m` tf
-		market_structure_json(range, tf, ExchangeName::Binance, Instrument::Perp).await
+		let mut exchange = BINANCE.lock().await;
+		market_structure_json(range, tf, &mut **exchange, Instrument::Perp).await
 	}
 
 	fn fmt_progress(loaded: usize, target: usize) -> String {
