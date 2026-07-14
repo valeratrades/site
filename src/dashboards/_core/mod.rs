@@ -14,8 +14,8 @@ use serde::{Serialize, de::DeserializeOwned};
 use v_utils::trades::Timeframe;
 
 pub trait SourceData: Sized + Serialize + DeserializeOwned + Send {
-	/// Both the poll frequency and the age past which a persisted copy is stale.
-	/// Under normal load the persisted copy is practically always fresh.
+	/// Refresh interval: once the persisted copy is older than this, the next `load` repolls.
+	/// Staleness (the client-facing warning) is a longer horizon — see [`load`].
 	fn decay_horizon() -> Timeframe;
 	fn fetch() -> impl Future<Output = Result<Self>> + Send;
 
@@ -66,11 +66,6 @@ pub struct Loaded<T> {
 pub struct Stale {
 	pub fetched_at: Timestamp,
 	pub error: String,
-}
-
-/// At/over `horizon` — or negative, since a future `fetched_at` (clock skew) should count as due.
-fn past(age: SignedDuration, horizon: std::time::Duration) -> bool {
-	age.is_negative() || age.unsigned_abs() >= horizon
 }
 
 /// Serve the persisted copy while inside its refresh interval (or always, under mock). Past the
@@ -125,6 +120,10 @@ pub async fn load<T: SourceData>() -> Result<Loaded<T>> {
 			None => Err(e),
 		},
 	}
+}
+/// At/over `horizon` — or negative, since a future `fetched_at` (clock skew) should count as due.
+fn past(age: SignedDuration, horizon: std::time::Duration) -> bool {
+	age.is_negative() || age.unsigned_abs() >= horizon
 }
 
 /// Per-source async lock, created on first use, so `load` coalesces concurrent refreshes into one.
