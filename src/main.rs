@@ -96,7 +96,8 @@ async fn main() {
 			shell(leptos_options_clone.clone())
 		}))
 		.with_state(leptos_options)
-		.layer(tower_http::compression::CompressionLayer::new());
+		.layer(tower_http::compression::CompressionLayer::new())
+		.layer(axum::middleware::from_fn(pkg_no_store));
 
 	// run our app with hyper (`axum::Server` is a re-export of `hyper::Server`)
 	let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
@@ -106,4 +107,19 @@ async fn main() {
 		info!("{msg}");
 	}
 	axum::serve(listener, app.into_make_service()).await.unwrap();
+}
+
+/// `/pkg` assets keep a stable URL across builds while their content (and the island-id hashes baked
+/// into the wasm) changes every deploy. Any CDN/browser caching therefore pairs a fresh HTML shell
+/// with a stale `site.js`/wasm — the island ids mismatch and the whole dashboard fails to hydrate.
+/// `no-store` keeps them uncached so a deploy can never serve a mismatched pair.
+// ponytail: no-store re-fetches the wasm each load; swap for content-hashed filenames if that cost bites.
+#[cfg(feature = "ssr")]
+async fn pkg_no_store(req: axum::extract::Request, next: axum::middleware::Next) -> axum::response::Response {
+	let is_pkg = req.uri().path().starts_with("/pkg/");
+	let mut resp = next.run(req).await;
+	if is_pkg {
+		resp.headers_mut().insert(axum::http::header::CACHE_CONTROL, axum::http::HeaderValue::from_static("no-store"));
+	}
+	resp
 }
