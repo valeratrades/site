@@ -12,6 +12,9 @@ use leptos::prelude::*;
 
 use super::{cme, fng, lsr, market_structure, vol};
 
+/// Every panel this deck hosts. A saved layout that doesn't cover all of these is treated as
+/// unusable on load (see `on_ready`) and replaced by the seed.
+const PANEL_IDS: [&str; 5] = ["market_structure", "lsr", "cme", "vol", "fng"];
 #[island]
 pub fn DashboardDeck() -> impl IntoView {
 	let panels = RwSignal::new(vec![
@@ -57,11 +60,19 @@ pub fn DashboardDeck() -> impl IntoView {
 			loaded.set(Some(key));
 			leptos::task::spawn_local(async move {
 				match load_layout(key.to_string()).await {
-					Ok(Some(json)) =>
-						if let Err(e) = api.load(&json) {
-							leptos::logging::error!("saved layout corrupt, using seed: {e:?}");
+					Ok(Some(json)) => {
+						// A parseable layout can still be unusable — empty, or missing panels (saved
+						// before a panel existed, or a truncated write) — and renders as a black empty
+						// dock. Re-seed unless every panel is actually hosted.
+						let usable = api.load(&json).is_ok() && {
+							let live: std::collections::HashSet<String> = api.tab_ids().into_iter().map(|p| p.0).collect();
+							PANEL_IDS.iter().all(|id| live.contains(*id))
+						};
+						if !usable {
+							leptos::logging::error!("saved layout unusable (corrupt or missing panels), using seed");
 							seed(&api);
-						},
+						}
+					}
 					Ok(None) => seed(&api),
 					Err(e) => {
 						leptos::logging::error!("load_layout failed, using seed: {e}");
@@ -132,6 +143,10 @@ fn seed(api: &PackedApi) {
 		("vol", 14, 4, MinSize::Rem { w: 16.0, h: 3.0 }),
 		("fng", 16, 4, MinSize::Rem { w: 20.0, h: 3.0 }),
 	];
+	debug_assert!(
+		specs.len() == PANEL_IDS.len() && PANEL_IDS.iter().all(|id| specs.iter().any(|(s, ..)| s == id)),
+		"seed must cover exactly PANEL_IDS"
+	);
 	for (id, w, h, min) in specs {
 		let group = Group::new(api.mint_group_id(), PanelId(id.into()));
 		api.place(group, w, h, min);

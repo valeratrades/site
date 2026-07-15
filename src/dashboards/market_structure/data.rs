@@ -43,7 +43,7 @@ pub async fn market_structure_json(limit: RequestRange, tf: Timeframe, exchange:
 	let closes = collect_data(&all_pairs, tf, limit, instrument, &*exchange).await?;
 
 	let mut performance: Vec<(Pair, f64)> = closes.iter().map(|(k, v)| (*k, v.last().unwrap().1 - v.first().unwrap().1)).collect();
-	performance.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+	performance.sort_by(|a, b| a.1.total_cmp(&b.1));
 	let n_samples = (performance.len() as f64).ln().round() as usize;
 	let top: Vec<Pair> = performance.iter().rev().take(n_samples).map(|x| x.0).collect();
 	let bottom: Vec<Pair> = performance.iter().take(n_samples).map(|x| x.0).collect();
@@ -205,17 +205,25 @@ async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, instru
 
 	results.into_iter().for_each(|result| match result {
 		Ok((symbol, series)) => {
-			if "BTC-USDT" == symbol.pair {
-				btc_found = true;
-			}
 			let mut pts: Vec<(i64, f64)> = series.col_open_times.iter().zip(&series.col_closes).map(|(t, c)| (t.as_second(), *c)).collect();
 			pts.sort_by_key(|p| p.0);
 			match pts.first() {
-				// normalize each series to its own first close, in log-return space
-				Some(&(_, first)) => {
+				// normalize each series to its own first close, in log-return space. A non-positive or
+				// non-finite close (a bad tick under a degraded/rate-limited feed) yields NaN/inf here,
+				// which would both poison the perf sort (`partial_cmp` panics on NaN) and serialize as
+				// JSON `null` — drop the pair instead of letting one bad tick take the panel down.
+				Some(&(_, first)) if first > 0.0 => {
 					pts.iter_mut().for_each(|p| p.1 = (p.1 / first).ln());
-					normalized.insert(symbol.pair, pts);
+					if pts.iter().all(|p| p.1.is_finite()) {
+						if "BTC-USDT" == symbol.pair {
+							btc_found = true;
+						}
+						normalized.insert(symbol.pair, pts);
+					} else {
+						tracing::warn!("dropping {symbol}: non-finite log-returns (bad close ≤ 0)");
+					}
 				}
+				Some(&(_, first)) => tracing::warn!("dropping {symbol}: non-positive first close {first}"),
 				None => eprintln!("Received empty data for: {symbol}"),
 			}
 		}
