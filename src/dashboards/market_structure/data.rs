@@ -68,7 +68,7 @@ pub async fn market_structure_json(limit: RequestRange, tf: Timeframe, exchange:
 		};
 		let sign = if p >= 0.0 { '+' } else { '-' };
 		let change = format!("{:.2}", 100.0 * p.abs());
-		format!("{symbol:<5}{sign}{change:>5}%")
+		format!("{symbol:<5}{sign}{change:>5}cNp")
 	};
 
 	// assign a stable palette color to each highlighted (non-BTC) pair, in legend order
