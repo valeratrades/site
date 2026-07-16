@@ -1,7 +1,7 @@
-use color_eyre::eyre::{Report, Result, bail, eyre};
+use color_eyre::eyre::{Result, eyre};
 use jiff::{Timestamp, civil::Date, tz::TimeZone};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_with::{DisplayFromStr, serde_as};
 use v_utils::{NowThen, PrettyPrint};
 
 #[allow(unused)]
@@ -14,28 +14,13 @@ pub struct Positions {
 #[allow(unused)]
 #[derive(Clone, Debug, Default, Deserialize, Serialize, derive_new::new)]
 pub struct CftcReport {
-	// pub asset: String,
 	pub date: Timestamp,
 	pub dealer_intermidiary: Positions,
 	pub asset_manager_or_institutional: Positions,
 	pub leveraged_funds: Positions,
 	pub other_reportables: Positions,
-	_non_reportables: Option<Value>,
 }
 impl CftcReport {
-	pub fn parse_by_index(page: &[String], index: u32) -> Result<Self> {
-		let index_line_pos = page
-			.iter()
-			.position(|line| line.contains(&format!("#{index}")))
-			.ok_or_else(|| eyre!("Could not find the block with BTC index /*{CFTC_CODE_BTC}*/ in parsed CFTC report"))?;
-		let block: &[String; 20] = page
-			.get((index_line_pos - 8)..=(index_line_pos + 11))
-			.and_then(|slice| slice.try_into().ok())
-			.ok_or_else(|| eyre!("Block size mismatch - expected 20 lines"))?;
-
-		block.try_into()
-	}
-
 	pub fn to_markdown_table(&self) -> String {
 		let format_num = |n: f64| format!("{n:.0}");
 		let format_pct = |n: f64| format!("{n:.1}");
@@ -109,14 +94,132 @@ impl CftcReport {
 	}
 }
 
+// www.cftc.gov's HTML report sits behind a Cloudflare bot-challenge that 403s datacenter/pod egress
+// IPs; the Socrata data API serves the same "Traders in Financial Futures" report as JSON with no challenge.
 pub async fn fetch_cftc_positions() -> Result<CftcReport> {
-	let url = "https://www.cftc.gov/dea/futures/financial_lf.htm";
-	let response = reqwest::get(url).await?.text().await?;
-	let lines: Vec<String> = response.lines().map(String::from).collect();
-
-	CftcReport::parse_by_index(&lines, CFTC_CODE_BTC)
+	let rows: Vec<TffRow> = reqwest::Client::new()
+		.get("https://publicreporting.cftc.gov/resource/gpe5-46if.json")
+		.query(&[("cftc_contract_market_code", CFTC_CODE_BTC), ("$order", "report_date_as_yyyy_mm_dd DESC"), ("$limit", "1")])
+		.send()
+		.await?
+		.json()
+		.await?;
+	let row = rows.into_iter().next().ok_or_else(|| eyre!("CFTC API returned no rows for BTC ({CFTC_CODE_BTC})"))?;
+	row.try_into()
 }
-static CFTC_CODE_BTC: u32 = 133741;
+static CFTC_CODE_BTC: &str = "133741";
+
+/// One "Traders in Financial Futures - Futures Only" report row, as served by the CFTC Socrata API
+/// (dataset gpe5-46if). Every numeric column arrives as a JSON string; spread-trader counts are
+/// omitted for all categories but leveraged funds.
+#[serde_as]
+#[derive(Deserialize)]
+struct TffRow {
+	report_date_as_yyyy_mm_dd: String,
+
+	#[serde_as(as = "DisplayFromStr")]
+	dealer_positions_long_all: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	dealer_positions_short_all: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	dealer_positions_spread_all: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	asset_mgr_positions_long: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	asset_mgr_positions_short: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	asset_mgr_positions_spread: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	lev_money_positions_long: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	lev_money_positions_short: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	lev_money_positions_spread: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	other_rept_positions_long: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	other_rept_positions_short: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	other_rept_positions_spread: f64,
+
+	#[serde_as(as = "DisplayFromStr")]
+	change_in_dealer_long_all: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	change_in_dealer_short_all: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	change_in_dealer_spread_all: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	change_in_asset_mgr_long: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	change_in_asset_mgr_short: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	change_in_asset_mgr_spread: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	change_in_lev_money_long: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	change_in_lev_money_short: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	change_in_lev_money_spread: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	change_in_other_rept_long: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	change_in_other_rept_short: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	change_in_other_rept_spread: f64,
+
+	#[serde_as(as = "DisplayFromStr")]
+	pct_of_oi_dealer_long_all: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pct_of_oi_dealer_short_all: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pct_of_oi_dealer_spread_all: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pct_of_oi_asset_mgr_long: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pct_of_oi_asset_mgr_short: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pct_of_oi_asset_mgr_spread: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pct_of_oi_lev_money_long: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pct_of_oi_lev_money_short: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pct_of_oi_lev_money_spread: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pct_of_oi_other_rept_long: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pct_of_oi_other_rept_short: f64,
+	#[serde_as(as = "DisplayFromStr")]
+	pct_of_oi_other_rept_spread: f64,
+
+	#[serde_as(as = "Option<DisplayFromStr>")]
+	#[serde(default)]
+	traders_dealer_long_all: Option<u32>,
+	#[serde_as(as = "Option<DisplayFromStr>")]
+	#[serde(default)]
+	traders_dealer_short_all: Option<u32>,
+	#[serde_as(as = "Option<DisplayFromStr>")]
+	#[serde(default)]
+	traders_asset_mgr_long_all: Option<u32>,
+	#[serde_as(as = "Option<DisplayFromStr>")]
+	#[serde(default)]
+	traders_asset_mgr_short_all: Option<u32>,
+	#[serde_as(as = "Option<DisplayFromStr>")]
+	#[serde(default)]
+	traders_lev_money_long_all: Option<u32>,
+	#[serde_as(as = "Option<DisplayFromStr>")]
+	#[serde(default)]
+	traders_lev_money_short_all: Option<u32>,
+	#[serde_as(as = "Option<DisplayFromStr>")]
+	#[serde(default)]
+	traders_lev_money_spread: Option<u32>,
+	#[serde_as(as = "Option<DisplayFromStr>")]
+	#[serde(default)]
+	traders_other_rept_long_all: Option<u32>,
+	#[serde_as(as = "Option<DisplayFromStr>")]
+	#[serde(default)]
+	traders_other_rept_short: Option<u32>,
+}
 
 #[allow(unused)]
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, derive_new::new)]
@@ -126,59 +229,71 @@ struct PositionsInfo {
 	percent_of_open: f64,
 	number_of_traders: Option<u32>,
 }
-impl TryFrom<&[String; 20]> for CftcReport {
-	type Error = Report;
+impl TryFrom<TffRow> for CftcReport {
+	type Error = color_eyre::eyre::Report;
 
-	fn try_from(block: &[String; 20]) -> Result<Self> {
-		let date = {
-			let date_line = &block[1];
-			let date_str = match date_line.find("as of") {
-				Some(pos) => &date_line[pos + 6..].trim(),
-				None => bail!("Date not found"),
-			};
-			let naive_date = Date::strptime("%B %d, %Y", date_str).map_err(|e| eyre!("Failed to parse date: {e}"))?;
-			let eastern = TimeZone::get("America/New_York").map_err(|e| eyre!("Failed to load Eastern timezone: {e}"))?;
-			naive_date
-				.at(15, 30, 0, 0)
-				.to_zoned(eastern)
-				.map_err(|e| eyre!("Failed to create Eastern timezone datetime: {e}"))?
-				.timestamp()
-		};
-
-		fn parse_nums<T: std::str::FromStr + std::fmt::Display + std::fmt::Debug>(line: &str) -> Result<Vec<T>>
-		where
-			<T as std::str::FromStr>::Err: std::fmt::Display, {
-			line.split_whitespace()
-				.filter(|s| !s.is_empty())
-				.map(|s| s.replace(",", "").parse::<T>())
-				.collect::<std::result::Result<Vec<_>, _>>()
-				.map_err(|e| eyre!("Failed to parse numbers: {e}\nIn line: {line}"))
-		}
-
-		let positions = parse_nums::<f64>(&block[10])?;
-		let changes = parse_nums::<f64>(&block[13])?;
-		let percents = parse_nums::<f64>(&block[16])?;
-		let traders: &Vec<Option<u32>> = &block[19]
-			.split_whitespace()
-			.filter(|s| !s.is_empty())
-			.map(|s| if s == "." { None } else { s.parse().ok() })
-			.collect();
-
-		fn create_positions(start_idx: usize, positions: &[f64], changes: &[f64], percents: &[f64], traders: &[Option<u32>]) -> Result<Positions> {
-			Ok(Positions {
-				long: PositionsInfo::new(positions[start_idx], changes[start_idx], percents[start_idx], traders[start_idx]),
-				short: PositionsInfo::new(positions[start_idx + 1], changes[start_idx + 1], percents[start_idx + 1], traders[start_idx + 1]),
-				spreading: PositionsInfo::new(positions[start_idx + 2], changes[start_idx + 2], percents[start_idx + 2], traders[start_idx + 2]),
-			})
-		}
+	fn try_from(r: TffRow) -> Result<Self> {
+		let day = r.report_date_as_yyyy_mm_dd.split('T').next().unwrap_or(&r.report_date_as_yyyy_mm_dd);
+		let naive_date = Date::strptime("%Y-%m-%d", day).map_err(|e| eyre!("Failed to parse date `{day}`: {e}"))?;
+		let eastern = TimeZone::get("America/New_York").map_err(|e| eyre!("Failed to load Eastern timezone: {e}"))?;
+		let date = naive_date
+			.at(15, 30, 0, 0)
+			.to_zoned(eastern)
+			.map_err(|e| eyre!("Failed to create Eastern timezone datetime: {e}"))?
+			.timestamp();
 
 		Ok(CftcReport {
 			date,
-			dealer_intermidiary: create_positions(0, &positions, &changes, &percents, traders)?,
-			asset_manager_or_institutional: create_positions(3, &positions, &changes, &percents, traders)?,
-			leveraged_funds: create_positions(6, &positions, &changes, &percents, traders)?,
-			other_reportables: create_positions(9, &positions, &changes, &percents, traders)?,
-			_non_reportables: None,
+			dealer_intermidiary: Positions::new(
+				PositionsInfo::new(r.dealer_positions_long_all, r.change_in_dealer_long_all, r.pct_of_oi_dealer_long_all, r.traders_dealer_long_all),
+				PositionsInfo::new(
+					r.dealer_positions_short_all,
+					r.change_in_dealer_short_all,
+					r.pct_of_oi_dealer_short_all,
+					r.traders_dealer_short_all,
+				),
+				PositionsInfo::new(r.dealer_positions_spread_all, r.change_in_dealer_spread_all, r.pct_of_oi_dealer_spread_all, None),
+			),
+			asset_manager_or_institutional: Positions::new(
+				PositionsInfo::new(r.asset_mgr_positions_long, r.change_in_asset_mgr_long, r.pct_of_oi_asset_mgr_long, r.traders_asset_mgr_long_all),
+				PositionsInfo::new(
+					r.asset_mgr_positions_short,
+					r.change_in_asset_mgr_short,
+					r.pct_of_oi_asset_mgr_short,
+					r.traders_asset_mgr_short_all,
+				),
+				PositionsInfo::new(r.asset_mgr_positions_spread, r.change_in_asset_mgr_spread, r.pct_of_oi_asset_mgr_spread, None),
+			),
+			leveraged_funds: Positions::new(
+				PositionsInfo::new(r.lev_money_positions_long, r.change_in_lev_money_long, r.pct_of_oi_lev_money_long, r.traders_lev_money_long_all),
+				PositionsInfo::new(
+					r.lev_money_positions_short,
+					r.change_in_lev_money_short,
+					r.pct_of_oi_lev_money_short,
+					r.traders_lev_money_short_all,
+				),
+				PositionsInfo::new(
+					r.lev_money_positions_spread,
+					r.change_in_lev_money_spread,
+					r.pct_of_oi_lev_money_spread,
+					r.traders_lev_money_spread,
+				),
+			),
+			other_reportables: Positions::new(
+				PositionsInfo::new(
+					r.other_rept_positions_long,
+					r.change_in_other_rept_long,
+					r.pct_of_oi_other_rept_long,
+					r.traders_other_rept_long_all,
+				),
+				PositionsInfo::new(
+					r.other_rept_positions_short,
+					r.change_in_other_rept_short,
+					r.pct_of_oi_other_rept_short,
+					r.traders_other_rept_short,
+				),
+				PositionsInfo::new(r.other_rept_positions_spread, r.change_in_other_rept_spread, r.pct_of_oi_other_rept_spread, None),
+			),
 		})
 	}
 }
