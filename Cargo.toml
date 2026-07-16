@@ -90,7 +90,7 @@ derive_more = { version = "=2.1.1", features = ["from", "display", "deref", "der
 dockviewers = { version = "0.1.10", features = ["leptos"] }
 futures = "=0.3.32"
 gloo-timers = { version = "=0.4.0", features = ["futures"], optional = true }
-jiff = { version = "=0.2.32", features = ["serde"] }
+jiff = { version = "=0.2.32", features = ["serde", "tzdb-bundle-always"] } # bundle IANA tzdb into the binary — prod container ships no system tzdata
 js-sys = "=0.3.103"
 leptos = { version = "=0.8.20", features = ["islands"] }
 leptos-routable = { git = "https://github.com/stefanboere/leptos-routable" }
