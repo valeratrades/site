@@ -1,15 +1,11 @@
-// Loaded lazily inside mount() — a *static* top-level CDN import here becomes a hard dependency of
-// the wasm hydration bundle (site.js imports this snippet), so a slow/failed CDN would silently
-// stall hydration and blank the whole app.
-const CDN = "https://cdn.jsdelivr.net/npm/lightweight-charts@5/dist/lightweight-charts.standalone.production.mjs";
-let _lib;
-const lib = async () => (_lib ??= await import(CDN));
+// "What we chart" for the Market Structure dashboard. The chart↔host boilerplate (instance reuse,
+// lazy lib import, error→banner) lives in v_utils::lwc; this module only receives (chart, data, lib).
 
 const GREY = '#88888855';
 // axis is log-return space; show tags/ticks as the % move they represent, matching the legend
 const PCT = { type: 'custom', minMove: 0.0001, formatter: v => (v >= 0 ? '+' : '') + ((Math.exp(v) - 1) * 100).toFixed(1) + '%' };
 
-let chart, seriesByPair = new Map(), bulk, bulkHost;
+let seriesByPair = new Map(), bulk, bulkHost;
 
 // The grey background pairs, drawn as one canvas pass pinned to the chart's scales.
 // Non-interactive (no crosshair / legend), but zooms & pans with the real series.
@@ -54,29 +50,21 @@ class BulkLines {
   }
 }
 
-export async function mount(el, src) {
-  const { createChart, LineSeries } = await lib();
-  // Guard before .json(): a 500 (e.g. exchange ban, no cached copy) has a text body — parsing it
-  // throws, and under panic=abort a rejected await nukes the whole wasm app. Surface it as a banner.
-  const res = await fetch(src);
-  if (!res.ok) return `⚠ Exchange unavailable — ${(await res.text()).trim()}`;
-  const d = await res.json();
-  if (!chart) {
-    chart = createChart(el, {
-      autoSize: true,
-      layout: { background: { color: 'transparent' }, textColor: '#cbd5e1' },
-      grid: { vertLines: { color: '#ffffff10' }, horzLines: { color: '#ffffff10' } },
-      rightPriceScale: { borderVisible: false },
-      timeScale: { timeVisible: true, borderVisible: false },
-    });
-  }
+export function draw(chart, d, viewSpec, lib) {
+  const el = chart.chartElement().parentElement;
+  chart.applyOptions({
+    layout: { background: { color: 'transparent' }, textColor: '#cbd5e1' },
+    grid: { vertLines: { color: '#ffffff10' }, horzLines: { color: '#ffffff10' } },
+    rightPriceScale: { borderVisible: false },
+    timeScale: { timeVisible: true, borderVisible: false },
+  });
 
   const seen = new Set();
   d.series.forEach((m, i) => {
     seen.add(m.pair);
     let s = seriesByPair.get(m.pair);
     if (!s) {
-      s = chart.addSeries(LineSeries, { color: m.color, lineWidth: m.width, priceFormat: PCT, priceLineVisible: false, lastValueVisible: true, crosshairMarkerVisible: true });
+      s = chart.addSeries(lib.LineSeries, { color: m.color, lineWidth: m.width, priceFormat: PCT, priceLineVisible: false, lastValueVisible: true, crosshairMarkerVisible: true });
       seriesByPair.set(m.pair, s);
     } else {
       s.applyOptions({ color: m.color, lineWidth: m.width });
@@ -96,7 +84,6 @@ export async function mount(el, src) {
 
   chart.timeScale().fitContent();
   renderLegend(el, d.legend, d.title);
-  return d.stale ?? null;
 }
 
 function renderLegend(el, legend, title) {

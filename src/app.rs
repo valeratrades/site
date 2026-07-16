@@ -491,6 +491,11 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
 		<!DOCTYPE html>
 		<html lang="en">
 			<head>
+				// must precede any module import so the bare `lightweight-charts` specifier resolves
+				<script
+					type="importmap"
+					inner_html=r#"{"imports":{"lightweight-charts":"https://cdn.jsdelivr.net/npm/lightweight-charts@5/dist/lightweight-charts.standalone.production.mjs"}}"#
+				></script>
 				<meta charset="utf-8" />
 				<meta name="viewport" content="width=device-width, initial-scale=1" />
 				<AutoReload options=options.clone() />
