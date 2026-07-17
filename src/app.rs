@@ -491,15 +491,15 @@ pub fn shell(options: LeptosOptions) -> impl IntoView {
 		<!DOCTYPE html>
 		<html lang="en">
 			<head>
-				// must precede any module import so the bare `lightweight-charts` specifier resolves
-				<script
-					type="importmap"
-					inner_html=r#"{"imports":{"lightweight-charts":"https://cdn.jsdelivr.net/npm/lightweight-charts@5/dist/lightweight-charts.standalone.production.mjs"}}"#
-				></script>
-				<meta charset="utf-8" />
+				// must precede any module import so the bare `lightweight-charts` specifier resolves.
+				// builder instead of view-macro: static-view SSR renders `inner_html` as a literal attribute
+				{leptos::html::script()
+					.attr("type", "importmap")
+					.inner_html(
+						r#"{"imports":{"lightweight-charts":"https://cdn.jsdelivr.net/npm/lightweight-charts@5/dist/lightweight-charts.standalone.production.mjs"}}"#,
+					)} <meta charset="utf-8" />
 				<meta name="viewport" content="width=device-width, initial-scale=1" />
-				<AutoReload options=options.clone() />
-				<HydrationScripts options islands=true />
+				<AutoReload options=options.clone() /> <HydrationScripts options islands=true />
 				<MetaTags />
 			</head>
 			<body>
