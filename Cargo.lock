@@ -1506,9 +1506,9 @@ dependencies = [
 
 [[package]]
 name = "dockviewers"
-version = "0.1.10"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ce8dec92632db02c1feb1bb26f6ba7d3b7f062d40a414ee549a7514219a2c61"
+checksum = "d85ac8f9793482a46532cfe1814793ed57b46f52625888bff8df9fa2dca44a3c"
 dependencies = [
  "dockviewers_core",
  "dockviewers_leptos",
@@ -1516,9 +1516,9 @@ dependencies = [
 
 [[package]]
 name = "dockviewers_core"
-version = "0.1.10"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bade9be853021819187b7cd9deb188873bedf6a40f42983addcfabfc76e36d15"
+checksum = "fac6c814cb2f7d83c16f96303d7017ddab3ebb0dc43ef40368568fcc815293c3"
 dependencies = [
  "serde",
  "serde_json",
@@ -1528,9 +1528,9 @@ dependencies = [
 
 [[package]]
 name = "dockviewers_leptos"
-version = "0.1.10"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de2238157416928af142f74dd848af0dd63352fb67120898467296623cf89c02"
+checksum = "72e2e9eb1903a3de82d5fb74657d14c9bbb4ed5c3ab6d1fd2a0eacbd8ab091f3"
 dependencies = [
  "dockviewers_core",
  "leptos",
