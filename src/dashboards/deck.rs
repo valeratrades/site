@@ -1,19 +1,19 @@
 //! The dashboard rendered as a packed-grid dock: the five sub-dashboards become draggable/resizable
-//! panels. `s` saves the live arrangement; three saved layouts are kept, keyed by device band, so
-//! each screen class opens onto a sensible seed. This island is the whole dashboard now — its child
-//! views are plain components that hydrate within it.
+//! panels. `Alt+S` caches the live arrangement in this browser (dockviewers does that itself);
+//! `Alt+Shift+S` publishes it, admin-only, as the default every other visitor lands on. This island
+//! is the whole dashboard now — its child views are plain components that hydrate within it.
 
 #[cfg(feature = "ssr")]
 use std::path::PathBuf;
-use std::{cell::Cell, rc::Rc, sync::Arc};
+use std::{rc::Rc, sync::Arc};
 
-use dockviewers::leptos::{Breakpoint, Config, DockPanel, Group, Keybind, MinSize, PackedApi, PackedArea, PackedState, PanelId, Step};
+use dockviewers::leptos::{Config, DockPanel, Group, MinSize, PackedApi, PackedArea, PanelId, Saved, Step};
 use leptos::prelude::*;
 
 use super::{cme, fng, lsr, market_structure, vol};
 
-/// Every panel this deck hosts. A saved layout that doesn't cover all of these is treated as
-/// unusable on load (see `on_ready`) and replaced by the seed.
+/// Every panel this deck hosts. A layout that doesn't cover all of these is treated as unusable and
+/// replaced by the seed.
 const PANEL_IDS: [&str; 5] = ["market_structure", "lsr", "cme", "vol", "fng"];
 #[island]
 pub fn DashboardDeck() -> impl IntoView {
@@ -45,41 +45,40 @@ pub fn DashboardDeck() -> impl IntoView {
 		},
 	]);
 
-	// All client wiring lives here: `on_ready` fires once on the client with a `Copy` (`!Send`)
-	// `PackedApi`, so the reactive handles it spins up never cross the `Send + Sync` bound the prop
-	// demands. The `Rc<Cell>` remembers the band group last loaded so the effect — which re-fires on
-	// every layout edit (any `api.breakpoint()` read subscribes to the whole state) — only reloads
-	// when a resize actually crosses a band boundary.
-	let on_ready = Arc::new(move |api: PackedApi| {
-		let loaded: Rc<Cell<Option<&'static str>>> = Rc::new(Cell::new(None));
-		Effect::new(move |_| {
-			let key = seed_key(api.breakpoint());
-			if loaded.get() == Some(key) {
+	// Fires once per band entry, on the client, after dockviewers has already resolved its own
+	// localStorage cache — so this only has to cover what the cache didn't: the published default,
+	// then the built-in seed.
+	let on_band = Arc::new(move |api: PackedApi| {
+		if api.restored() {
+			if !hosts_every_panel(&api) {
+				leptos::logging::error!("cached layout is missing panels, using seed");
+				seed(&api);
+			}
+			return;
+		}
+		let band = api.band();
+		leptos::task::spawn_local(async move {
+			let loaded = load_layout(band.to_string()).await;
+			// A resize can cross into another band while this is in flight; that crossing ran its own
+			// `on_band`, and applying a stale band's layout over it would fight the newer one.
+			if api.band() != band {
 				return;
 			}
-			loaded.set(Some(key));
-			leptos::task::spawn_local(async move {
-				match load_layout(key.to_string()).await {
-					Ok(Some(json)) => {
-						// A parseable layout can still be unusable — empty, or missing panels (saved
-						// before a panel existed, or a truncated write) — and renders as a black empty
-						// dock. Re-seed unless every panel is actually hosted.
-						let usable = api.load(&json).is_ok() && {
-							let live: std::collections::HashSet<String> = api.tab_ids().into_iter().map(|p| p.0).collect();
-							PANEL_IDS.iter().all(|id| live.contains(*id))
-						};
-						if !usable {
-							leptos::logging::error!("saved layout unusable (corrupt or missing panels), using seed");
-							seed(&api);
-						}
-					}
-					Ok(None) => seed(&api),
-					Err(e) => {
-						leptos::logging::error!("load_layout failed, using seed: {e}");
+			match loaded {
+				Ok(Some(json)) => {
+					// A parseable layout can still be unusable — empty, or missing panels (published
+					// before a panel existed, or a truncated write) — and renders as a black empty dock.
+					if !(api.load(&json).is_ok() && hosts_every_panel(&api)) {
+						leptos::logging::error!("published layout unusable (corrupt or missing panels), using seed");
 						seed(&api);
 					}
 				}
-			});
+				Ok(None) => seed(&api),
+				Err(e) => {
+					leptos::logging::error!("load_layout failed, using seed: {e}");
+					seed(&api);
+				}
+			}
 		});
 	}) as Arc<dyn Fn(PackedApi) + Send + Sync>;
 
@@ -94,7 +93,7 @@ pub fn DashboardDeck() -> impl IntoView {
 	let mounted = RwSignal::new(false);
 	Effect::new(move |_| mounted.set(true));
 
-	// `s`-save feedback: the keybind sets this, the overlay below shows it, then it self-clears.
+	// Save feedback: the save hook sets this, the overlay below shows it, then it self-clears.
 	let toast = RwSignal::new(None::<String>);
 
 	view! {
@@ -103,7 +102,7 @@ pub fn DashboardDeck() -> impl IntoView {
 			style="position:relative; height:calc(100vh - 3.5rem); --dv-accent:#22c55e;"
 		>
 			<Show when=move || mounted.get() fallback=|| ()>
-				<PackedArea panels=panels config=keybinds(toast) on_ready=on_ready.clone() />
+				<PackedArea panels=panels config=dock_config(toast) on_band=on_band.clone() />
 			</Show>
 			{move || {
 				toast
@@ -119,14 +118,12 @@ pub fn DashboardDeck() -> impl IntoView {
 		</div>
 	}
 }
-/// Coarse device band → saved-layout key. Xl/Lg share `xl`, Sm/Xs share `sm`.
-fn seed_key(bp: Breakpoint) -> &'static str {
-	use Breakpoint::*;
-	match bp {
-		Xl | Lg => "xl",
-		Md => "md",
-		Sm | Xs => "sm",
-	}
+
+/// Whether the live layout actually hosts all of [`PANEL_IDS`] — the difference between a layout and
+/// a black rectangle.
+fn hosts_every_panel(api: &PackedApi) -> bool {
+	let live: std::collections::HashSet<String> = api.tab_ids().into_iter().map(|p| p.0).collect();
+	PANEL_IDS.iter().all(|id| live.contains(*id))
 }
 
 /// Built-in first-run arrangement: each panel its own group, packed left→right. Sizes are in grid
@@ -153,36 +150,37 @@ fn seed(api: &PackedApi) {
 	}
 }
 
-/// `s` persists the live arrangement under its band key, via dockviewers' own keydown path (the same
-/// one that drives `u`/`f`/`?`), so it inherits its editable-field guard and hydration timing. Built
-/// fresh per render so the `!Send` `Rc` action is born on the client, not captured by the island view.
-fn keybinds(toast: RwSignal<Option<String>>) -> Config {
+/// `Alt+S` is dockviewers' own per-band localStorage cache — nothing to do but say so. `Alt+Shift+S`
+/// is this host's addition: publish the arrangement as the default fresh visitors get, which the
+/// server rejects for non-admins. Built fresh per render so the `!Send` `Rc` hook is born on the
+/// client, not captured by the island view.
+fn dock_config(toast: RwSignal<Option<String>>) -> Config {
 	Config {
-		actions: vec![(
-			Keybind { key: "s", alt: false, ctrl: false },
-			std::rc::Rc::new(move |s: &mut PackedState| {
-				leptos::logging::log!("`s` pressed — saving layout");
-				let json = s.save();
-				let key = seed_key(s.breakpoint()).to_string();
-				leptos::task::spawn_local(async move {
-					let msg = match save_layout(key.clone(), json).await {
-						Ok(()) => format!("Layout saved ({key})"),
-						Err(e) => {
-							leptos::logging::error!("save_layout failed: {e}");
-							"Save failed".into()
-						}
-					};
-					toast.set(Some(msg));
-					#[cfg(target_arch = "wasm32")]
-					{
-						gloo_timers::future::TimeoutFuture::new(2500).await;
-						toast.set(None);
+		storage_key: Some("site-dashboard".into()),
+		on_save: Some(Rc::new(move |saved| match saved {
+			Saved::Cached { band } => show_toast(toast, format!("Layout cached ({band})")),
+			Saved::Published { band, json } => leptos::task::spawn_local(async move {
+				let msg = match save_layout(band.to_string(), json).await {
+					Ok(()) => format!("Layout published ({band})"),
+					Err(e) => {
+						leptos::logging::error!("save_layout failed: {e}");
+						"Publish failed".into()
 					}
-				});
-			}) as dockviewers::leptos::Action,
-		)],
+				};
+				show_toast(toast, msg);
+			}),
+		})),
 		..Default::default()
 	}
+}
+
+fn show_toast(toast: RwSignal<Option<String>>, msg: String) {
+	toast.set(Some(msg));
+	#[cfg(target_arch = "wasm32")]
+	leptos::task::spawn_local(async move {
+		gloo_timers::future::TimeoutFuture::new(2500).await;
+		toast.set(None);
+	});
 }
 
 #[cfg(feature = "ssr")]
@@ -190,11 +188,11 @@ fn layout_path(key: &str) -> PathBuf {
 	v_utils::xdg_cache_dir!("dashboards").join(format!("layout-{key}.json"))
 }
 
-//REVIEW: server-file persistence lives here per-host; evaluate upstreaming into `dockviewers`
-// (it ships a localStorage `persist` module) once this is proven — unify only if it removes real
-// duplication versus the localStorage / SQLite hosts.
+/// The site-wide default for one band. Admin-only: this is what every visitor who hasn't cached
+/// their own arrangement lands on.
 #[server]
 async fn save_layout(key: String, json: String) -> Result<(), ServerFnError> {
+	crate::admin::require_admin().await?;
 	std::fs::write(layout_path(&key), json).map_err(|e| ServerFnError::new(format!("write layout: {e}")))?;
 	Ok(())
 }

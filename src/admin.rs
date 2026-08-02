@@ -15,6 +15,23 @@ pub struct AdminFileInfo {
 	pub filename: String,
 }
 
+/// Reject anyone who isn't a configured admin. Any server fn that writes something the whole site
+/// then reads starts with this.
+#[cfg(feature = "ssr")]
+pub async fn require_admin() -> Result<(), ServerFnError> {
+	use crate::config::LiveSettings;
+
+	let user = crate::app::server_impl::get_current_user_impl().await?.ok_or_else(|| ServerFnError::new("Not logged in"))?;
+	let settings = use_context::<LiveSettings>()
+		.ok_or_else(|| ServerFnError::new("Settings not available"))?
+		.config()
+		.map_err(|e| ServerFnError::new(e.to_string()))?;
+	if !settings.admin.users.contains_key(&user.username) {
+		return Err(ServerFnError::new("Access denied: not an admin"));
+	}
+	Ok(())
+}
+
 #[server(GetAdminData)]
 pub async fn get_admin_data() -> Result<AdminData, ServerFnError> {
 	use crate::config::LiveSettings;
