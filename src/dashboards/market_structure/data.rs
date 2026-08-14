@@ -1,6 +1,7 @@
 use std::{collections::HashMap, sync::LazyLock, time::Duration};
 
 use color_eyre::eyre::{Result, bail};
+use exchange_interactions::prelude::*;
 use futures::{
 	lock::Mutex,
 	stream::{self, StreamExt as _},
@@ -8,8 +9,8 @@ use futures::{
 use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
-use v_exchanges::prelude::*;
-use v_utils::trades::{Pair, Timeframe};
+use trading_data_core::Pair;
+use v_utils::Timeframe;
 
 /// category10, cycled across highlighted (non-BTC) series
 const PALETTE: [&str; 10] = ["#1f77b4", "#ff7f0e", "#2ca02c", "#d62728", "#9467bd", "#8c564b", "#e377c2", "#7f7f7f", "#bcbd22", "#17becf"];

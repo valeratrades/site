@@ -4,11 +4,11 @@ use std::{
 };
 
 use color_eyre::eyre::{Result, bail};
+use exchange_interactions::{Lsrs, prelude::*};
 use futures::future::join_all;
 use serde::{Deserialize, Serialize};
 use tracing::{info, instrument, warn};
-use v_exchanges::{Lsrs, prelude::*};
-use v_utils::{trades::Timeframe, xdg_data_file};
+use v_utils::{Timeframe, xdg_data_file};
 
 #[instrument]
 pub async fn get(tf: Timeframe, range: RequestRange) -> Result<SortedLsrs> {
@@ -76,7 +76,7 @@ pub async fn get(tf: Timeframe, range: RequestRange) -> Result<SortedLsrs> {
 	Ok(sorted_lsrs)
 }
 /// Inner values are guaranteed to be sorted
-#[derive(Clone, Debug, Default, derive_more::Deref, derive_more::DerefMut, Deserialize, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, derive_more::Deref, derive_more::DerefMut)]
 pub struct SortedLsrs {
 	#[deref_mut]
 	#[deref]

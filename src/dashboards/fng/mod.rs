@@ -50,7 +50,7 @@ async fn try_build() -> Result<FngRendered, ServerFnError> {
 }
 #[cfg(feature = "ssr")]
 impl super::_core::SourceData for data::Fng {
-	fn decay_horizon() -> v_utils::trades::Timeframe {
+	fn decay_horizon() -> v_utils::Timeframe {
 		"1h".into()
 	}
 

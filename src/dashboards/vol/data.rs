@@ -101,7 +101,7 @@ pub async fn bvol(duration: Duration) -> Result<NowThen> {
 		bail!("Duration must be greater than 10m");
 	}
 
-	let bm = v_exchanges::bitmex::Bitmex::default();
+	let bm = exchange_interactions::bitmex::Bitmex::default();
 	let bvols = bm.bvol(duration).await.map_err(|e| {
 		tracing::warn!("Failed to fetch BVOL data from BitMEX: {e:?}");
 		eyre!("Failed to fetch BVOL data: {e}")
@@ -129,7 +129,7 @@ pub async fn vix(duration: Duration) -> Result<NowThen> {
 	}
 
 	let hours_floored = (duration.as_secs() / 3600) as u8; //NB: relies on previous check that should (for other reasons) ensure that this is a valid u8
-	v_exchanges::yahoo::vix_change("1h".into(), hours_floored).await.map_err(|e| {
+	exchange_interactions::yahoo::vix_change("1h".into(), hours_floored).await.map_err(|e| {
 		tracing::warn!("Failed to fetch VIX data from Yahoo Finance: {e:?}");
 		eyre!("Failed to fetch VIX data: {e}")
 	})

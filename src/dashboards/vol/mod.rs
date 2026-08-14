@@ -52,7 +52,7 @@ async fn try_pull() -> Result<VolData, ServerFnError> {
 }
 #[cfg(feature = "ssr")]
 impl super::_core::SourceData for VolData {
-	fn decay_horizon() -> v_utils::trades::Timeframe {
+	fn decay_horizon() -> v_utils::Timeframe {
 		"1h".into()
 	}
 

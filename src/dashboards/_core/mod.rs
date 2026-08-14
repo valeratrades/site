@@ -11,7 +11,7 @@ use color_eyre::eyre::Result;
 use futures::lock::Mutex as AsyncMutex;
 use jiff::{SignedDuration, Timestamp};
 use serde::{Serialize, de::DeserializeOwned};
-use v_utils::trades::Timeframe;
+use v_utils::Timeframe;
 
 pub trait SourceData: Sized + Serialize + DeserializeOwned + Send {
 	/// Refresh interval: once the persisted copy is older than this, the next `load` repolls.

@@ -53,7 +53,7 @@ async fn try_build() -> Result<CftcReportRendered, ServerFnError> {
 }
 #[cfg(feature = "ssr")]
 impl super::_core::SourceData for data::CftcReport {
-	fn decay_horizon() -> v_utils::trades::Timeframe {
+	fn decay_horizon() -> v_utils::Timeframe {
 		"6h".into() // report publishes weekly; a few polls/day catches the Friday release
 	}
 

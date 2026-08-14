@@ -7,7 +7,7 @@ use leptos::{
 	prelude::*,
 };
 use serde::{Deserialize, Serialize};
-use v_utils::trades::Pair;
+use trading_data_core::Pair;
 use web_sys::wasm_bindgen::JsValue;
 
 use super::{LoadingWithProgress, LoadingWithProgressProps};
@@ -126,7 +126,7 @@ pub struct RenderedLsr {
 	/// The LSR value (% longs) for sorting
 	pub value: f64,
 }
-#[derive(Clone, Debug, Default, derive_more::Deref, Deserialize, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize, derive_more::Deref)]
 pub struct RenderedLsrs {
 	#[deref]
 	pub v: Vec<RenderedLsr>,
@@ -354,7 +354,7 @@ async fn build_lsrs() -> Result<RenderedLsrs, ServerFnError> {
 }
 #[cfg(feature = "ssr")]
 impl super::_core::SourceData for data::SortedLsrs {
-	fn decay_horizon() -> v_utils::trades::Timeframe {
+	fn decay_horizon() -> v_utils::Timeframe {
 		"5m".into()
 	}
 

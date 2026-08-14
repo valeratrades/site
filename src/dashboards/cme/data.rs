@@ -2,7 +2,7 @@ use color_eyre::eyre::{Result, eyre};
 use jiff::{Timestamp, civil::Date, tz::TimeZone};
 use serde::{Deserialize, Serialize};
 use serde_with::{DisplayFromStr, serde_as};
-use v_utils::{NowThen, PrettyPrint};
+use v_utils::{NowThen, utils::PrettyPrint};
 
 #[allow(unused)]
 #[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, derive_new::new)]
