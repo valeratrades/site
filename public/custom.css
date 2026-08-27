@@ -6,6 +6,10 @@ body { font-family: monospace; }
 /* Text blocks wrap instead of clipping; <pre> default is white-space: pre. */
 pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 
+/* Pins the line box the dashboards' computed text floors are counted in (`src/dashboards/floor.rs`).
+   The explicit font-size also kills the 13px default browsers apply to bare `font-family: monospace`. */
+.dv-host pre { line-height: 1.25; font-size: 1rem; }
+
 /* Restore browser defaults for semantic HTML inside blog posts */
 .blog-post-content :where(h1, h2, h3, h4, h5, h6, p, ul, ol, li, a, blockquote, pre, code, figure, figcaption, table, th, td, hr, strong, em) {
   all: revert;

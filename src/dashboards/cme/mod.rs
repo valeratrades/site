@@ -2,12 +2,18 @@
 mod data;
 use leptos::{html::*, prelude::*};
 
-use super::{LoadingIndicator, LoadingIndicatorProps};
+use super::{LoadingIndicator, LoadingIndicatorProps, deck::publish, floor::Extent};
 
 #[component]
 pub fn CftcReportView() -> impl IntoView {
 	let trigger = RwSignal::new(());
 	let report_resource = Resource::new(move || trigger.get(), |_| async move { try_build().await });
+
+	Effect::new(move |_| {
+		if let Some(Ok(d)) = report_resource.get() {
+			publish("cme", Extent::of(&d.short));
+		}
+	});
 
 	// Set up retry interval - retry every 1 minute on error
 	#[cfg(not(feature = "ssr"))]

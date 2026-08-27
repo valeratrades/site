@@ -4,12 +4,18 @@ mod data;
 use leptos::{html::*, prelude::*};
 use v_utils::NowThen;
 
-use super::{LoadingIndicator, LoadingIndicatorProps};
+use super::{LoadingIndicator, LoadingIndicatorProps, deck::publish, floor::Extent};
 
 #[component]
 pub fn VolView() -> impl IntoView {
 	let trigger = RwSignal::new(());
 	let vol_resource = Resource::new(move || trigger.get(), move |_| async move { try_pull().await });
+
+	Effect::new(move |_| {
+		if let Some(Ok(d)) = vol_resource.get() {
+			publish("vol", Extent::of(&d.to_string()));
+		}
+	});
 
 	// Set up retry interval - retry every 1 minute on error
 	#[cfg(not(feature = "ssr"))]

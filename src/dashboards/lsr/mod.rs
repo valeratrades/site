@@ -10,7 +10,11 @@ use serde::{Deserialize, Serialize};
 use trading_data_core::Pair;
 use web_sys::wasm_bindgen::JsValue;
 
-use super::{LoadingWithProgress, LoadingWithProgressProps};
+use super::{LoadingWithProgress, LoadingWithProgressProps, deck::publish, floor::Extent};
+
+/// The search box: its `Search Dashboards` placeholder, plus `p-2` either side, on one input-tall
+/// row. Static markup, so it is measured once here rather than counted.
+const SEARCH: Extent = Extent { cols: 19, rows: 2 };
 
 /// Main wrapper component that fetches LSR data and passes it to both search and display
 #[component]
@@ -58,8 +62,11 @@ pub fn LsrView() -> impl IntoView {
 					let outliers = rendered_lsrs.outliers.clone();
 					let lsrs_vec = rendered_lsrs.v.clone();
 					(div().child((
-						pre().inner_html(outliers),
-						LsrSearchAndDisplayIsland(LsrSearchAndDisplayIslandProps { rendered_lsrs: lsrs_vec.clone() }),
+						pre().inner_html(outliers.clone()),
+						LsrSearchAndDisplayIsland(LsrSearchAndDisplayIslandProps {
+							rendered_lsrs: lsrs_vec.clone(),
+							outliers: Extent::of(&outliers),
+						}),
 					)),)
 						.into_any()
 				}
@@ -78,11 +85,26 @@ pub fn LsrView() -> impl IntoView {
 }
 
 #[component]
-pub fn LsrSearchAndDisplayIsland(rendered_lsrs: Vec<RenderedLsr>) -> impl IntoView {
+pub fn LsrSearchAndDisplayIsland(rendered_lsrs: Vec<RenderedLsr>, outliers: Extent) -> impl IntoView {
 	let rendered_lsrs_memo = Memo::new(move |_| rendered_lsrs.clone());
 
 	// Signal to track selected pairs from URL
 	let selected_pairs = RwSignal::new(Vec::<Pair>::new());
+
+	// The panel is the outlier block, the search box and the selected list stacked, plus `p-4`. The
+	// list contributes width only: it is a scroll region (see `LsrDisplay`), and a scroll region does
+	// not clip — so twenty selected pairs must not ratchet the tile's floor twenty rows taller.
+	Effect::new(move |_| {
+		let all = rendered_lsrs_memo.get();
+		let widest = selected_pairs
+			.get()
+			.iter()
+			.filter_map(|p| all.iter().find(|l| l.pair == *p))
+			.map(|l| Extent::of(&l.rend).cols)
+			.max()
+			.unwrap_or(0);
+		publish("lsr", outliers.above(SEARCH).above(Extent { cols: widest, rows: 1 }).pad(3, 2));
+	});
 
 	// Read URL params on mount and update selected_pairs
 	#[cfg(not(feature = "ssr"))]
@@ -200,7 +222,9 @@ fn LsrDisplay(rendered_lsrs: Memo<Vec<RenderedLsr>>, selected_pairs: RwSignal<Ve
 		selected_index.set(Some(idx));
 	};
 
-	div().class("mt-4 space-y-2").child(ForEnumerate(ForEnumerateProps {
+	// A scroll region, so the selected list never forces the tile taller — which is what lets the
+	// panel's computed floor count it as one row wide-but-short (see `LsrSearchAndDisplayIsland`).
+	div().class("mt-4 space-y-2").style("overflow-y:auto; min-height:0;").child(ForEnumerate(ForEnumerateProps {
 		each: move || selected_lsrs.get(),
 		key: |item| item.pair,
 		children: move |i: ReadSignal<usize>, item: RenderedLsr| {

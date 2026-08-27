@@ -89,8 +89,7 @@ color-eyre = "=0.6.5"
 console_error_panic_hook = { version = "=0.1.7", optional = true }
 derive-new = "=0.7.0"
 derive_more = { version = "=2.1.1", features = ["from", "display", "deref", "deref_mut", "debug"] }
-dockviewers = { version = "0.2.0", features = ["leptos"] }
-# was `v_exchanges`; renamed upstream, and only the new name carries the post-2.16 v_utils
+dockviewers = { version = "0.2.1", features = ["leptos"] }
 exchange_interactions = { version = "=0.19.2", features = ["binance", "bybit", "data"], optional = true }
 futures = "=0.3.32"
 gloo-net = { version = "=0.6.0", features = ["http"], optional = true }
@@ -133,6 +132,13 @@ xdg = { version = "=3.0.0", optional = true }
 # the same crate twice; nothing imports the 0.4 alias, it exists to carry the feature.
 getrandom = { version = "=0.3.4", features = ["wasm_js"] }
 getrandom_04 = { package = "getrandom", version = "=0.4.3", features = ["wasm_js"] }
+
+# ponytail: temporary — 0.2.1 (`PackedApi::set_min`, which the computed text floors need) is not
+# published yet. Drop this section the moment it is; the version requirement above is already honest.
+[patch.crates-io]
+dockviewers = { path = "/home/v/s/ev_invest/dockviewers/dockviewers" }
+dockviewers_core = { path = "/home/v/s/ev_invest/dockviewers/dockviewers_core" }
+dockviewers_leptos = { path = "/home/v/s/ev_invest/dockviewers/dockviewers_leptos" }
 
 [profile.wasm-release]
 inherits = "release"

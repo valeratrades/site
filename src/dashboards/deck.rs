@@ -5,16 +5,25 @@
 
 #[cfg(feature = "ssr")]
 use std::path::PathBuf;
-use std::{rc::Rc, sync::Arc};
+use std::{collections::HashMap, rc::Rc, sync::Arc};
 
 use dockviewers::leptos::{Config, DockPanel, Group, MinSize, PackedApi, PackedArea, PanelId, Saved, Step};
-use leptos::prelude::*;
+use leptos::{ev, prelude::*};
 
-use super::{cme, fng, lsr, market_structure, vol};
+use super::{cme, floor::Extent, fng, lsr, market_structure, vol};
 
 /// Every panel this deck hosts. A layout that doesn't cover all of these is treated as unusable and
 /// replaced by the seed.
 const PANEL_IDS: [&str; 5] = ["market_structure", "lsr", "cme", "vol", "fng"];
+
+/// A panel handing the deck the smallest box its current content fits in. Panics outside the deck —
+/// these views have no other host, so a missing context is a wiring bug, not a mode to degrade into.
+pub fn publish(id: &'static str, ext: Extent) {
+	let floors = use_context::<Floors>().expect("dashboard panels only render inside DashboardDeck");
+	floors.0.update(|m| {
+		m.insert(id, ext);
+	});
+}
 #[island]
 pub fn DashboardDeck() -> impl IntoView {
 	let panels = RwSignal::new(vec![
@@ -45,15 +54,29 @@ pub fn DashboardDeck() -> impl IntoView {
 		},
 	]);
 
+	provide_context(Floors(RwSignal::new(HashMap::new())));
+	let floors = use_context::<Floors>().expect("just provided");
+
+	// The live layout handle, and the counter that says "re-resolve the floors now". Two things move
+	// under a floor without the floor itself changing: a fresh layout (band crossing, seed, published
+	// load) has no mins yet, and `MinSize::Rem` resolves against `step_px = width / cols`, which
+	// rescales on every window drag — a floor set at 1920px is short by a third at 1400px in the same
+	// band. Both bump this.
+	let api_cell = RwSignal::new(None::<PackedApi>);
+	let refloor = RwSignal::new(0u32);
+	window_event_listener(ev::resize, move |_| refloor.update(|n| *n += 1));
+
 	// Fires once per band entry, on the client, after dockviewers has already resolved its own
 	// localStorage cache — so this only has to cover what the cache didn't: the published default,
 	// then the built-in seed.
 	let on_band = Arc::new(move |api: PackedApi| {
+		api_cell.set(Some(api));
 		if api.restored() {
 			if !hosts_every_panel(&api) {
 				leptos::logging::error!("cached layout is missing panels, using seed");
 				seed(&api);
 			}
+			refloor.update(|n| *n += 1);
 			return;
 		}
 		let band = api.band();
@@ -79,8 +102,24 @@ pub fn DashboardDeck() -> impl IntoView {
 					seed(&api);
 				}
 			}
+			refloor.update(|n| *n += 1);
 		});
 	}) as Arc<dyn Fn(PackedApi) + Send + Sync>;
+
+	// The join: every known floor, pushed into whatever layout is live. `set_min` is idempotent and a
+	// no-op for a panel the grid doesn't host, so re-running the whole map is cheaper than tracking
+	// which entry moved.
+	// Read off the same `Config` the dock runs on rather than retyped — `dock_config` leaves this
+	// field at its default, and building the real one here would hoist its `!Send` `Rc` into the
+	// island body (see the note on `dock_config`).
+	let title_h_rem = Config::default().title_h_rem;
+	Effect::new(move |_| {
+		refloor.track();
+		let Some(api) = api_cell.get() else { return };
+		for (id, ext) in floors.0.get() {
+			api.set_min(&PanelId(id.into()), ext.min_size(title_h_rem));
+		}
+	});
 
 	// A real height so the dock's first measure lands; the app nav sits above it. Defaults already
 	// ship a dark theme, so only the accent is nudged to the site's green.
@@ -118,6 +157,10 @@ pub fn DashboardDeck() -> impl IntoView {
 		</div>
 	}
 }
+/// The floors the text panels compute from what they render, keyed by panel id. Each panel writes
+/// its own; the deck joins them into the live layout (see [`publish`]).
+#[derive(Clone, Copy)]
+struct Floors(RwSignal<HashMap<&'static str, Extent>>);
 
 /// Whether the live layout actually hosts all of [`PANEL_IDS`] — the difference between a layout and
 /// a black rectangle.
@@ -127,18 +170,19 @@ fn hosts_every_panel(api: &PackedApi) -> bool {
 }
 
 /// Built-in first-run arrangement: each panel its own group, packed left→right. Sizes are in grid
-/// steps (~64 cols × 36 rows fill the container); mins are `Rem` so a panel can't shrink below its
-/// content's natural extent — the text panels floor at roughly their one/few readable lines, while
-/// the chart keeps an elastic-but-sane range.
+/// steps (~64 cols × 36 rows fill the container). The four text panels seed at the loosest possible
+/// floor — theirs is counted from the text they render and arrives with the data, one frame later
+/// (see [`super::floor`]); anything typed here would only be a number to go stale.
 fn seed(api: &PackedApi) {
 	api.reset();
+	const LOOSE: MinSize = MinSize::Steps { w: Step(1), h: Step(1) };
 	let specs: [(&str, u32, u32, MinSize); 5] = [
-		// floored at the current live session size — these two never work any smaller
+		// A canvas, not text: there is nothing to count, so its floor stays authored.
 		("market_structure", 29, 16, MinSize::Steps { w: Step(29), h: Step(16) }),
-		("lsr", 22, 16, MinSize::Steps { w: Step(11), h: Step(9) }),
-		("cme", 20, 12, MinSize::Rem { w: 24.0, h: 8.0 }),
-		("vol", 14, 4, MinSize::Rem { w: 16.0, h: 3.0 }),
-		("fng", 16, 4, MinSize::Rem { w: 20.0, h: 3.0 }),
+		("lsr", 22, 16, LOOSE),
+		("cme", 20, 12, LOOSE),
+		("vol", 14, 4, LOOSE),
+		("fng", 16, 4, LOOSE),
 	];
 	debug_assert!(
 		specs.len() == PANEL_IDS.len() && PANEL_IDS.iter().all(|id| specs.iter().any(|(s, ..)| s == id)),

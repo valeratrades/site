@@ -2,12 +2,18 @@
 mod data;
 use leptos::{html::*, prelude::*};
 
-use super::{LoadingIndicator, LoadingIndicatorProps};
+use super::{LoadingIndicator, LoadingIndicatorProps, deck::publish, floor::Extent};
 
 #[component]
 pub fn FngView() -> impl IntoView {
 	let trigger = RwSignal::new(());
 	let fng_resource = Resource::new(move || trigger.get(), |_| async move { try_build().await });
+
+	Effect::new(move |_| {
+		if let Some(Ok(d)) = fng_resource.get() {
+			publish("fng", Extent::of(&d.0));
+		}
+	});
 
 	// Set up retry interval - retry every 1 minute on error
 	#[cfg(not(feature = "ssr"))]
