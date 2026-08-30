@@ -1304,26 +1304,31 @@ fn VerifyForm() -> impl IntoView {
 						.attr("class", "inline-block px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"),
 					))
 					.into_any(),
-				Some(Err(e)) => div()
-					.class("text-center")
-					.child((
-						h1().class("text-2xl font-bold mb-4 text-red-600").child("Verification Failed"),
-						div().class("bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4").child(e),
-						A(AProps {
-							href: "/login".to_string(),
-							children: Box::new(|| view! { "Go to Login" }.into_any()),
-							target: None,
-							exact: false,
-							strict_trailing_slash: false,
-							scroll: true,
-						})
-						.attr("class", "inline-block px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"),
-					))
-					.into_any(),
+				Some(Err(e)) => auth_failure("Verification Failed", e, "Go to Login"),
 				None => div().class("text-center").child("Loading...").into_any(),
 			}
 		}
 	}
+}
+
+/// The failure panel both auth callbacks land on: what failed, the error itself, and the way back.
+fn auth_failure(title: &'static str, error: String, link: &'static str) -> AnyView {
+	div()
+		.class("text-center")
+		.child((
+			h1().class("text-2xl font-bold mb-4 text-red-600").child(title),
+			div().class("bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4").child(error),
+			A(AProps {
+				href: "/login".to_string(),
+				children: Box::new(move || link.into_any()),
+				target: None,
+				exact: false,
+				strict_trailing_slash: false,
+				scroll: true,
+			})
+			.attr("class", "inline-block px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"),
+		))
+		.into_any()
 }
 
 #[component]
@@ -1385,22 +1390,7 @@ fn GoogleCallbackHandler() -> impl IntoView {
 				))
 				.into_any()
 		} else if let Some(Err(e)) = status.get() {
-			div()
-				.class("text-center")
-				.child((
-					h1().class("text-2xl font-bold mb-4 text-red-600").child("Sign-in Failed"),
-					div().class("bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4").child(e),
-					A(AProps {
-						href: "/login".to_string(),
-						children: Box::new(|| view! { "Try Again" }.into_any()),
-						target: None,
-						exact: false,
-						strict_trailing_slash: false,
-						scroll: true,
-					})
-					.attr("class", "inline-block px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"),
-				))
-				.into_any()
+			auth_failure("Sign-in Failed", e, "Try Again")
 		} else {
 			div().class("text-center").child("Redirecting...").into_any()
 		}

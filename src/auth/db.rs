@@ -104,62 +104,43 @@ impl Database {
 		Ok(())
 	}
 
-	pub async fn get_user_by_email(&self, email: &str) -> Result<Option<(User, String)>> {
-		let row = sqlx::query("SELECT id, email, username, password_hash, display_name, avatar_url FROM users WHERE email = ? LIMIT 1")
-			.bind(email)
-			.fetch_optional(&self.pool)
-			.await
-			.wrap_err("failed to query user by email")?;
+	/// The lookup every `get_user_by_*` shares. `query` stays a literal at each call site so sqlx's
+	/// injection guard still applies — only the fetch and the row mapping are common.
+	async fn user_row(&self, query: &'static str, value: &str, what: &'static str) -> Result<Option<sqlx::sqlite::SqliteRow>> {
+		sqlx::query(query).bind(value).fetch_optional(&self.pool).await.wrap_err(what)
+	}
 
-		Ok(row.map(|r| {
-			(
-				User {
-					id: r.get("id"),
-					email: r.get("email"),
-					username: r.get("username"),
-					display_name: none_if_empty(r.get("display_name")),
-					avatar_url: none_if_empty(r.get("avatar_url")),
-				},
-				r.get("password_hash"),
+	pub async fn get_user_by_email(&self, email: &str) -> Result<Option<(User, String)>> {
+		let row = self
+			.user_row(
+				"SELECT id, email, username, password_hash, display_name, avatar_url FROM users WHERE email = ? LIMIT 1",
+				email,
+				"failed to query user by email",
 			)
-		}))
+			.await?;
+		Ok(row.map(|r| (user_from_row(&r), r.get("password_hash"))))
 	}
 
 	pub async fn get_user_by_username(&self, username: &str) -> Result<Option<(User, String)>> {
-		let row = sqlx::query("SELECT id, email, username, password_hash, display_name, avatar_url FROM users WHERE username = ? LIMIT 1")
-			.bind(username)
-			.fetch_optional(&self.pool)
-			.await
-			.wrap_err("failed to query user by username")?;
-
-		Ok(row.map(|r| {
-			(
-				User {
-					id: r.get("id"),
-					email: r.get("email"),
-					username: r.get("username"),
-					display_name: none_if_empty(r.get("display_name")),
-					avatar_url: none_if_empty(r.get("avatar_url")),
-				},
-				r.get("password_hash"),
+		let row = self
+			.user_row(
+				"SELECT id, email, username, password_hash, display_name, avatar_url FROM users WHERE username = ? LIMIT 1",
+				username,
+				"failed to query user by username",
 			)
-		}))
+			.await?;
+		Ok(row.map(|r| (user_from_row(&r), r.get("password_hash"))))
 	}
 
 	pub async fn get_user_by_id(&self, id: &str) -> Result<Option<User>> {
-		let row = sqlx::query("SELECT id, email, username, display_name, avatar_url FROM users WHERE id = ? LIMIT 1")
-			.bind(id)
-			.fetch_optional(&self.pool)
-			.await
-			.wrap_err("failed to query user by id")?;
-
-		Ok(row.map(|r| User {
-			id: r.get("id"),
-			email: r.get("email"),
-			username: r.get("username"),
-			display_name: none_if_empty(r.get("display_name")),
-			avatar_url: none_if_empty(r.get("avatar_url")),
-		}))
+		let row = self
+			.user_row(
+				"SELECT id, email, username, display_name, avatar_url FROM users WHERE id = ? LIMIT 1",
+				id,
+				"failed to query user by id",
+			)
+			.await?;
+		Ok(row.map(|r| user_from_row(&r)))
 	}
 
 	pub async fn email_exists(&self, email: &str) -> Result<bool> {
@@ -291,19 +272,14 @@ impl Database {
 	}
 
 	pub async fn get_user_by_google_id(&self, google_id: &str) -> Result<Option<User>> {
-		let row = sqlx::query("SELECT id, email, username, display_name, avatar_url FROM users WHERE google_id = ? LIMIT 1")
-			.bind(google_id)
-			.fetch_optional(&self.pool)
-			.await
-			.wrap_err("failed to query user by google id")?;
-
-		Ok(row.map(|r| User {
-			id: r.get("id"),
-			email: r.get("email"),
-			username: r.get("username"),
-			display_name: none_if_empty(r.get("display_name")),
-			avatar_url: none_if_empty(r.get("avatar_url")),
-		}))
+		let row = self
+			.user_row(
+				"SELECT id, email, username, display_name, avatar_url FROM users WHERE google_id = ? LIMIT 1",
+				google_id,
+				"failed to query user by google id",
+			)
+			.await?;
+		Ok(row.map(|r| user_from_row(&r)))
 	}
 
 	pub async fn create_google_user(&self, id: &str, email: &str, username: &str, google_id: &str, display_name: &str, avatar_url: &str) -> Result<()> {
@@ -441,6 +417,16 @@ pub struct AdminFileWithData {
 	pub uploaded_by: String,
 	pub uploaded_at: String,
 }
+fn user_from_row(r: &sqlx::sqlite::SqliteRow) -> User {
+	User {
+		id: r.get("id"),
+		email: r.get("email"),
+		username: r.get("username"),
+		display_name: none_if_empty(r.get("display_name")),
+		avatar_url: none_if_empty(r.get("avatar_url")),
+	}
+}
+
 fn none_if_empty(s: String) -> Option<String> {
 	if s.is_empty() { None } else { Some(s) }
 }

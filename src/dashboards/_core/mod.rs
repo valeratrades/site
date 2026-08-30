@@ -13,6 +13,7 @@ use jiff::{SignedDuration, Timestamp};
 use serde::{Serialize, de::DeserializeOwned};
 use v_utils::Timeframe;
 
+type SourceLocks = HashMap<&'static str, Arc<AsyncMutex<()>>>;
 pub trait SourceData: Sized + Serialize + DeserializeOwned + Send {
 	/// Refresh interval: once the persisted copy is older than this, the next `load` repolls.
 	/// Staleness (the client-facing warning) is a longer horizon — see [`load`].
@@ -130,7 +131,6 @@ fn past(age: SignedDuration, horizon: std::time::Duration) -> bool {
 fn source_lock<T: SourceData>() -> Arc<AsyncMutex<()>> {
 	LOCKS.lock().unwrap().entry(T::name()).or_insert_with(|| Arc::new(AsyncMutex::new(()))).clone()
 }
-type SourceLocks = HashMap<&'static str, Arc<AsyncMutex<()>>>;
 static LOCKS: LazyLock<Mutex<SourceLocks>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
 async fn fetch_tracked<T: SourceData>() -> Result<T> {
