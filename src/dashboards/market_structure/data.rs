@@ -180,7 +180,7 @@ async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, instru
 	//HACK: assumes we're never misaligned here
 	// ponytail: fixed cap keeps the per-pair burst under Binance's 2400 weight/min IP limit; tune if the universe grows
 	const CONCURRENCY: usize = 12;
-	let results: Vec<_> = stream::iter(pairs.to_vec().into_iter().map(|pair| {
+	let results: Vec<_> = stream::iter(pairs.iter().copied().map(|pair| {
 		let symbol = Symbol::new(pair, instrument);
 		async move {
 			let r = match get_historical_data(symbol, tf, range, exchange).await {

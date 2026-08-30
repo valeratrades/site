@@ -130,7 +130,8 @@ fn past(age: SignedDuration, horizon: std::time::Duration) -> bool {
 fn source_lock<T: SourceData>() -> Arc<AsyncMutex<()>> {
 	LOCKS.lock().unwrap().entry(T::name()).or_insert_with(|| Arc::new(AsyncMutex::new(()))).clone()
 }
-static LOCKS: LazyLock<Mutex<HashMap<&'static str, Arc<AsyncMutex<()>>>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+type SourceLocks = HashMap<&'static str, Arc<AsyncMutex<()>>>;
+static LOCKS: LazyLock<Mutex<SourceLocks>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
 async fn fetch_tracked<T: SourceData>() -> Result<T> {
 	REGISTRY.lock().unwrap().insert(

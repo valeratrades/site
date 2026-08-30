@@ -36,6 +36,10 @@ lib-profile-release = "wasm-release"
 [package.metadata.cargo-all-features]
 skip_feature_sets = [["ssr", "hydrate"]]
 
+# Reached only through a macro expansion, so no `use` of it exists to find.
+[package.metadata.cargo-machete]
+ignored = ["miette"]
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 #,}}}
@@ -54,7 +58,6 @@ hydrate = [
 ]
 ssr = [
     "dep:any_spawner",
-    "dep:pulldown-cmark",
     "dep:serde_json",
     "dep:exchange_interactions",
     "dep:axum",
@@ -62,17 +65,15 @@ ssr = [
     "dep:tracing",
     "dep:leptos_axum",
     "dep:reqwest",
-    "dep:arrow",
     "dep:sqlx",
     "dep:bcrypt",
     "dep:uuid",
-    "dep:tower-cookies",
     "dep:tower-http",
     "dep:lettre",
-    "dep:miette",
     "dep:oauth2",
     "dep:xdg",
     "dep:notify",
+    "dep:miette",
     "leptos/ssr",
     "leptos_meta/ssr",
     "leptos_router/ssr",
@@ -80,7 +81,6 @@ ssr = [
 
 [dependencies]
 any_spawner = { version = "=0.3.0", optional = true }
-arrow = { version = "=59.1.0", default-features = false, features = ["ipc"], optional = true }
 axum = { version = "=0.8.9", optional = true }
 base64 = "=0.22.1"
 bcrypt = { version = "=0.19.2", optional = true }
@@ -101,12 +101,12 @@ leptos-routable = { git = "https://github.com/stefanboere/leptos-routable" }
 leptos_axum = { version = "=0.8.10", optional = true }
 leptos_meta = { version = "=0.8.6" }
 leptos_router = { version = "=0.8.14" }
+# Named by the expansion of v_utils' `clientside!`, never by this crate's own source — which is why
+# it needs the cargo-machete exemption below.
 lettre = { version = "=0.11.22", features = ["tokio1-native-tls", "builder"], optional = true }
-miette = { version = "=7.6.0", features = ["fancy"], optional = true } # required in scope by v_utils' `clientside!` macro
+miette = { version = "=7.6.0", features = ["fancy"], optional = true }
 notify = { version = "=8.2.0", optional = true }
 oauth2 = { version = "=5.0.0", optional = true }
-proc-macro2 = "=1.0.106"
-pulldown-cmark = { version = "=0.13.4", optional = true }
 reqwest = { version = "=0.12.28", features = ["json"], optional = true } # pinned to 0.12: oauth2 5.0 has not migrated to reqwest 0.13 (its `request_async` only accepts its own reqwest 0.12 client type)
 send_wrapper = { version = "=0.6.0", optional = true }
 serde = { version = "=1.0.228", features = ["derive"] }
@@ -114,7 +114,6 @@ serde_json = { version = "=1.0.150", optional = true }
 serde_with = { version = "=3.21.0" }
 sqlx = { version = "^0.9", features = ["sqlite", "runtime-tokio"], optional = true }
 tokio = { version = "=1.53.1", features = ["rt-multi-thread"], optional = true }
-tower-cookies = { version = "=0.11.0", optional = true }
 tower-http = { version = "=0.7.0", features = ["fs", "compression-gzip"], optional = true }
 tracing = { version = "=0.1.44", optional = true }
 trading_data_core = "=0.3.0" # `Pair` et al., moved out of v_utils in 2.16; version matched to exchange_interactions' own

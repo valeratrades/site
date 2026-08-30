@@ -133,7 +133,7 @@ pub fn compile_blog_posts(blog_dir: &Path, output_dir: &Path) -> Vec<BlogPost> {
 	}
 
 	// Sort by creation time, newest first
-	posts.sort_by(|a, b| b.created.cmp(&a.created));
+	posts.sort_by_key(|p| std::cmp::Reverse(p.created));
 	posts
 }
 /// Initialize blog posts at startup and start file watcher. Call this from main.rs.

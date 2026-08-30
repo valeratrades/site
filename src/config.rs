@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 // MyConfigPrimitives now supplies its own Serialize impl, so deriving serde::Serialize too would conflict
 #[derive(Clone, Debug, v_utils::macros::MyConfigPrimitives)]
-#[cfg_attr(feature = "ssr", derive(v_utils::macros::Settings, v_utils::macros::LiveSettings))]
+#[cfg_attr(feature = "ssr", derive(v_utils::macros::LiveSettings, v_utils::macros::Settings))]
 pub struct Settings {
 	pub mock: Option<bool>,
 	/// Multiple of a source's refresh interval past which its cached copy is surfaced as stale.
