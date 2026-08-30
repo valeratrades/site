@@ -3076,12 +3076,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "macro-attr"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "00e51c6f0e2bf862b01b3d784fc32b02feb248a69062c51fb0b6d14cd526cc2a"
-
-[[package]]
 name = "manyhow"
 version = "0.11.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5948,14 +5942,13 @@ dependencies = [
 
 [[package]]
 name = "v_utils"
-version = "2.17.10"
+version = "2.17.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bbf4c257c82eae2e804f71fe223218e000580f7872dd3376f4cd36254c94b479"
+checksum = "86301ca713be2ae7ef08231ac7ec93c37d292e0f79b3a0128a2ce838f15ebe4c"
 dependencies = [
  "ahash",
  "bon",
  "config",
- "const_format",
  "derive-new",
  "derive_more",
  "dirs",
@@ -5964,12 +5957,10 @@ dependencies = [
  "facet-json",
  "facet-toml",
  "function_name",
- "futures",
  "indexmap 2.14.0",
  "insta",
  "js-sys",
  "libc",
- "macro-attr",
  "miette",
  "rand 0.10.2",
  "rand_distr",
@@ -5982,7 +5973,6 @@ dependencies = [
  "toml",
  "tracing",
  "tracing-error",
- "tracing-log",
  "tracing-subscriber",
  "ustr",
  "v_utils_macros",
@@ -5994,11 +5984,10 @@ dependencies = [
 
 [[package]]
 name = "v_utils_macros"
-version = "2.12.7"
+version = "2.12.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29d9e383ef5d7f448c0d71f11fec179c2e6c97336ade6a2fe8ccacdc2266c7c1"
+checksum = "8a90b2a794b3e1b5adbe1d9a62e9d0b4c9cf5d0523b5d56451044c19230c2abd"
 dependencies = [
- "eyre",
  "heck 0.5.0",
  "proc-macro2",
  "quote",

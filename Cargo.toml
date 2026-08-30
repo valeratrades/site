@@ -116,7 +116,7 @@ tower-http = { version = "=0.7.0", features = ["fs", "compression-gzip"], option
 tracing = { version = "=0.1.44", optional = true }
 trading_data_core = "=0.3.0" # `Pair` et al., moved out of v_utils in 2.16; version matched to exchange_interactions' own
 uuid = { version = "=1.24.0", features = ["v4"], optional = true }
-v_utils = { version = "=2.17.10", features = ["cli", "xdg", "lightweight_charts"] }
+v_utils = { version = "=2.17.12", features = ["cli", "xdg", "lightweight_charts"] }
 wasm-bindgen = "=0.2.126" #NB: version must match that of wasm-bindgen-cli (pinned in flake.nix)
 wasm-bindgen-futures = "=0.4.76"
 web-sys = { version = "=0.3.103", features = ["Navigator", "Clipboard", "Document", "Element", "HtmlElement", "HtmlInputElement", "FileList", "File", "Blob", "BlobPropertyBag", "Url", "HtmlAnchorElement"] }
