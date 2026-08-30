@@ -87,12 +87,21 @@
           src = ./.;
           filter = path: _type: baseNameOf path != ".cargo";
         };
+        # v_utils' `lightweight_charts` feature `include_str!`s this, and its build.rs would `curl`
+        # it — which the hermetic sandbox forbids. Fetched here instead (a fixed-output derivation,
+        # the one place network is allowed) and handed over via `LWC_MJS`. Version and hash must
+        # match the crate's own pin; a mismatch fails its assert rather than reaching a browser.
+        lightweightCharts = pkgs.fetchurl {
+          url = "https://cdn.jsdelivr.net/npm/lightweight-charts@5.2.0/dist/lightweight-charts.standalone.production.mjs";
+          sha256 = "66ac22df1b08de08ec2fae2b401b0f9731a4653a28e18a9837c7c3553c33dbe2";
+        };
         siteBin = rustPlatform.buildRustPackage {
           inherit pname;
           version = manifest.version;
 
           # No `.git` in the hermetic sandbox — hand build.rs the commit for the BuildTag.
           SITE_BUILD_REV = self.shortRev or self.dirtyShortRev or "";
+          LWC_MJS = lightweightCharts;
 
           src = pureSrc;
           cargoLock = {
