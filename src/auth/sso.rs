@@ -44,11 +44,6 @@ pub fn cleared_access_cookie(settings: &Settings) -> Option<HeaderValue> {
 	settings.sso.as_ref().map(|sso| cookie(settings, sso, &format!("{}=; Max-Age=0", va_sso::COOKIE)))
 }
 
-fn cookie(settings: &Settings, sso: &SsoConf, value: &str) -> HeaderValue {
-	let domain = sso.cookie_domain.as_ref().map(|d| format!("; Domain={d}")).unwrap_or_default();
-	HeaderValue::from_str(&format!("{value}; Path=/; HttpOnly; SameSite=Lax{domain}{}", secure(settings))).expect("a JWT and a domain are header-safe")
-}
-
 /// `; Secure` when the site is served over https.
 pub fn secure(settings: &Settings) -> &'static str {
 	match settings.site_url.starts_with("https://") {
@@ -56,12 +51,10 @@ pub fn secure(settings: &Settings) -> &'static str {
 		false => "",
 	}
 }
-
 #[derive(serde::Deserialize)]
 pub struct RefreshQuery {
 	return_to: String,
 }
-
 /// Signed in: a fresh `va_access`, and back to `return_to`. Not: the login page, which comes back here.
 pub async fn refresh(State((live, db)): State<(LiveSettings, Database)>, headers: HeaderMap, Query(q): Query<RefreshQuery>) -> Response {
 	let settings = live.config().expect("the config loaded at start");
@@ -85,8 +78,15 @@ pub async fn refresh(State((live, db)): State<(LiveSettings, Database)>, headers
 		let back = format!("/auth/refresh?return_to={}", urlencoding(&q.return_to));
 		return Redirect::to(&format!("/login?redirect_to={}", urlencoding(&back))).into_response();
 	};
-	let cookie = access_cookie(&settings, &db, &user).await.expect("the signing key parsed at start").expect("sso is configured");
+	let cookie = access_cookie(&settings, &db, &user)
+		.await
+		.expect("sso.signing_key_pem is an Ed25519 PKCS#8 PEM")
+		.expect("sso is configured");
 	([(header::SET_COOKIE, cookie)], Redirect::to(&q.return_to)).into_response()
+}
+fn cookie(settings: &Settings, sso: &SsoConf, value: &str) -> HeaderValue {
+	let domain = sso.cookie_domain.as_ref().map(|d| format!("; Domain={d}")).unwrap_or_default();
+	HeaderValue::from_str(&format!("{value}; Path=/; HttpOnly; SameSite=Lax{domain}{}", secure(settings))).expect("a JWT and a domain are header-safe")
 }
 
 fn returns_to_cookie_host(settings: &Settings, sso: &SsoConf, return_to: &str) -> bool {
