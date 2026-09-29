@@ -74,10 +74,11 @@
         combined = v_flakes.utils.combine { inherit rust; modules = [ rs github readme ]; };
       in
       let
-        rustc = rust;
-        cargo = rust;
+        build_rust = v_flakes.rs.build_nightly system;
         rustPlatform = pkgs.makeRustPlatform {
-          inherit rustc cargo stdenv;
+          rustc = build_rust;
+          cargo = build_rust;
+          inherit stdenv;
         };
         # `.cargo` holds dev-only accelerators (sccache rustc-wrapper, cranelift,
         # mold) the hermetic sandbox lacks — drop it so the pure build uses nix's
@@ -232,6 +233,7 @@
             mounts = [ "/data" ];
             workingDir = "/data";
             imageEnv = [ "HOME=/data" ];
+            sqlite = [ "/data/.local/state/site/db.sqlite3" ];
           };
         };
       in
