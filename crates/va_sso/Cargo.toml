@@ -1,0 +1,15 @@
+[package]
+name = "va_sso"
+version = "0.1.0"
+edition = "2024"
+description = "The valeratrades.com sign-in cookie: its claims, minting and verification"
+license = "BlueOak-1.0.0"
+repository = "https://github.com/valeratrades/site"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+
+jsonwebtoken = { workspace = true, features = ["use_pem", "rust_crypto"] }
+
+[lints]
+workspace = true

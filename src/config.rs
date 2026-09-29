@@ -21,6 +21,13 @@ pub struct Settings {
 	#[serde(default)]
 	#[primitives(skip)]
 	pub admin: AdminConf,
+	/// The `va_access` cookie other valeratrades.com services sign in with; unset, none is set.
+	#[serde(default)]
+	pub sso: Option<SsoConf>,
+	/// Group name → the verified emails in it, carried in `va_access`; members of `admin` are its admins.
+	#[serde(default)]
+	#[primitives(skip)]
+	pub groups: HashMap<String, Vec<String>>,
 }
 impl Settings {
 	pub fn mock(&self) -> bool {
@@ -41,6 +48,8 @@ impl Default for Settings {
 			google_oauth: GoogleOAuthConfig::default(),
 			site_url: __default_site_url(),
 			admin: AdminConf::default(),
+			sso: None,
+			groups: HashMap::new(),
 		}
 	}
 }
@@ -76,6 +85,15 @@ impl GoogleOAuthConfig {
 	pub fn is_configured(&self) -> bool {
 		!self.client_id.is_empty() && !self.client_secret.is_empty()
 	}
+}
+
+#[derive(Clone, Debug, v_utils::macros::MyConfigPrimitives, v_utils::macros::SettingsNested)]
+pub struct SsoConf {
+	/// Ed25519 private key, PKCS#8 PEM
+	pub signing_key_pem: String,
+	/// `valeratrades.com` shares the cookie with every subdomain; unset, it stays on this host.
+	/// `/auth/refresh` returns only to the hosts that receive it.
+	pub cookie_domain: Option<String>,
 }
 
 fn __default_site_url() -> String {

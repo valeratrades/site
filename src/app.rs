@@ -79,13 +79,9 @@ pub mod server_impl {
 			info!("Registration successful, verification email sent");
 			Ok("Please check your email to verify your account".to_string())
 		} else {
-			// SMTP not configured, auto-verify for dev
-			db.mark_email_verified(&user_id).await.map_err(|e| {
-				error!("Failed to mark email verified: {e}");
-				ServerFnError::new(format!("Failed to verify email: {e}"))
-			})?;
-			info!("Registration successful (SMTP not configured, auto-verified)");
-			Ok("Account created (email verification skipped - SMTP not configured)".to_string())
+			// the email stays unverified, so it carries no groups to other services (auth::sso)
+			info!("Registration successful (SMTP not configured, email unverified)");
+			Ok("Account created (email unverified - SMTP not configured)".to_string())
 		}
 	}
 
@@ -151,25 +147,7 @@ pub mod server_impl {
 			return Err(ServerFnError::new("Please verify your email before logging in"));
 		}
 
-		// Create session
-		let session_id = uuid::Uuid::new_v4().to_string();
-		db.create_session(&session_id, &user.id, 24 * 7).await.map_err(|e| {
-			error!("Failed to create session: {e}");
-			ServerFnError::new(format!("Failed to create session: {e}"))
-		})?;
-
-		// Set cookie via response header
-		use leptos_axum::ResponseOptions;
-		if let Some(response) = use_context::<ResponseOptions>() {
-			response.insert_header(
-				axum::http::header::SET_COOKIE,
-				axum::http::HeaderValue::from_str(&format!(
-					"session_id={session_id}; Path=/; HttpOnly; SameSite=Lax; Max-Age={}",
-					60 * 60 * 24 * 7 // 1 week in seconds
-				))
-				.unwrap(),
-			);
-		}
+		start_session(&settings, &db, &user).await?;
 
 		info!("Login successful");
 		Ok(user)
@@ -223,12 +201,13 @@ pub mod server_impl {
 			let _ = db.delete_session(&session_id).await;
 		}
 
-		// Clear cookie
-		if let Some(response) = use_context::<ResponseOptions>() {
-			response.insert_header(
-				axum::http::header::SET_COOKIE,
-				axum::http::HeaderValue::from_str("session_id=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0").unwrap(),
-			);
+		let response = use_context::<ResponseOptions>().expect("server fns run with response options");
+		response.append_header(
+			axum::http::header::SET_COOKIE,
+			axum::http::HeaderValue::from_static("session_id=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0"),
+		);
+		if let Some(access) = crate::auth::sso::cleared_access_cookie(&get_settings()?) {
+			response.append_header(axum::http::header::SET_COOKIE, access);
 		}
 
 		Ok(())
@@ -314,6 +293,9 @@ pub mod server_impl {
 			.await
 			.map_err(|e| ServerFnError::new(format!("Failed to parse user info: {e}")))?;
 
+		if !user_info.verified_email {
+			return Err(ServerFnError::new("Google has not verified this account's email"));
+		}
 		let display_name = user_info.name.unwrap_or_default();
 		let avatar_url = user_info.picture.unwrap_or_default();
 
@@ -352,28 +334,40 @@ pub mod server_impl {
 			}
 		};
 
-		// Create session
-		let session_id = uuid::Uuid::new_v4().to_string();
-		db.create_session(&session_id, &user.id, 24 * 7)
-			.await
-			.map_err(|e| ServerFnError::new(format!("Failed to create session: {e}")))?;
-
-		// Set cookie
-		use leptos_axum::ResponseOptions;
-		if let Some(response) = use_context::<ResponseOptions>() {
-			response.insert_header(
-				axum::http::header::SET_COOKIE,
-				axum::http::HeaderValue::from_str(&format!("session_id={session_id}; Path=/; HttpOnly; SameSite=Lax; Max-Age={}", 60 * 60 * 24 * 7)).unwrap(),
-			);
-		}
+		start_session(&settings, &db, &user).await?;
 
 		Ok(user)
+	}
+
+	/// `session_id` for this site, and `va_access` for its subdomains.
+	async fn start_session(settings: &Settings, db: &Database, user: &User) -> Result<(), ServerFnError> {
+		use leptos_axum::ResponseOptions;
+		let session_id = uuid::Uuid::new_v4().to_string();
+		db.create_session(&session_id, &user.id, 24 * 7).await.map_err(|e| {
+			error!("Failed to create session: {e}");
+			ServerFnError::new(format!("Failed to create session: {e}"))
+		})?;
+		let access = crate::auth::sso::access_cookie(settings, db, user)
+			.await
+			.map_err(|e| ServerFnError::new(format!("Failed to sign the access cookie: {e}")))?;
+		let response = use_context::<ResponseOptions>().expect("server fns run with response options");
+		let session = format!(
+			"session_id={session_id}; Path=/; HttpOnly; SameSite=Lax; Max-Age={}{}",
+			60 * 60 * 24 * 7,
+			crate::auth::sso::secure(settings)
+		);
+		response.append_header(axum::http::header::SET_COOKIE, axum::http::HeaderValue::from_str(&session).expect("a uuid is header-safe"));
+		if let Some(access) = access {
+			response.append_header(axum::http::header::SET_COOKIE, access);
+		}
+		Ok(())
 	}
 
 	#[derive(serde::Deserialize)]
 	pub struct GoogleUserInfo {
 		pub id: String,
 		pub email: String,
+		pub verified_email: bool,
 		pub name: Option<String>,
 		pub picture: Option<String>,
 	}
@@ -790,7 +784,8 @@ fn LoginForm() -> impl IntoView {
 		if let Some(window) = web_sys::window() {
 			if let Ok(search) = window.location().search() {
 				if let Ok(params) = web_sys::UrlSearchParams::new_with_str(&search) {
-					if let Some(redirect) = params.get("redirect_to") {
+					// a path on this site only: anywhere else goes through /auth/refresh, which checks the host
+					if let Some(redirect) = params.get("redirect_to").filter(|r| r.starts_with('/') && !r.starts_with("//")) {
 						redirect_to.set(redirect);
 					}
 				}
@@ -1038,6 +1033,10 @@ fn LoginForm() -> impl IntoView {
 											.on(ev::click, move |_| {
 												google_loading.set(true);
 												error.set(None);
+												// Google returns to /auth/google/callback, which picks this up
+												if let Some(storage) = web_sys::window().and_then(|w| w.session_storage().ok().flatten()) {
+													let _ = storage.set_item("redirect_to", &redirect_to.get());
+												}
 												wasm_bindgen_futures::spawn_local(async move {
 													match google_auth_start().await {
 														Ok(url) =>
@@ -1358,12 +1357,15 @@ fn GoogleCallbackHandler() -> impl IntoView {
 					(Some(code), Some(state)) => {
 						wasm_bindgen_futures::spawn_local(async move {
 							match google_auth_callback(code, state).await {
-								Ok(_) => {
-									// Redirect to home on success
+								Ok(_) =>
 									if let Some(window) = web_sys::window() {
-										let _ = window.location().set_href("/");
-									}
-								}
+										let storage = window.session_storage().ok().flatten();
+										let to = storage.as_ref().and_then(|s| s.get_item("redirect_to").ok().flatten()).unwrap_or_else(|| "/".into());
+										if let Some(s) = &storage {
+											let _ = s.remove_item("redirect_to");
+										}
+										let _ = window.location().set_href(&to);
+									},
 								Err(e) => {
 									status.set(Some(Err(e.to_string())));
 									is_loading.set(false);

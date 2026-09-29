@@ -300,14 +300,17 @@ impl Database {
 	}
 
 	pub async fn link_google_to_user(&self, user_id: &str, google_id: &str, avatar_url: &str, display_name: &str) -> Result<()> {
-		sqlx::query("UPDATE users SET google_id = ?, email_verified = 1, avatar_url = ?, display_name = ? WHERE id = ?")
-			.bind(google_id)
-			.bind(avatar_url)
-			.bind(display_name)
-			.bind(user_id)
-			.execute(&self.pool)
-			.await
-			.wrap_err("failed to link google to user")?;
+		// a password set before the email was proven could be anyone's
+		sqlx::query(
+			"UPDATE users SET google_id = ?, password_hash = CASE email_verified WHEN 1 THEN password_hash ELSE '' END, email_verified = 1, avatar_url = ?, display_name = ? WHERE id = ?",
+		)
+		.bind(google_id)
+		.bind(avatar_url)
+		.bind(display_name)
+		.bind(user_id)
+		.execute(&self.pool)
+		.await
+		.wrap_err("failed to link google to user")?;
 		Ok(())
 	}
 

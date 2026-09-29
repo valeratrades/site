@@ -169,6 +169,22 @@
         # cwd in /data (the persistent mount) with the read-only pieces symlinked
         # from the store. HOME=/data puts the sqlite db + dashboard caches (XDG
         # paths) on the same mount.
+        # Baked into the image; secrets come from the container's env through `{ env = … }`.
+        prodConfig = (pkgs.formats.toml { }).generate "site.toml" {
+          site_url = "https://valeratrades.com";
+          google_oauth = {
+            client_id = "350565753492-iltccminubv2bi8b6m1355mdsdmo6238.apps.googleusercontent.com";
+            client_secret = { env = "GOOGLE_CLIENT_SECRET"; };
+          };
+          sso = {
+            signing_key_pem = { env = "SSO_SIGNING_KEY_PEM"; };
+            cookie_domain = "valeratrades.com";
+          };
+          groups = {
+            admin = [ "v79166789533@gmail.com" "valeratrades@gmail.com" ];
+            service-arb = [ "v79166789533@gmail.com" ];
+          };
+        };
         prodRun = pkgs.writeShellApplication {
           name = "${pname}-prod";
           runtimeInputs = with pkgs; [ coreutils typst ];
@@ -179,7 +195,7 @@
             ln -sfn ${./Cargo.toml} Cargo.toml
             export LEPTOS_SITE_ADDR="''${LEPTOS_SITE_ADDR:-0.0.0.0:61156}"
             export LEPTOS_ENV=PROD
-            exec ${siteBin}/bin/${pname}
+            exec ${siteBin}/bin/${pname} --config ${prodConfig}
           '';
         };
         # `nix run .#dev` → `cargo leptos watch`, from anywhere in the repo.
