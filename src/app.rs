@@ -319,7 +319,6 @@ pub mod server_impl {
 				..existing_user
 			}
 		} else {
-			// Create new user — username defaults to full email
 			let user_id = uuid::Uuid::new_v4().to_string();
 			let username = user_info.email.clone();
 			db.create_google_user(&user_id, &user_info.email, &username, &user_info.id, &display_name, &avatar_url)
@@ -332,6 +331,17 @@ pub mod server_impl {
 				display_name: if display_name.is_empty() { None } else { Some(display_name) },
 				avatar_url: if avatar_url.is_empty() { None } else { Some(avatar_url) },
 			}
+		};
+
+		// a username still equal to the email was never chosen: the Google name, if free, replaces it
+		let user = match &user.display_name {
+			Some(name) if user.username == user.email && name.len() <= 64 && !db.username_exists(name).await.map_err(|e| ServerFnError::new(format!("Database error: {e}")))? => {
+				db.update_username(&user.id, name)
+					.await
+					.map_err(|e| ServerFnError::new(format!("Failed to update username: {e}")))?;
+				User { username: name.clone(), ..user }
+			}
+			_ => user,
 		};
 
 		start_session(&settings, &db, &user).await?;

@@ -54,6 +54,14 @@ impl Verifier {
 		})
 	}
 
+	/// The minting side's own verifier, from its signing key.
+	pub fn try_from_signing_key(signing_key_pem: &str) -> Result<Self, Error> {
+		use ed25519_dalek::pkcs8::{DecodePrivateKey, EncodePublicKey, spki::der::pem::LineEnding};
+		let invalid = || Error::from(jsonwebtoken::errors::ErrorKind::InvalidKeyFormat);
+		let key = ed25519_dalek::SigningKey::from_pkcs8_pem(signing_key_pem).map_err(|_| invalid())?;
+		Self::try_new(&key.verifying_key().to_public_key_pem(LineEnding::LF).map_err(|_| invalid())?)
+	}
+
 	pub fn verify(&self, token: &str) -> Result<Claims, Error> {
 		Ok(jsonwebtoken::decode::<Wire>(token, &self.key, &self.validation)?.claims.claims)
 	}
@@ -94,6 +102,7 @@ mod tests {
 		let v = Verifier::try_new(PUBLIC).unwrap();
 		let c = claims(now() + 900);
 		assert_eq!(v.verify(&mint(PRIVATE, c.clone()).unwrap()).unwrap(), c);
+		assert_eq!(Verifier::try_from_signing_key(PRIVATE).unwrap().verify(&mint(PRIVATE, c.clone()).unwrap()).unwrap(), c);
 		assert!(v.verify(&mint(PRIVATE, claims(now() - 3600)).unwrap()).is_err(), "expired");
 		let hs = jsonwebtoken::encode(&Header::default(), &c, &EncodingKey::from_secret(b"x")).unwrap();
 		assert!(v.verify(&hs).is_err(), "not EdDSA");

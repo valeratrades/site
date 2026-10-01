@@ -9,6 +9,7 @@ repository = "https://github.com/valeratrades/site"
 [dependencies]
 serde = { version = "1", features = ["derive"] }
 
+ed25519-dalek = { workspace = true, features = ["pkcs8", "pem"] }
 jsonwebtoken = { workspace = true, features = ["use_pem", "rust_crypto"] }
 
 [lints]

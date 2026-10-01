@@ -1,8 +1,9 @@
 //! valeratrades.com as the sign-in for its subdomains: the `va_access` cookie ([`va_sso`]) set
 //! beside `session_id`, and `/auth/refresh`, where a service sends a browser whose cookie is
-//! missing or expired.
+//! missing or expired. `/auth/members` lists a group for those services' admins.
 
 use axum::{
+	Json,
 	extract::{Query, State},
 	http::{HeaderMap, HeaderValue, StatusCode, header},
 	response::{IntoResponse, Redirect, Response},
@@ -64,13 +65,7 @@ pub async fn refresh(State((live, db)): State<(LiveSettings, Database)>, headers
 	if !returns_to_cookie_host(&settings, sso, &q.return_to) {
 		return (StatusCode::BAD_REQUEST, format!("{} does not receive this site's sign-in cookie", q.return_to)).into_response();
 	}
-	let session = headers
-		.get_all(header::COOKIE)
-		.iter()
-		.filter_map(|v| v.to_str().ok())
-		.flat_map(|v| v.split(';'))
-		.find_map(|c| c.trim().strip_prefix("session_id="));
-	let user = match session {
+	let user = match cookie_value(&headers, "session_id") {
 		Some(s) => db.get_session_user(s).await.expect("the session table is readable"),
 		None => None,
 	};
@@ -84,6 +79,56 @@ pub async fn refresh(State((live, db)): State<(LiveSettings, Database)>, headers
 		.expect("sso is configured");
 	([(header::SET_COOKIE, cookie)], Redirect::to(&q.return_to)).into_response()
 }
+#[derive(serde::Deserialize)]
+pub struct MembersQuery {
+	group: String,
+}
+/// `group` and the admins, with their accounts. For admins, by the `va_access` a service forwards.
+pub async fn members(State((live, db)): State<(LiveSettings, Database)>, headers: HeaderMap, Query(q): Query<MembersQuery>) -> Response {
+	let settings = live.config().expect("the config loaded at start");
+	let Some(sso) = &settings.sso else {
+		return (StatusCode::NOT_FOUND, "sign-in for other services is not configured here").into_response();
+	};
+	let verifier = va_sso::Verifier::try_from_signing_key(&sso.signing_key_pem).expect("sso.signing_key_pem is an Ed25519 PKCS#8 PEM");
+	let Some(claims) = cookie_value(&headers, va_sso::COOKIE).and_then(|t| verifier.verify(t).ok()) else {
+		return (StatusCode::UNAUTHORIZED, "no live va_access cookie").into_response();
+	};
+	if !claims.admin {
+		return (StatusCode::FORBIDDEN, "the member list is the admins'").into_response();
+	}
+	let Some(group) = settings.groups.get(&q.group) else {
+		return (StatusCode::NOT_FOUND, format!("no group {}", q.group)).into_response();
+	};
+	let mut emails: Vec<String> = group.iter().chain(settings.groups.get("admin").into_iter().flatten()).map(|e| e.to_lowercase()).collect();
+	emails.sort();
+	emails.dedup();
+	let mut out = Vec::with_capacity(emails.len());
+	for email in emails {
+		let user = db.get_verified_user_by_email(&email).await.expect("the users table is readable");
+		out.push(Member {
+			username: user.as_ref().map(|u| u.username.clone()),
+			display_name: user.and_then(|u| u.display_name),
+			email,
+		});
+	}
+	Json(out).into_response()
+}
+#[derive(serde::Serialize)]
+struct Member {
+	email: String,
+	/// `None`: no verified account with this email yet
+	username: Option<String>,
+	display_name: Option<String>,
+}
+fn cookie_value<'h>(headers: &'h HeaderMap, name: &str) -> Option<&'h str> {
+	headers
+		.get_all(header::COOKIE)
+		.iter()
+		.filter_map(|v| v.to_str().ok())
+		.flat_map(|v| v.split(';'))
+		.find_map(|c| c.trim().strip_prefix(name)?.strip_prefix('='))
+}
+
 fn cookie(settings: &Settings, sso: &SsoConf, value: &str) -> HeaderValue {
 	let domain = sso.cookie_domain.as_ref().map(|d| format!("; Domain={d}")).unwrap_or_default();
 	HeaderValue::from_str(&format!("{value}; Path=/; HttpOnly; SameSite=Lax{domain}{}", secure(settings))).expect("a JWT and a domain are header-safe")

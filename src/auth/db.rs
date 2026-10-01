@@ -121,6 +121,18 @@ impl Database {
 		Ok(row.map(|r| (user_from_row(&r), r.get("password_hash"))))
 	}
 
+	/// Case-insensitive: config lists and sign-ups need not agree on case.
+	pub async fn get_verified_user_by_email(&self, email: &str) -> Result<Option<User>> {
+		let row = self
+			.user_row(
+				"SELECT id, email, username, display_name, avatar_url FROM users WHERE lower(email) = lower(?) AND email_verified = 1 LIMIT 1",
+				email,
+				"failed to query verified user by email",
+			)
+			.await?;
+		Ok(row.as_ref().map(user_from_row))
+	}
+
 	pub async fn get_user_by_username(&self, username: &str) -> Result<Option<(User, String)>> {
 		let row = self
 			.user_row(
