@@ -41,48 +41,39 @@ pub mod server_impl {
 		info!("Registration attempt");
 		let settings = get_settings()?;
 		let db = get_db()?;
-
-		if db.email_exists(&email).await.map_err(|e| {
-			error!("Database error checking email: {e}");
+		let db_err = |e: color_eyre::Report| {
+			error!("Database error during registration: {e}");
 			ServerFnError::new(format!("Database error: {e}"))
-		})? {
+		};
+
+		// an unverified account never reaches other services (auth::sso), so without mail to verify it there is no point making one
+		if settings.smtp.username.is_empty() {
+			info!("Registration refused: SMTP not configured");
+			return Err(ServerFnError::new("Signing up with a password needs email verification, which is not set up here: sign in with Google"));
+		}
+		db.drop_unverified(&email).await.map_err(db_err)?; // a past attempt whose mail never got through
+		if db.email_exists(&email).await.map_err(db_err)? {
 			info!("Email already registered");
 			return Err(ServerFnError::new("Email already registered"));
 		}
 
 		let user_id = uuid::Uuid::new_v4().to_string();
-		db.create_user(&user_id, &email, &username, &password).await.map_err(|e| {
-			error!("Failed to create user: {e}");
-			ServerFnError::new(format!("Failed to create user: {e}"))
-		})?;
-
-		// Create verification token and send email
+		db.create_user(&user_id, &email, &username, &password).await.map_err(db_err)?;
 		let token = uuid::Uuid::new_v4().to_string();
-		db.create_email_token(&token, &user_id, 24).await.map_err(|e| {
-			error!("Failed to create verification token: {e}");
-			ServerFnError::new(format!("Failed to create verification token: {e}"))
+		db.create_email_token(&token, &user_id, 24).await.map_err(db_err)?;
+
+		let email_sender = EmailSender::try_new(&settings.smtp).map_err(|e| {
+			error!("Email configuration error: {e}");
+			ServerFnError::new(format!("Email configuration error: {e}"))
+		})?;
+		let verification_link = format!("{}/verify?token={token}", settings.site_url);
+		email_sender.send_verification_email(&email, &username, &verification_link).await.map_err(|e| {
+			error!("Failed to send verification email: {e}");
+			ServerFnError::new(format!("Failed to send verification email: {e}"))
 		})?;
 
-		// Send verification email
-		if !settings.smtp.username.is_empty() {
-			let email_sender = EmailSender::try_new(&settings.smtp).map_err(|e| {
-				error!("Email configuration error: {e}");
-				ServerFnError::new(format!("Email configuration error: {e}"))
-			})?;
-
-			let verification_link = format!("{}/verify?token={token}", settings.site_url);
-			email_sender.send_verification_email(&email, &username, &verification_link).await.map_err(|e| {
-				error!("Failed to send verification email: {e}");
-				ServerFnError::new(format!("Failed to send verification email: {e}"))
-			})?;
-
-			info!("Registration successful, verification email sent");
-			Ok("Please check your email to verify your account".to_string())
-		} else {
-			// the email stays unverified, so it carries no groups to other services (auth::sso)
-			info!("Registration successful (SMTP not configured, email unverified)");
-			Ok("Account created (email unverified - SMTP not configured)".to_string())
-		}
+		info!("Registration successful, verification email sent");
+		Ok("Please check your email to verify your account".to_string())
 	}
 
 	#[instrument(skip(token))]
@@ -825,6 +816,8 @@ fn LoginForm() -> impl IntoView {
 						let msg = format!("{e}");
 						let clean_msg = if msg.contains("Email already registered") {
 							"This email is already registered. Please login instead.".to_string()
+						} else if msg.contains("sign in with Google") {
+							"Signing up with a password is not available here: sign in with Google.".to_string()
 						} else {
 							// Show actual error for debugging
 							format!("Registration failed: {msg}")

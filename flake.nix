@@ -180,10 +180,7 @@
           sso = {
             signing_key_pem = { env = "SSO_SIGNING_KEY_PEM"; };
             cookie_domain = "valeratrades.com";
-          };
-          groups = {
-            admin = [ "v79166789533@gmail.com" "valeratrades@gmail.com" ];
-            service-arb = [ "v79166789533@gmail.com" ];
+            admins = [ "v79166789533@gmail.com" "valeratrades@gmail.com" ];
           };
         };
         prodRun = pkgs.writeShellApplication {

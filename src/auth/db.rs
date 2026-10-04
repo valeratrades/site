@@ -88,6 +88,19 @@ impl Database {
 		.await
 		.wrap_err("failed to create admin_files table")?;
 
+		sqlx::query(
+			"CREATE TABLE IF NOT EXISTS group_members (
+                grp TEXT NOT NULL,
+                email TEXT NOT NULL,
+                added_by TEXT NOT NULL,
+                added_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+                PRIMARY KEY (grp, email)
+            )",
+		)
+		.execute(&pool)
+		.await
+		.wrap_err("failed to create group_members table")?;
+
 		Ok(Self { pool })
 	}
 
@@ -156,13 +169,27 @@ impl Database {
 	}
 
 	pub async fn email_exists(&self, email: &str) -> Result<bool> {
-		let row = sqlx::query("SELECT COUNT(*) as cnt FROM users WHERE email = ?")
+		let row = sqlx::query("SELECT COUNT(*) as cnt FROM users WHERE lower(email) = lower(?)")
 			.bind(email)
 			.fetch_one(&self.pool)
 			.await
 			.wrap_err("failed to check email existence")?;
 		let count: i64 = row.get("cnt");
 		Ok(count > 0)
+	}
+
+	/// An unverified account under `email`, with its sessions and tokens: it could be anyone's.
+	pub async fn drop_unverified(&self, email: &str) -> Result<()> {
+		let mut tx = self.pool.begin().await.wrap_err("failed to begin")?;
+		for q in [
+			"DELETE FROM sessions WHERE user_id IN (SELECT id FROM users WHERE lower(email) = lower(?) AND email_verified = 0)",
+			"DELETE FROM email_tokens WHERE user_id IN (SELECT id FROM users WHERE lower(email) = lower(?) AND email_verified = 0)",
+			"DELETE FROM users WHERE lower(email) = lower(?) AND email_verified = 0",
+		] {
+			sqlx::query(q).bind(email).execute(&mut *tx).await.wrap_err("failed to drop unverified account")?;
+		}
+		tx.commit().await.wrap_err("failed to commit")?;
+		Ok(())
 	}
 
 	pub async fn create_session(&self, session_id: &str, user_id: &str, expires_hours: u32) -> Result<()> {
@@ -355,6 +382,47 @@ impl Database {
 			.wrap_err("failed to check username existence")?;
 		let count: i64 = row.get("cnt");
 		Ok(count > 0)
+	}
+
+	/// Idempotent; emails are kept lowercase.
+	pub async fn add_to_group(&self, group: &str, email: &str, by: &str) -> Result<()> {
+		sqlx::query("INSERT INTO group_members (grp, email, added_by) VALUES (?, lower(?), lower(?)) ON CONFLICT DO NOTHING")
+			.bind(group)
+			.bind(email)
+			.bind(by)
+			.execute(&self.pool)
+			.await
+			.wrap_err("failed to add to group")?;
+		Ok(())
+	}
+
+	/// Whether the email was in the group.
+	pub async fn remove_from_group(&self, group: &str, email: &str) -> Result<bool> {
+		let done = sqlx::query("DELETE FROM group_members WHERE grp = ? AND email = lower(?)")
+			.bind(group)
+			.bind(email)
+			.execute(&self.pool)
+			.await
+			.wrap_err("failed to remove from group")?;
+		Ok(done.rows_affected() > 0)
+	}
+
+	pub async fn group_members(&self, group: &str) -> Result<Vec<String>> {
+		let rows = sqlx::query("SELECT email FROM group_members WHERE grp = ?")
+			.bind(group)
+			.fetch_all(&self.pool)
+			.await
+			.wrap_err("failed to list group")?;
+		Ok(rows.iter().map(|r| r.get("email")).collect())
+	}
+
+	pub async fn groups_of(&self, email: &str) -> Result<Vec<String>> {
+		let rows = sqlx::query("SELECT grp FROM group_members WHERE email = lower(?) ORDER BY grp")
+			.bind(email)
+			.fetch_all(&self.pool)
+			.await
+			.wrap_err("failed to list groups")?;
+		Ok(rows.iter().map(|r| r.get("grp")).collect())
 	}
 
 	pub async fn create_admin_file(&self, id: &str, filename: &str, content_type: &str, data: &str, uploaded_by: &str) -> Result<()> {

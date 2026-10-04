@@ -27,7 +27,7 @@ async fn refresh_signs_in_verified_members_and_returns_only_to_cookie_hosts() {
 	std::fs::write(
 		&config,
 		format!(
-			"site_url = \"http://localhost:61156\"\n[sso]\nsigning_key_pem = \"\"\"\n{PRIVATE}\"\"\"\n[groups]\nservice-arb = [\"Member@x.com\", \"unverified@x.com\"]\nadmin = [\"root@x.com\"]\n"
+			"site_url = \"http://localhost:61156\"\n[sso]\nadmins = [\"root@x.com\"]\nsigning_key_pem = \"\"\"\n{PRIVATE}\"\"\"\n"
 		),
 	)
 	.unwrap();
@@ -40,6 +40,9 @@ async fn refresh_signs_in_verified_members_and_returns_only_to_cookie_hosts() {
 	}
 	db.mark_email_verified("m").await.unwrap();
 	db.mark_email_verified("r").await.unwrap();
+	for email in ["Member@x.com", "unverified@x.com"] {
+		db.add_to_group("service-arb", email, "root@x.com").await.unwrap();
+	}
 
 	let app = axum::Router::new().route("/auth/refresh", axum::routing::get(site::auth::sso::refresh).with_state((live, db)));
 	let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();

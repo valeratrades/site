@@ -24,10 +24,6 @@ pub struct Settings {
 	/// The `va_access` cookie other valeratrades.com services sign in with; unset, none is set.
 	#[serde(default)]
 	pub sso: Option<SsoConf>,
-	/// Group name → the verified emails in it, carried in `va_access`; members of `admin` are its admins.
-	#[serde(default)]
-	#[primitives(skip)]
-	pub groups: HashMap<String, Vec<String>>,
 }
 impl Settings {
 	pub fn mock(&self) -> bool {
@@ -49,7 +45,6 @@ impl Default for Settings {
 			site_url: __default_site_url(),
 			admin: AdminConf::default(),
 			sso: None,
-			groups: HashMap::new(),
 		}
 	}
 }
@@ -94,6 +89,9 @@ pub struct SsoConf {
 	/// `valeratrades.com` shares the cookie with every subdomain; unset, it stays on this host.
 	/// `/auth/refresh` returns only to the hosts that receive it.
 	pub cookie_domain: Option<String>,
+	/// Verified emails that are admins on every service signing in with `va_access`; the groups
+	/// are theirs to keep, in the database (`/auth/members`).
+	pub admins: Vec<String>,
 }
 
 fn __default_site_url() -> String {

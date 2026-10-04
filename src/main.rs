@@ -91,7 +91,13 @@ async fn main() {
 			}),
 		)
 		.route("/auth/refresh", axum::routing::get(site::auth::sso::refresh).with_state((live_settings.clone(), db.clone())))
-		.route("/auth/members", axum::routing::get(site::auth::sso::members).with_state((live_settings.clone(), db.clone())))
+		.route(
+			"/auth/members",
+			axum::routing::get(site::auth::sso::members)
+				.put(site::auth::sso::add_member)
+				.delete(site::auth::sso::remove_member)
+				.with_state((live_settings.clone(), db.clone())),
+		)
 		.fallback(file_and_error_handler(move |_| {
 			provide_context(live_settings.clone());
 			provide_context(db.clone());

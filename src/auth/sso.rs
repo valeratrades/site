@@ -1,6 +1,6 @@
 //! valeratrades.com as the sign-in for its subdomains: the `va_access` cookie ([`va_sso`]) set
 //! beside `session_id`, and `/auth/refresh`, where a service sends a browser whose cookie is
-//! missing or expired. `/auth/members` lists a group for those services' admins.
+//! missing or expired. `/auth/members` is where those services' admins list and keep a group.
 
 use axum::{
 	Json,
@@ -19,20 +19,15 @@ const TTL_SECS: i64 = 15 * 60; // how stale a group or admin claim may get
 pub async fn access_cookie(settings: &Settings, db: &Database, user: &User) -> color_eyre::Result<Option<HeaderValue>> {
 	let Some(sso) = &settings.sso else { return Ok(None) };
 	let email = user.email.to_lowercase();
-	let groups: Vec<String> = match db.is_email_verified(&user.id).await? {
-		true => settings
-			.groups
-			.iter()
-			.filter(|(_, emails)| emails.iter().any(|e| e.to_lowercase() == email))
-			.map(|(g, _)| g.clone())
-			.collect(),
-		false => vec![],
+	let (admin, groups) = match db.is_email_verified(&user.id).await? {
+		true => (sso.admins.iter().any(|a| a.to_lowercase() == email), db.groups_of(&email).await?),
+		false => (false, vec![]),
 	};
 	let claims = va_sso::Claims {
 		sub: user.id.clone(),
 		email,
 		username: user.username.clone(),
-		admin: groups.iter().any(|g| g == "admin"),
+		admin,
 		groups,
 		exp: jiff::Timestamp::now().as_second() + TTL_SECS,
 	};
@@ -86,20 +81,17 @@ pub struct MembersQuery {
 /// `group` and the admins, with their accounts. For admins, by the `va_access` a service forwards.
 pub async fn members(State((live, db)): State<(LiveSettings, Database)>, headers: HeaderMap, Query(q): Query<MembersQuery>) -> Response {
 	let settings = live.config().expect("the config loaded at start");
-	let Some(sso) = &settings.sso else {
-		return (StatusCode::NOT_FOUND, "sign-in for other services is not configured here").into_response();
+	let sso = match admin(&settings, &headers) {
+		Ok((sso, _)) => sso,
+		Err(r) => return r,
 	};
-	let verifier = va_sso::Verifier::try_from_signing_key(&sso.signing_key_pem).expect("sso.signing_key_pem is an Ed25519 PKCS#8 PEM");
-	let Some(claims) = cookie_value(&headers, va_sso::COOKIE).and_then(|t| verifier.verify(t).ok()) else {
-		return (StatusCode::UNAUTHORIZED, "no live va_access cookie").into_response();
-	};
-	if !claims.admin {
-		return (StatusCode::FORBIDDEN, "the member list is the admins'").into_response();
-	}
-	let Some(group) = settings.groups.get(&q.group) else {
-		return (StatusCode::NOT_FOUND, format!("no group {}", q.group)).into_response();
-	};
-	let mut emails: Vec<String> = group.iter().chain(settings.groups.get("admin").into_iter().flatten()).map(|e| e.to_lowercase()).collect();
+	let mut emails: Vec<String> = db
+		.group_members(&q.group)
+		.await
+		.expect("the group_members table is readable")
+		.into_iter()
+		.chain(sso.admins.iter().map(|e| e.to_lowercase()))
+		.collect();
 	emails.sort();
 	emails.dedup();
 	let mut out = Vec::with_capacity(emails.len());
@@ -113,6 +105,39 @@ pub async fn members(State((live, db)): State<(LiveSettings, Database)>, headers
 	}
 	Json(out).into_response()
 }
+#[derive(serde::Deserialize)]
+pub struct MemberQuery {
+	group: String,
+	email: String,
+}
+/// Puts `email` in `group`; its next `va_access` carries it.
+pub async fn add_member(State((live, db)): State<(LiveSettings, Database)>, headers: HeaderMap, Query(q): Query<MemberQuery>) -> Response {
+	let settings = live.config().expect("the config loaded at start");
+	let by = match admin(&settings, &headers) {
+		Ok((_, claims)) => claims.email,
+		Err(r) => return r,
+	};
+	if q.group == ADMIN || q.group.trim().is_empty() {
+		return (StatusCode::BAD_REQUEST, format!("{:?} is not a group admins keep: admins are the config's", q.group)).into_response();
+	}
+	let email = q.email.trim();
+	if !email.contains('@') {
+		return (StatusCode::BAD_REQUEST, format!("{email:?} is not an email")).into_response();
+	}
+	db.add_to_group(&q.group, email, &by).await.expect("the group_members table is writable");
+	StatusCode::NO_CONTENT.into_response()
+}
+/// Takes `email` out of `group`; its `va_access` drops it at the next refresh, within [`TTL_SECS`].
+pub async fn remove_member(State((live, db)): State<(LiveSettings, Database)>, headers: HeaderMap, Query(q): Query<MemberQuery>) -> Response {
+	let settings = live.config().expect("the config loaded at start");
+	if let Err(r) = admin(&settings, &headers) {
+		return r;
+	}
+	match db.remove_from_group(&q.group, q.email.trim()).await.expect("the group_members table is writable") {
+		true => StatusCode::NO_CONTENT.into_response(),
+		false => (StatusCode::NOT_FOUND, format!("{} is not in {}", q.email, q.group)).into_response(),
+	}
+}
 #[derive(serde::Serialize)]
 struct Member {
 	email: String,
@@ -120,6 +145,23 @@ struct Member {
 	username: Option<String>,
 	display_name: Option<String>,
 }
+const ADMIN: &str = "admin";
+
+/// The caller, by the `va_access` a service forwards, if an admin.
+fn admin<'s>(settings: &'s Settings, headers: &HeaderMap) -> Result<(&'s SsoConf, va_sso::Claims), Response> {
+	let Some(sso) = &settings.sso else {
+		return Err((StatusCode::NOT_FOUND, "sign-in for other services is not configured here").into_response());
+	};
+	let verifier = va_sso::Verifier::try_from_signing_key(&sso.signing_key_pem).expect("sso.signing_key_pem is an Ed25519 PKCS#8 PEM");
+	let Some(claims) = cookie_value(headers, va_sso::COOKIE).and_then(|t| verifier.verify(t).ok()) else {
+		return Err((StatusCode::UNAUTHORIZED, "no live va_access cookie").into_response());
+	};
+	match claims.admin {
+		true => Ok((sso, claims)),
+		false => Err((StatusCode::FORBIDDEN, "groups are the admins'").into_response()),
+	}
+}
+
 fn cookie_value<'h>(headers: &'h HeaderMap, name: &str) -> Option<&'h str> {
 	headers
 		.get_all(header::COOKIE)
