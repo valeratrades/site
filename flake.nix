@@ -169,7 +169,8 @@
         # cwd in /data (the persistent mount) with the read-only pieces symlinked
         # from the store. HOME=/data puts the sqlite db + dashboard caches (XDG
         # paths) on the same mount.
-        # Baked into the image; secrets come from the container's env through `{ env = … }`.
+        # Not in the image: the cluster mounts it as a ConfigMap (devops), editable while running.
+        # Secrets come from the container's env through `{ env = … }`.
         prodConfig = (pkgs.formats.toml { }).generate "site.toml" {
           site_url = "https://valeratrades.com";
           google_oauth = {
@@ -195,7 +196,8 @@
             ln -sfn ${./Cargo.toml} Cargo.toml
             export LEPTOS_SITE_ADDR="''${LEPTOS_SITE_ADDR:-0.0.0.0:61156}"
             export LEPTOS_ENV=PROD
-            exec ${siteBin}/bin/${pname} --config ${prodConfig}
+            : "''${1:?usage: ${pname}-prod --config <site.toml>}"
+            exec ${siteBin}/bin/${pname} "$@"
           '';
         };
         # `nix run .#dev` → `cargo leptos watch`, from anywhere in the repo.
@@ -256,6 +258,7 @@
       {
         packages = {
           default = siteBin;
+          prod-config = prodConfig;
         } // containerStd.packages;
 
         containers = containerStd.containers;
