@@ -193,7 +193,6 @@
             ln -sfn ${./Cargo.toml} Cargo.toml
             export LEPTOS_SITE_ADDR="''${LEPTOS_SITE_ADDR:-0.0.0.0:61156}"
             export LEPTOS_ENV=PROD
-            : "''${1:?usage: ${pname}-prod --config <site.toml>}"
             exec ${siteBin}/bin/${pname} "$@"
           '';
         };
