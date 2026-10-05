@@ -14,6 +14,7 @@ use crate::config::{LiveSettings, Settings, SsoConf};
 
 const TTL_SECS: i64 = 15 * 60; // how stale a group or admin claim may get
 
+const ADMIN: &str = "admin";
 /// `Set-Cookie` for `va_access`; `None` without `sso` configured. Groups and admin come only
 /// with a verified email: an unverified one could be anyone's.
 pub async fn access_cookie(settings: &Settings, db: &Database, user: &User) -> color_eyre::Result<Option<HeaderValue>> {
@@ -145,7 +146,6 @@ struct Member {
 	username: Option<String>,
 	display_name: Option<String>,
 }
-const ADMIN: &str = "admin";
 
 /// The caller, by the `va_access` a service forwards, if an admin.
 fn admin<'s>(settings: &'s Settings, headers: &HeaderMap) -> Result<(&'s SsoConf, va_sso::Claims), Response> {
