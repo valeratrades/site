@@ -107,9 +107,7 @@
           src = pureSrc;
           cargoLock = {
             lockFile = ./Cargo.lock;
-            outputHashes = {
-              "leptos-routable-0.2.0" = "sha256-w17sr9fLbUaCHP6x/fVSmR5dYduTGBlXBDna7Ksq+ZM=";
-            };
+            allowBuiltinFetchGit = true;
           };
 
           buildInputs = with pkgs; [ openssl.dev ];
