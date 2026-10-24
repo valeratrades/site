@@ -187,8 +187,8 @@ struct CachedRef<'a, T> {
 
 fn read<T: SourceData>() -> Option<Cached<T>> {
 	let p = path::<T>();
-	match std::fs::read_to_string(&p) {
-		Ok(s) => match serde_json::from_str(&s) {
+	match std::fs::File::open(&p) {
+		Ok(f) => match serde_json::from_reader(std::io::BufReader::new(f)) {
 			Ok(c) => Some(c),
 			Err(e) => {
 				tracing::warn!("corrupt cache {}: {e}; refetching", p.display());
@@ -206,7 +206,9 @@ fn read<T: SourceData>() -> Option<Cached<T>> {
 fn write<T: SourceData>(data: &T) -> Result<()> {
 	let record = CachedRef { fetched_at: Timestamp::now(), data };
 	let p = path::<T>();
-	std::fs::write(&p, serde_json::to_string_pretty(&record)?)?;
+	let mut w = std::io::BufWriter::new(std::fs::File::create(&p)?);
+	serde_json::to_writer(&mut w, &record)?;
+	std::io::Write::flush(&mut w)?;
 	tracing::info!("persisted {}", T::name());
 	Ok(())
 }

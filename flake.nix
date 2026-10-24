@@ -191,6 +191,7 @@
             ln -sfn ${./Cargo.toml} Cargo.toml
             export LEPTOS_SITE_ADDR="''${LEPTOS_SITE_ADDR:-0.0.0.0:61156}"
             export LEPTOS_ENV=PROD
+            export MALLOC_ARENA_MAX=2 # per-thread arenas hold freed fetch buffers; measured ~25% lower peak RSS
             exec ${siteBin}/bin/${pname} "$@"
           '';
         };

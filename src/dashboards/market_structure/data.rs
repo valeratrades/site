@@ -6,7 +6,6 @@ use futures::{
 	lock::Mutex,
 	stream::{self, StreamExt as _},
 };
-use jiff::Timestamp;
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 use trading_data_core::Pair;
@@ -185,7 +184,7 @@ async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, instru
 		async move {
 			let r = match get_historical_data(symbol, tf, range, exchange).await {
 				Ok(series) => {
-					tracing::debug!("Successfully fetched {} data points for {symbol}", series.col_closes.len());
+					tracing::debug!("Successfully fetched {} data points for {symbol}", series.len());
 					Ok((symbol, series))
 				}
 				Err(e) => {
@@ -205,8 +204,7 @@ async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, instru
 	let mut btc_found = false;
 
 	results.into_iter().for_each(|result| match result {
-		Ok((symbol, series)) => {
-			let mut pts: Vec<(i64, f64)> = series.col_open_times.iter().zip(&series.col_closes).map(|(t, c)| (t.as_second(), *c)).collect();
+		Ok((symbol, mut pts)) => {
 			pts.sort_by_key(|p| p.0);
 			match pts.first() {
 				// normalize each series to its own first close, in log-return space. A non-positive or
@@ -247,19 +245,9 @@ async fn collect_data(pairs: &[Pair], tf: Timeframe, range: RequestRange, instru
 
 	Ok(normalized)
 }
-#[allow(unused)]
-#[derive(Clone, Debug, Default, derive_new::new)]
-//HACK: manual roll of a DataFrame. No checks for alignment (or proper vectorization, for that matter)...
-struct RelevantHistoricalData {
-	col_open_times: Vec<Timestamp>,
-	col_opens: Vec<f64>,
-	col_highs: Vec<f64>,
-	col_lows: Vec<f64>,
-	col_closes: Vec<f64>,
-	col_volumes: Vec<f64>,
-}
+/// `(open_time, close)` per kline — the only columns the chart reads.
 #[instrument(skip_all, fields(symbol = %symbol))]
-async fn get_historical_data(symbol: Symbol, tf: Timeframe, range: RequestRange, exchange: &dyn Exchange) -> Result<RelevantHistoricalData> {
+async fn get_historical_data(symbol: Symbol, tf: Timeframe, range: RequestRange, exchange: &dyn Exchange) -> Result<Vec<(i64, f64)>> {
 	tracing::debug!("Fetching klines for {symbol} (tf={tf:?}, range={range:?})");
 
 	let klines = match exchange.klines(symbol, tf, range).await {
@@ -272,29 +260,7 @@ async fn get_historical_data(symbol: Symbol, tf: Timeframe, range: RequestRange,
 			return Err(e.into());
 		}
 	};
-
-	let mut open_time = Vec::new();
-	let mut open = Vec::new();
-	let mut high = Vec::new();
-	let mut low = Vec::new();
-	let mut close = Vec::new();
-	let mut volume = Vec::new();
-	for k in klines {
-		open_time.push(k.open_time);
-		open.push(k.open);
-		high.push(k.high);
-		low.push(k.low);
-		close.push(k.close);
-		volume.push(k.volume_quote);
-	}
-	Ok(RelevantHistoricalData {
-		col_open_times: open_time,
-		col_opens: open,
-		col_highs: high,
-		col_lows: low,
-		col_closes: close,
-		col_volumes: volume,
-	})
+	Ok(klines.into_iter().map(|k| (k.open_time.as_second(), k.close)).collect())
 }
 #[derive(Deserialize, Serialize)]
 struct SeriesMeta {

@@ -1,11 +1,8 @@
-use std::{
-	fmt::Write as _,
-	sync::{Arc, Mutex},
-};
+use std::{fmt::Write as _, sync::Mutex};
 
 use color_eyre::eyre::{Result, bail};
 use exchange_interactions::{Lsrs, prelude::*};
-use futures::future::join_all;
+use futures::stream::{self, StreamExt as _};
 use serde::{Deserialize, Serialize};
 use tracing::{info, instrument, warn};
 use v_utils::{Timeframe, xdg_data_file};
@@ -41,29 +38,31 @@ pub async fn get(tf: Timeframe, range: RequestRange) -> Result<SortedLsrs> {
 
 	let progress = crate::dashboards::_core::Progress::of::<SortedLsrs>();
 	progress.set_target(lsr_pairs.len());
-	let new_no_data_pairs = Arc::new(Mutex::new(Vec::new()));
-	let handles = lsr_pairs.iter().map(|p| {
-		let new_no_data_pairs = Arc::clone(&new_no_data_pairs);
-		let bn = Arc::new(&bn);
-		async move {
-			let r = match bn.lsr(*p, tf, range, "Global".into()).await {
-				Ok(lsr_vec) if !lsr_vec.is_empty() => Some(lsr_vec),
-				Ok(_) => {
-					info!("No data for {p}");
-					new_no_data_pairs.lock().unwrap().push(p.to_string());
-					None
-				}
-				Err(e) => {
-					warn!("Couldn't fetch data for {p}: {e:?}");
-					None
-				}
-			};
-			progress.inc();
-			r
-		}
-	});
-	let results = join_all(handles).await;
-	let new_no_data_pairs = Arc::try_unwrap(new_no_data_pairs).expect("All locks have been awaited").into_inner().unwrap();
+	let new_no_data_pairs = Mutex::new(Vec::new());
+	let (bn, no_data) = (&bn, &new_no_data_pairs);
+	let results: Vec<_> = stream::iter(lsr_pairs.iter().copied().map(|p| async move {
+		let r = match bn.lsr(p, tf, range, "Global".into()).await {
+			Ok(mut lsrs) if !lsrs.is_empty() => {
+				lsrs.values = vec![lsrs.values[0], lsrs.values[lsrs.values.len() - 1]]; // only the endpoints are rendered (`display_change`)
+				Some(lsrs)
+			}
+			Ok(_) => {
+				info!("No data for {p}");
+				no_data.lock().unwrap().push(p.to_string());
+				None
+			}
+			Err(e) => {
+				warn!("Couldn't fetch data for {p}: {e:?}");
+				None
+			}
+		};
+		progress.inc();
+		r
+	}))
+	.buffer_unordered(12) // each in-flight request holds its own connection
+	.collect()
+	.await;
+	let new_no_data_pairs = new_no_data_pairs.into_inner().unwrap();
 	if !new_no_data_pairs.is_empty() {
 		let all_no_data_pairs = lsr_no_data_pairs.into_iter().chain(new_no_data_pairs).collect::<Vec<_>>();
 		std::fs::write(&lsr_no_data_pairs_file, all_no_data_pairs.join("\n")).unwrap();
