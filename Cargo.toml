@@ -46,6 +46,9 @@ members = [".", "crates/va_sso"]
 [workspace.lints.rust]
 unused_features = "allow"
 
+[workspace.lints.cargo]
+non_kebab_case_bins = "allow"
+
 [workspace.dependencies]
 any_spawner = "=0.3.0"
 axum = "=0.8.9"
