@@ -299,7 +299,6 @@
             openssl
             pkg-config
             perl
-            sccache
             rust
             binaryen
             typst # blog .typ -> .html compilation at server runtime
