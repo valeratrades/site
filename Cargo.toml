@@ -4,6 +4,7 @@ cargo-features = ["codegen-backend"]
 name = "site"
 version = "0.1.0"
 edition = "2021"
+repository = "https://github.com/valeratrades/site"
 
 [package.metadata.leptos]
 output-name = "site"
@@ -44,10 +45,15 @@ ignored = ["miette"]
 members = [".", "crates/va_sso"]
 
 [workspace.lints.rust]
+stable_features = "allow"
 unused_features = "allow"
 
 [workspace.lints.cargo]
 non_kebab_case_bins = "allow"
+
+[workspace.lints.clippy]
+if_not_else = "warn"
+integer_division = "warn"
 
 [workspace.dependencies]
 any_spawner = "=0.3.0"
@@ -94,6 +100,9 @@ wasm-bindgen = "=0.2.126"
 wasm-bindgen-futures = "=0.4.76"
 web-sys = "=0.3.103"
 xdg = "=3.0.0"
+
+[workspace.package]
+repository = "https://github.com/valeratrades/site"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
