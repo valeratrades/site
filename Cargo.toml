@@ -85,7 +85,7 @@ tracing = "=0.1.44"
 trading_data_core = "=0.3.0"
 url = "=2.5.8"
 uuid = "=1.24.0"
-v_utils = "=2.17.12"
+v_utils = "=3.0.0"
 va_sso = { version = "0.1", path = "crates/va_sso" }
 wasm-bindgen = "=0.2.126"
 wasm-bindgen-futures = "=0.4.76"
